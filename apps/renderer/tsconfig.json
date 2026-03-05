@@ -7,6 +7,7 @@
     "jsx": "preserve",
     "jsxImportSource": "vue",
     "skipLibCheck": true,
+    "rootDir": "src",
     "outDir": "dist"
   },
   "include": ["src", "src/env.d.ts"]
