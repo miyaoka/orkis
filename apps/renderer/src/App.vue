@@ -1,5 +1,5 @@
 <script setup lang="ts">
-const ipcHandle = () => window.api.ping()
+const ipcHandle = () => window.api.ping();
 </script>
 
 <template>

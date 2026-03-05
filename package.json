@@ -2,8 +2,8 @@
   "name": "orkis",
   "version": "0.0.0",
   "private": true,
-  "type": "module",
   "description": "AI Agent Orchestrator",
+  "type": "module",
   "scripts": {
     "dev": "tsx scripts/watch.ts",
     "build": "pnpm -r build",
@@ -15,6 +15,7 @@
   "devDependencies": {
     "electron": "catalog:",
     "lefthook": "catalog:",
+    "oxfmt": "catalog:",
     "tsx": "^4.21.0",
     "typescript": "catalog:",
     "vite": "catalog:"

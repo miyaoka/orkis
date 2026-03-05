@@ -1,7 +1,7 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer } from "electron";
 
 const api = {
-  ping: () => ipcRenderer.send('ping'),
-}
+  ping: () => ipcRenderer.send("ping"),
+};
 
-contextBridge.exposeInMainWorld('api', api)
+contextBridge.exposeInMainWorld("api", api);

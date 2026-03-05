@@ -1,9 +1,9 @@
 export interface OrkisAPI {
-  ping: () => void
+  ping: () => void;
 }
 
 declare global {
   interface Window {
-    api: OrkisAPI
+    api: OrkisAPI;
   }
 }
