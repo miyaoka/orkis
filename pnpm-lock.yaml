@@ -52,7 +52,7 @@ importers:
     dependencies:
       '@orkis/preload':
         specifier: workspace:*
-        version: link:../preload
+        version: link:../../packages/preload
     devDependencies:
       '@types/node':
         specifier: 'catalog:'
@@ -60,18 +60,6 @@ importers:
       electron:
         specifier: 'catalog:'
         version: 40.6.1
-      typescript:
-        specifier: 'catalog:'
-        version: 5.9.3
-      vite:
-        specifier: 'catalog:'
-        version: 7.3.1(@types/node@24.11.0)(jiti@2.6.1)(tsx@4.21.0)
-
-  apps/preload:
-    devDependencies:
-      '@types/node':
-        specifier: 'catalog:'
-        version: 24.11.0
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
@@ -87,7 +75,7 @@ importers:
     devDependencies:
       '@orkis/preload':
         specifier: workspace:*
-        version: link:../preload
+        version: link:../../packages/preload
       '@vitejs/plugin-vue':
         specifier: ^6.0.4
         version: 6.0.4(vite@7.3.1(@types/node@25.3.3)(jiti@2.6.1)(tsx@4.21.0))(vue@3.5.29(typescript@5.9.3))
@@ -100,6 +88,18 @@ importers:
       vue-tsc:
         specifier: ^3.2.5
         version: 3.2.5(typescript@5.9.3)
+
+  packages/preload:
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.11.0
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+      vite:
+        specifier: 'catalog:'
+        version: 7.3.1(@types/node@24.11.0)(jiti@2.6.1)(tsx@4.21.0)
 
 packages:
 

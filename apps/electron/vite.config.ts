@@ -10,7 +10,12 @@ export default defineConfig({
     },
     outDir: "dist",
     rollupOptions: {
-      external: ["electron", ...builtinModules, ...builtinModules.map((m) => `node:${m}`)],
+      external: [
+        "electron",
+        "@orkis/preload",
+        ...builtinModules,
+        ...builtinModules.map((m) => `node:${m}`),
+      ],
     },
     minify: false,
   },

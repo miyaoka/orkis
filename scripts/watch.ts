@@ -53,8 +53,8 @@ function setupMainWatcher({ resolvedUrls }: ViteDevServer) {
 
 function setupPreloadWatcher({ ws }: ViteDevServer) {
   return build({
-    root: path.resolve(ROOT, "apps/preload"),
-    configFile: path.resolve(ROOT, "apps/preload/vite.config.ts"),
+    root: path.resolve(ROOT, "packages/preload"),
+    configFile: path.resolve(ROOT, "packages/preload/vite.config.ts"),
     build: { watch: {} },
     plugins: [
       {

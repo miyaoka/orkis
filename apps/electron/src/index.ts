@@ -1,5 +1,6 @@
 import { app, shell, BrowserWindow, ipcMain } from "electron";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 function createWindow() {
   const mainWindow = new BrowserWindow({
@@ -7,7 +8,7 @@ function createWindow() {
     height: 670,
     show: false,
     webPreferences: {
-      preload: path.resolve(import.meta.dirname, "../../preload/dist/index.js"),
+      preload: fileURLToPath(import.meta.resolve("@orkis/preload")),
       sandbox: false,
     },
   });
