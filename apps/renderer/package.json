@@ -1,0 +1,21 @@
+{
+  "name": "@orkis/renderer",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc --noEmit && vite build",
+    "typecheck": "vue-tsc --noEmit"
+  },
+  "dependencies": {
+    "vue": "^3.5.29"
+  },
+  "devDependencies": {
+    "@orkis/preload": "workspace:*",
+    "@vitejs/plugin-vue": "^6.0.4",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vue-tsc": "^3.2.5"
+  }
+}

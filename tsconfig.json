@@ -1,4 +1,8 @@
 {
   "files": [],
-  "references": [{ "path": "./tsconfig.node.json" }, { "path": "./tsconfig.web.json" }]
+  "references": [
+    { "path": "./apps/electron" },
+    { "path": "./apps/preload" },
+    { "path": "./apps/renderer" }
+  ]
 }
