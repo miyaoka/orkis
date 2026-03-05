@@ -29,6 +29,9 @@ importers:
 
   .:
     devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.11.0
       electron:
         specifier: 'catalog:'
         version: 40.6.1
@@ -38,15 +41,12 @@ importers:
       oxfmt:
         specifier: 'catalog:'
         version: 0.36.0
-      tsx:
-        specifier: ^4.21.0
-        version: 4.21.0
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
       vite:
         specifier: 'catalog:'
-        version: 7.3.1(@types/node@25.3.3)(jiti@2.6.1)(tsx@4.21.0)
+        version: 7.3.1(@types/node@24.11.0)(jiti@2.6.1)(tsx@4.21.0)
 
   apps/electron:
     dependencies:
@@ -1320,7 +1320,7 @@ snapshots:
     dependencies:
       '@types/http-cache-semantics': 4.2.0
       '@types/keyv': 3.1.4
-      '@types/node': 24.11.0
+      '@types/node': 25.3.3
       '@types/responselike': 1.0.3
 
   '@types/estree@1.0.8': {}
@@ -1329,7 +1329,7 @@ snapshots:
 
   '@types/keyv@3.1.4':
     dependencies:
-      '@types/node': 24.11.0
+      '@types/node': 25.3.3
 
   '@types/node@24.11.0':
     dependencies:
@@ -1338,15 +1338,14 @@ snapshots:
   '@types/node@25.3.3':
     dependencies:
       undici-types: 7.18.2
-    optional: true
 
   '@types/responselike@1.0.3':
     dependencies:
-      '@types/node': 24.11.0
+      '@types/node': 25.3.3
 
   '@types/yauzl@2.10.3':
     dependencies:
-      '@types/node': 24.11.0
+      '@types/node': 25.3.3
     optional: true
 
   '@vitejs/plugin-vue@6.0.4(vite@7.3.1(@types/node@25.3.3)(jiti@2.6.1)(tsx@4.21.0))(vue@3.5.29(typescript@5.9.3))':
@@ -1576,6 +1575,7 @@ snapshots:
   get-tsconfig@4.13.6:
     dependencies:
       resolve-pkg-maps: 1.0.0
+    optional: true
 
   global-agent@3.0.0:
     dependencies:
@@ -1764,7 +1764,8 @@ snapshots:
 
   resolve-alpn@1.2.1: {}
 
-  resolve-pkg-maps@1.0.0: {}
+  resolve-pkg-maps@1.0.0:
+    optional: true
 
   responselike@2.0.1:
     dependencies:
@@ -1848,6 +1849,7 @@ snapshots:
       get-tsconfig: 4.13.6
     optionalDependencies:
       fsevents: 2.3.3
+    optional: true
 
   type-fest@0.13.1:
     optional: true
@@ -1856,8 +1858,7 @@ snapshots:
 
   undici-types@7.16.0: {}
 
-  undici-types@7.18.2:
-    optional: true
+  undici-types@7.18.2: {}
 
   universalify@0.1.2: {}
 
