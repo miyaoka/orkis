@@ -1,0 +1,35 @@
+name: 'Setup Environment'
+description: '開発環境の共通セットアップ（mise、pnpm、依存関係）'
+
+runs:
+  using: 'composite'
+  steps:
+    # mise によるランタイム環境のセットアップ
+    # Node.js、Bun などのバージョン管理
+    - name: Set up by mise
+      uses: jdx/mise-action@e79ddf65a11cec7b0e882bedced08d6e976efb2d # v3
+      with:
+        install: true
+        cache: true
+
+    # pnpm ストアディレクトリのパスを取得
+    - name: Get pnpm store directory
+      id: pnpm-cache
+      shell: bash
+      run: |
+        echo "STORE_PATH=$(pnpm store path)" >> $GITHUB_OUTPUT
+
+    # pnpm ストアのキャッシュ
+    # node_modules の代わりにグローバルストアをキャッシュすることで
+    # 重複を排除し、キャッシュサイズを削減
+    - name: Cache pnpm store
+      uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5
+      with:
+        path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
+        key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+
+    # 依存関係のインストール
+    # frozen-lockfile: lock ファイルを更新せず、正確なバージョンをインストール
+    - name: Install dependencies
+      shell: bash
+      run: pnpm install --frozen-lockfile
