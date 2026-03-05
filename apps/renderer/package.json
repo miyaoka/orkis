@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "typecheck": "vue-tsc --noEmit"
+    "typecheck": "vue-tsc --noEmit",
+    "lint": "eslint .",
+    "fix": "eslint . --fix -c eslint.config.fix.ts && oxfmt ."
   },
   "dependencies": {
     "vue": "^3.5.29"
@@ -14,6 +16,12 @@
   "devDependencies": {
     "@orkis/preload": "workspace:*",
     "@vitejs/plugin-vue": "^6.0.4",
+    "@vue/eslint-config-prettier": "^10.2.0",
+    "@vue/eslint-config-typescript": "^14.7.0",
+    "eslint": "catalog:",
+    "eslint-plugin-import-x": "catalog:",
+    "eslint-plugin-unused-imports": "catalog:",
+    "eslint-plugin-vue": "^10.8.0",
     "typescript": "catalog:",
     "vite": "catalog:",
     "vue-tsc": "^3.2.5"

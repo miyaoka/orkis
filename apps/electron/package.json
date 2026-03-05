@@ -6,7 +6,9 @@
   "main": "dist/index.js",
   "scripts": {
     "build": "vite build",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "lint": "oxlint --type-aware",
+    "fix": "oxlint --type-aware --fix && oxfmt ."
   },
   "dependencies": {
     "@orkis/preload": "workspace:*"
