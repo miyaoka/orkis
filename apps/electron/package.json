@@ -11,9 +11,11 @@
     "fix": "oxlint --type-aware --fix && oxfmt ."
   },
   "dependencies": {
-    "@orkis/preload": "workspace:*"
+    "@orkis/preload": "workspace:*",
+    "node-pty": "^1.1.0"
   },
   "devDependencies": {
+    "@electron/rebuild": "^4.0.3",
     "@types/node": "catalog:",
     "electron": "catalog:",
     "typescript": "catalog:",

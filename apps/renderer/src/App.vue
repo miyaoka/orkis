@@ -1,14 +1,21 @@
 <script setup lang="ts">
-const ipcHandle = () => window.api.ping();
+import TerminalPane from "./components/TerminalPane.vue";
 </script>
 
 <template>
-  <div class="flex h-screen flex-col items-center justify-center gap-4 bg-zinc-900 text-white">
-    <span class="icon-[lucide--bot] size-12 text-blue-400" />
-    <h1 class="text-3xl font-bold">orkis</h1>
-    <p class="text-zinc-400">AI Agent Orchestrator</p>
-    <button class="rounded-sm bg-blue-600 px-4 py-2 hover:bg-blue-500" @click="ipcHandle">
-      Send IPC ping
-    </button>
+  <div class="flex h-screen bg-zinc-900 text-white">
+    <!-- 左ペイン -->
+    <div class="flex w-80 shrink-0 flex-col border-r border-zinc-700 p-4">
+      <h1 class="mb-4 text-lg font-bold">
+        <span class="mr-2 icon-[lucide--bot] align-middle text-blue-400" />
+        orkis
+      </h1>
+      <p class="text-sm text-zinc-400">Todos (coming soon)</p>
+    </div>
+
+    <!-- 右ペイン: ターミナル -->
+    <div class="min-w-0 flex-1 p-2">
+      <TerminalPane />
+    </div>
   </div>
 </template>

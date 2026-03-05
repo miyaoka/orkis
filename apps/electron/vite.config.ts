@@ -12,6 +12,7 @@ export default defineConfig({
     rollupOptions: {
       external: [
         "electron",
+        "node-pty",
         "@orkis/preload",
         ...builtinModules,
         ...builtinModules.map((m) => `node:${m}`),
