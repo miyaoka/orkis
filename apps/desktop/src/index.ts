@@ -264,6 +264,19 @@ function stopWatching(win: OrkisWindow) {
   gitStatusNeedsRerun.delete(win);
 }
 
+/** ウィンドウ close 時に関連リソースをすべて解放する */
+function cleanupWindow(win: OrkisWindow) {
+  stopWatching(win);
+  windowDirs.delete(win);
+  // このウィンドウが所有する PTY をすべて kill
+  for (const [id, entry] of ptys) {
+    if (entry.win === win) {
+      entry.proc.kill();
+      ptys.delete(id);
+    }
+  }
+}
+
 // --- ウィンドウ作成 ---
 
 function createWindowWithRPC(dir: string): OrkisWindow {
@@ -290,14 +303,16 @@ function createWindowWithRPC(dir: string): OrkisWindow {
       },
       messages: {
         ptyWrite: ({ id, data }) => {
-          ptys.get(id)?.proc.terminal?.write(data);
+          const entry = ptys.get(id);
+          if (entry?.win === win) entry.proc.terminal?.write(data);
         },
         ptyResize: ({ id, cols, rows }) => {
-          ptys.get(id)?.proc.terminal?.resize(cols, rows);
+          const entry = ptys.get(id);
+          if (entry?.win === win) entry.proc.terminal?.resize(cols, rows);
         },
         ptyKill: ({ id }) => {
           const entry = ptys.get(id);
-          if (entry) {
+          if (entry?.win === win) {
             entry.proc.kill();
             ptys.delete(id);
           }
@@ -320,6 +335,10 @@ function createWindowWithRPC(dir: string): OrkisWindow {
     url: viewUrl,
     frame: { width: 1200, height: 800, x: 100, y: 100 },
     rpc,
+  });
+
+  win.on("close", () => {
+    cleanupWindow(win);
   });
 
   return win;
@@ -474,15 +493,9 @@ handleSocketMessage({ type: "open", dir });
 // --- クリーンアップ ---
 
 process.on("beforeExit", () => {
-  for (const { proc } of ptys.values()) {
-    proc.kill();
-  }
-  ptys.clear();
-
   for (const win of windowDirs.keys()) {
-    stopWatching(win);
+    cleanupWindow(win);
   }
-  windowDirs.clear();
 
   socketServer.close();
   if (fs.existsSync(SOCKET_PATH)) {
