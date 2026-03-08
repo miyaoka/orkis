@@ -76,6 +76,14 @@ orkis/
 │       │   ├── index.ts
 │       │   └── result.ts          # Result 型 + tryCatch
 │       └── tsconfig.json
+
+## コーディング規約
+
+### エラーハンドリング
+
+- try-catch は使わず、`@orkis/shared` の `tryCatch` を使って Result 型で処理する
+- `tryCatch(() => ...)` で同期処理、`tryCatch(promise)` で非同期処理をラップ
+- 結果は `result.ok` で判定し、`result.value` / `result.error` でアクセスする
 ├── scripts/
 │   └── watch.ts           # dev サーバー統合（renderer + preload + main）
 ├── docs/
