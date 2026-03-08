@@ -18,13 +18,13 @@ features/preview/
 
 拡張子から判定する。マッチしないものは `code` として扱う。
 
-| 種別     | 拡張子                                    | レンダリング                      |
-| -------- | ----------------------------------------- | --------------------------------- |
-| image    | png, jpg, jpeg, gif, webp, avif, ico, bmp | `<img>` (base64 data: URL)        |
-| svg      | svg                                       | 画像プレビュー / ソースコード切替 |
-| markdown | md                                        | marked + mermaid + DOMPurify      |
-| code     | その他すべて                              | Shiki シンタックスハイライト      |
-| binary   | NUL バイト含有                            | 「Binary file」メッセージ         |
+| 種別     | 拡張子                                    | レンダリング                                              |
+| -------- | ----------------------------------------- | --------------------------------------------------------- |
+| image    | png, jpg, jpeg, gif, webp, avif, ico, bmp | `<img>` (ファイルサーバー URL)                            |
+| svg      | svg                                       | 画像プレビュー（ファイルサーバー URL） / ソースコード切替 |
+| markdown | md                                        | marked + mermaid + DOMPurify                              |
+| code     | その他すべて                              | Shiki シンタックスハイライト                              |
+| binary   | NUL バイト含有                            | 「Binary file」メッセージ                                 |
 
 ## モード切替
 
@@ -41,13 +41,12 @@ git 変更ファイルには Original / Diff / Current の3タブを表示する
 
 `PreviewPane` が RPC 経由で desktop からファイル内容を取得する。
 
-| RPC           | 用途                                                       |
-| ------------- | ---------------------------------------------------------- |
-| `fsReadFile`  | 現在のファイル内容（バイナリ判定 + 画像の data: URL 生成） |
-| `gitShowFile` | `HEAD` 時点のファイル内容（Original / Diff 用）            |
+| RPC           | 用途                                            |
+| ------------- | ----------------------------------------------- |
+| `fsReadFile`  | 現在のファイル内容（バイナリ判定）              |
+| `gitShowFile` | `HEAD` 時点のファイル内容（Original / Diff 用） |
 
-- 画像: WKWebView が `file://` をブロックするため、desktop 側で base64 `data:` URL に変換
-- SVG: テキストとして読み込み、表示時に `TextEncoder` + `btoa` で `data:image/svg+xml;base64,...` に変換（Unicode 対応）
+- 画像 / SVG: WKWebView が `file://` をブロックするため、desktop 側のファイルサーバー経由で配信
 - バイナリ判定: NUL バイト（`0x00`）の有無で判定（git と同じ方式）
 - 最大サイズ: 1MB を超えるファイルはバイナリ扱い
 
@@ -89,7 +88,7 @@ desktop からの `fsChange` メッセージを購読し、選択中ファイル
 
 ### ImagePreview
 
-- `<img>` タグで data: URL を表示
+- `<img>` タグでファイルサーバー URL を表示
 - `object-contain` で縦横比を維持
 
 ## Preview チェックボックス

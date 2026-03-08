@@ -39,14 +39,14 @@ flowchart LR
 
 ### desktop → renderer
 
-| Message           | Payload              | 用途                      |
-| ----------------- | -------------------- | ------------------------- |
-| `ptyData`         | `{ id, data }`       | PTY 出力                  |
-| `ptyExit`         | `{ id, exitCode }`   | PTY 終了                  |
-| `fsChange`        | `{ relDir }`         | ファイル変更通知          |
-| `gitStatusChange` | `{ statuses }`       | git status 変化           |
-| `orkisOpen`       | `{ dir, file? }`     | ウィンドウ open           |
-| `orkisHook`       | `{ event, payload }` | Claude Code Hook イベント |
+| Message           | Payload                             | 用途                      |
+| ----------------- | ----------------------------------- | ------------------------- |
+| `ptyData`         | `{ id, data }`                      | PTY 出力                  |
+| `ptyExit`         | `{ id, exitCode }`                  | PTY 終了                  |
+| `fsChange`        | `{ relDir }`                        | ファイル変更通知          |
+| `gitStatusChange` | `{ statuses }`                      | git status 変化           |
+| `orkisOpen`       | `{ dir, file?, fileServerBaseUrl }` | ウィンドウ open           |
+| `orkisHook`       | `{ event, payload }`                | Claude Code Hook イベント |
 
 ### renderer → desktop
 
@@ -70,7 +70,6 @@ interface FileEntry {
 interface FileReadResult {
   content: string;
   isBinary: boolean;
-  dataUrl?: string;
 }
 ```
 

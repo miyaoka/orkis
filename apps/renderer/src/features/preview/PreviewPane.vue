@@ -3,6 +3,7 @@ import { computed, onUnmounted, ref, watch } from "vue";
 import type { GitChangeKind } from "../filer/filer-utils";
 import { getFileIconName, getIconUrl } from "../filer/useFileIcon";
 import { useSelectedPath } from "../filer/useSelectedPath";
+import { useWorkspace } from "../filer/useWorkspace";
 import { useRpc } from "../rpc/useRpc";
 import CodePreview from "./CodePreview.vue";
 import DiffPreview from "./DiffPreview.vue";
@@ -38,12 +39,11 @@ function hasRenderedView(ft: FileType): boolean {
 }
 
 const { selectedPath, selectedGitChange } = useSelectedPath();
+const { fileServerBaseUrl } = useWorkspace();
 const { request, onFsChange } = useRpc();
 
 const currentContent = ref<string>();
 const originalContent = ref<string>();
-/** バイナリ画像の data: URL */
-const imageDataUrl = ref<string>();
 const isBinary = ref(false);
 const isOriginalBinary = ref(false);
 const loading = ref(false);
@@ -111,11 +111,9 @@ async function fetchContent(path: string, gitChange: GitChangeKind | undefined) 
     if (currentResult) {
       currentContent.value = currentResult.content;
       isBinary.value = currentResult.isBinary;
-      imageDataUrl.value = currentResult.dataUrl;
     } else {
       currentContent.value = undefined;
       isBinary.value = false;
-      imageDataUrl.value = undefined;
     }
     if (originalResult) {
       originalContent.value = originalResult.content;
@@ -143,7 +141,6 @@ watch(
     if (!path) {
       currentContent.value = undefined;
       originalContent.value = undefined;
-      imageDataUrl.value = undefined;
       isBinary.value = false;
       isOriginalBinary.value = false;
       error.value = undefined;
@@ -181,14 +178,21 @@ const displayIsBinary = computed(() => {
   return isBinary.value;
 });
 
+/** ファイルサーバー経由の URL を構築 */
+function buildFileServerUrl(relPath: string): string | undefined {
+  if (!fileServerBaseUrl.value) return undefined;
+  const base = fileServerBaseUrl.value.endsWith("/")
+    ? fileServerBaseUrl.value
+    : `${fileServerBaseUrl.value}/`;
+  return new URL(encodeURI(relPath), base).href;
+}
+
 /** 画像として表示する URL */
 const imageUrl = computed(() => {
   if (!previewEnabled.value) return undefined;
-  if (imageDataUrl.value) return imageDataUrl.value;
-  if (fileType.value === "svg" && displayContent.value) {
-    const encoded = new TextEncoder().encode(displayContent.value);
-    const binary = Array.from(encoded, (b) => String.fromCharCode(b)).join("");
-    return `data:image/svg+xml;base64,${btoa(binary)}`;
+  const ft = fileType.value;
+  if ((ft === "image" || ft === "svg") && selectedPath.value) {
+    return buildFileServerUrl(selectedPath.value);
   }
   return undefined;
 });
