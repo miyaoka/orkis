@@ -175,6 +175,22 @@ importers:
       zod:
         specifier: 4.3.6
         version: 4.3.6
+    devDependencies:
+      '@types/bun':
+        specifier: ^1.3.10
+        version: 1.3.10
+      '@typescript/native-preview':
+        specifier: 'catalog:'
+        version: 7.0.0-dev.20260302.1
+      oxfmt:
+        specifier: 'catalog:'
+        version: 0.36.0
+      oxlint:
+        specifier: 'catalog:'
+        version: 1.51.0(oxlint-tsgolint@0.15.0)
+      oxlint-tsgolint:
+        specifier: 'catalog:'
+        version: 0.15.0
 
   packages/preload:
     devDependencies:
@@ -993,6 +1009,9 @@ packages:
   '@tybys/wasm-util@0.10.1':
     resolution: {integrity: sha512-9tTaPJLSiejZKx+Bmog4uSubteqTvFrVrURwkmHixBo0G4seD0zUxp98E1DzUBJxLQ3NPwXrGKDiVjwx/DpPsg==}
 
+  '@types/bun@1.3.10':
+    resolution: {integrity: sha512-0+rlrUrOrTSskibryHbvQkDOWRJwJZqZlxrUs1u4oOoTln8+WIXBPmAuCF35SWB2z4Zl3E84Nl/D0P7803nigQ==}
+
   '@types/cacheable-request@6.0.3':
     resolution: {integrity: sha512-IQ3EbTzGxIigb1I3qPZc1rWJnH0BmSKv5QYTalEwweFvyBDLSAe24zP0le/hyi7ecGfZVlIVAg4BZqb8WBwKqw==}
 
@@ -1379,6 +1398,9 @@ packages:
 
   buffer@5.7.1:
     resolution: {integrity: sha512-EHcyIPBQ4BSGlvjB16k5KgAJ27CIsHY/2JBmCRReo48y9rQ3MaUzWX3KVlBa4U7MyX02HdVj0K7C3WaB3ju7FQ==}
+
+  bun-types@1.3.10:
+    resolution: {integrity: sha512-tcpfCCl6XWo6nCVnpcVrxQ+9AYN1iqMIzgrSKYMB/fjLtV2eyAVEg7AxQJuCq/26R6HpKWykQXuSOq/21RYcbg==}
 
   cacache@19.0.1:
     resolution: {integrity: sha512-hdsUxulXCi5STId78vRVYEtDAjq99ICAUktLTeTYsLoTE6Z8dS0c8pWNCxwdrk9YfJeobDZc2Y186hD/5ZQgFQ==}
@@ -3328,6 +3350,10 @@ snapshots:
       tslib: 2.8.1
     optional: true
 
+  '@types/bun@1.3.10':
+    dependencies:
+      bun-types: 1.3.10
+
   '@types/cacheable-request@6.0.3':
     dependencies:
       '@types/http-cache-semantics': 4.2.0
@@ -3723,6 +3749,10 @@ snapshots:
     dependencies:
       base64-js: 1.5.1
       ieee754: 1.2.1
+
+  bun-types@1.3.10:
+    dependencies:
+      '@types/node': 25.3.3
 
   cacache@19.0.1:
     dependencies:
