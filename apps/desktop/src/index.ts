@@ -136,8 +136,74 @@ async function getGitStatus(cwd: string): Promise<Record<string, string>> {
   return statuses;
 }
 
+// --- ファイルサーバー ---
+
+/** ウィンドウごとの UUID → ルートディレクトリ */
+const fileServerDirs = new Map<string, string>();
+
+const fileServer = Bun.serve({
+  hostname: "localhost",
+  port: 0,
+  async fetch(req) {
+    // GET/HEAD 以外は拒否
+    if (req.method !== "GET" && req.method !== "HEAD") {
+      return new Response("Method Not Allowed", { status: 405 });
+    }
+
+    const url = new URL(req.url);
+    const segments = url.pathname.split("/").filter(Boolean);
+    const windowId = segments[0];
+    if (!windowId) return new Response("Not Found", { status: 404 });
+
+    const dir = fileServerDirs.get(windowId);
+    if (!dir) return new Response("Forbidden", { status: 403 });
+
+    const source = segments[1];
+    const decodeResult = tryCatch(() => decodeURIComponent(segments.slice(2).join("/")));
+    if (!decodeResult.ok) return new Response("Bad Request", { status: 400 });
+    const relPath = decodeResult.value;
+    if (!relPath) return new Response("Not Found", { status: 404 });
+
+    const headers = {
+      "X-Content-Type-Options": "nosniff",
+      "Cache-Control": "no-store",
+    } as Record<string, string>;
+
+    // 拡張子から MIME タイプを推定
+    const ext = relPath.split(".").pop()?.toLowerCase() ?? "";
+    const mimeType = Bun.file(`dummy.${ext}`).type;
+    headers["Content-Type"] = mimeType;
+
+    // /{windowId}/git/{relPath} — git show HEAD:path でファイルを返す
+    if (source === "git") {
+      const insideResult = tryCatch(() => assertInsideRoot(dir, relPath));
+      if (!insideResult.ok) return new Response("Forbidden", { status: 403 });
+      const proc = Bun.spawn(["git", "show", `HEAD:${relPath}`], { cwd: dir });
+      const bufResult = await tryCatch(new Response(proc.stdout).arrayBuffer());
+      await proc.exited;
+      if (!bufResult.ok || proc.exitCode !== 0) {
+        return new Response("Not Found", { status: 404 });
+      }
+      return new Response(bufResult.value, { headers });
+    }
+
+    // /{windowId}/fs/{relPath} — ファイルシステムから直接返す
+    if (source === "fs") {
+      const pathResult = await tryCatch(resolveSecurePath(dir, relPath));
+      if (!pathResult.ok) return new Response("Forbidden", { status: 403 });
+      return new Response(Bun.file(pathResult.value), { headers });
+    }
+
+    return new Response("Not Found", { status: 404 });
+  },
+});
+
+console.log(`[file-server] listening on http://localhost:${fileServer.port}`);
+
 // --- ウィンドウ管理 ---
 
+/** ウィンドウ → UUID */
+const windowIds = new Map<OrkisWindow, string>();
 const windowDirs = new Map<OrkisWindow, string>();
 
 // git status デバウンス
@@ -276,6 +342,9 @@ function stopWatching(win: OrkisWindow) {
 /** ウィンドウ close 時に関連リソースをすべて解放する */
 function cleanupWindow(win: OrkisWindow) {
   stopWatching(win);
+  const windowId = windowIds.get(win);
+  if (windowId) fileServerDirs.delete(windowId);
+  windowIds.delete(win);
   windowDirs.delete(win);
   // このウィンドウが所有する PTY をすべて kill
   for (const [id, entry] of ptys) {
@@ -330,12 +399,7 @@ function createWindowWithRPC(dir: string): OrkisWindow {
           // NUL バイトの有無でバイナリ判定（git と同じ方式）
           const bytes = new Uint8Array(await file.arrayBuffer());
           if (bytes.includes(0x00)) {
-            // 画像ファイルなら data: URL を生成
-            const mimeType = file.type;
-            const dataUrl = mimeType.startsWith("image/")
-              ? `data:${mimeType};base64,${Buffer.from(bytes).toString("base64")}`
-              : undefined;
-            return { content: "", isBinary: true, dataUrl };
+            return { content: "", isBinary: true };
           }
           const content = new TextDecoder().decode(bytes);
           return { content, isBinary: false };
@@ -389,7 +453,11 @@ function createWindowWithRPC(dir: string): OrkisWindow {
         },
         rendererReady: () => {
           console.log("[orkis] rendererReady received, sending orkisOpen:", dir);
-          win.webview.rpc?.send.orkisOpen({ dir });
+          const windowId = windowIds.get(win) ?? "";
+          win.webview.rpc?.send.orkisOpen({
+            dir,
+            fileServerBaseUrl: `http://localhost:${fileServer.port}/${windowId}`,
+          });
         },
       },
     },
@@ -450,10 +518,18 @@ function handleSocketMessage(message: OrkisMessage) {
       console.log(`[orkis] open: dir=${message.dir}, file=${message.file ?? "(none)"}`);
       const existing = findWindowByDir(message.dir);
       if (existing) {
-        existing.webview.rpc?.send.orkisOpen({ dir: message.dir, file: message.file });
+        const existingId = windowIds.get(existing) ?? "";
+        existing.webview.rpc?.send.orkisOpen({
+          dir: message.dir,
+          file: message.file,
+          fileServerBaseUrl: `http://localhost:${fileServer.port}/${existingId}`,
+        });
         break;
       }
       const newWin = createWindowWithRPC(message.dir);
+      const windowId = crypto.randomUUID();
+      windowIds.set(newWin, windowId);
+      fileServerDirs.set(windowId, message.dir);
       windowDirs.set(newWin, message.dir);
       startWatching(newWin, message.dir);
       break;
@@ -580,6 +656,7 @@ process.on("beforeExit", () => {
     cleanupWindow(win);
   }
 
+  void fileServer.stop();
   socketServer.close();
   if (fs.existsSync(SOCKET_PATH)) {
     fs.unlinkSync(SOCKET_PATH);

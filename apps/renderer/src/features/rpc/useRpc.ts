@@ -7,7 +7,9 @@ const listeners = {
   ptyExit: [] as Array<(payload: { id: number; exitCode: number }) => void>,
   fsChange: [] as Array<(payload: { relDir: string }) => void>,
   gitStatusChange: [] as Array<(payload: { statuses: Record<string, string> }) => void>,
-  orkisOpen: [] as Array<(payload: { dir: string; file?: string }) => void>,
+  orkisOpen: [] as Array<
+    (payload: { dir: string; file?: string; fileServerBaseUrl: string }) => void
+  >,
   orkisHook: [] as Array<(payload: { event: string; payload: Record<string, unknown> }) => void>,
 };
 
@@ -72,8 +74,9 @@ export function useRpc() {
     onFsChange: (fn: (payload: { relDir: string }) => void) => subscribe("fsChange", fn),
     onGitStatusChange: (fn: (payload: { statuses: Record<string, string> }) => void) =>
       subscribe("gitStatusChange", fn),
-    onOrkisOpen: (fn: (payload: { dir: string; file?: string }) => void) =>
-      subscribe("orkisOpen", fn),
+    onOrkisOpen: (
+      fn: (payload: { dir: string; file?: string; fileServerBaseUrl: string }) => void,
+    ) => subscribe("orkisOpen", fn),
     onOrkisHook: (fn: (payload: { event: string; payload: Record<string, unknown> }) => void) =>
       subscribe("orkisHook", fn),
   };

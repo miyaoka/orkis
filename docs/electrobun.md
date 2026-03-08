@@ -32,12 +32,14 @@ flowchart TB
     end
 
     desktop <-->|Electrobun RPC| renderer
-    cli -->|Unix socket\n/tmp/orkis.sock| desktop
+    cli -->|Unix socket<br>/tmp/orkis.sock| desktop
 ```
 
 ## WKWebView の制約
 
-- `file://` URL をブロック → 画像は desktop 側で base64 `data:` URL に変換
+- `file://` URL をブロック → desktop 側でローカル HTTP ファイルサーバー（`Bun.serve()`）を起動して配信
+  - `/{windowId}/fs/{relPath}` — 現在のファイル
+  - `/{windowId}/git/{relPath}` — HEAD 時点のファイル（`git show`）
 - `window.open()` が機能しない → RPC の `openExternal` 経由で `Utils.openExternal()` を呼ぶ
 
 ## ビルド構成

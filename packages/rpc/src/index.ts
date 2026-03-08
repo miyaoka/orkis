@@ -10,8 +10,6 @@ export interface FileReadResult {
   content: string;
   /** バイナリ等で読み取れなかった場合 true */
   isBinary: boolean;
-  /** 画像ファイルの場合、data: URL（base64） */
-  dataUrl?: string;
 }
 
 export type OrkisRPC = {
@@ -59,7 +57,7 @@ export type OrkisRPC = {
       ptyExit: { id: number; exitCode: number };
       fsChange: { relDir: string };
       gitStatusChange: { statuses: Record<string, string> };
-      orkisOpen: { dir: string; file?: string };
+      orkisOpen: { dir: string; file?: string; fileServerBaseUrl: string };
       orkisHook: { event: string; payload: Record<string, unknown> };
     };
   }>;
