@@ -7,8 +7,32 @@ output:
 pre-commit:
   parallel: true
   jobs:
-    - name: typecheck
-      run: pnpm -r --include-workspace-root --if-present typecheck
+    - name: typecheck-root
+      glob: "*.ts"
+      exclude:
+        - "apps/**"
+        - "packages/**"
+      run: tsgo --noEmit
+    - name: typecheck-shared
+      root: "packages/shared/"
+      glob: "**/*.ts"
+      run: tsgo --noEmit
+    - name: typecheck-preload
+      root: "packages/preload/"
+      glob: "**/*.ts"
+      run: tsgo --noEmit
+    - name: typecheck-electron
+      root: "apps/electron/"
+      glob: "**/*.ts"
+      run: tsgo --noEmit
+    - name: typecheck-cli
+      root: "apps/cli/"
+      glob: "**/*.ts"
+      run: tsgo --noEmit
+    - name: typecheck-renderer
+      root: "apps/renderer/"
+      glob: "**/*.{ts,vue}"
+      run: vue-tsc --noEmit
     - name: test-shared
       root: "packages/shared/"
       glob: "**/*.ts"
