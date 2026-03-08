@@ -1,0 +1,16 @@
+{
+  "name": "@orkis/cli",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "orkis": "./src/index.ts"
+  },
+  "scripts": {
+    "cli": "bun run src/index.ts"
+  },
+  "dependencies": {
+    "@miyaoka/fsss": "^0.3.0",
+    "zod": "4.3.6"
+  }
+}

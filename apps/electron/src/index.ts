@@ -1,7 +1,9 @@
 import { app, shell, BrowserWindow, ipcMain } from "electron";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import type net from "node:net";
 import * as pty from "node-pty";
+import { cleanupSocket, setupSocketServer, type OrkisMessage } from "./socket-server";
 
 const ptys = new Map<number, pty.IPty>();
 let nextPtyId = 0;
@@ -77,8 +79,26 @@ function createWindow() {
   }
 }
 
+let socketServer: net.Server | undefined;
+
+function handleSocketMessage(message: OrkisMessage) {
+  const window = BrowserWindow.getAllWindows()[0];
+
+  switch (message.type) {
+    case "hook":
+      console.log(`[orkis] hook: ${message.event}`, message.payload);
+      window?.webContents.send("orkis:hook", message.event, message.payload);
+      break;
+    case "open":
+      console.log(`[orkis] open: ${message.path}`);
+      window?.webContents.send("orkis:open", message.path);
+      break;
+  }
+}
+
 void app.whenReady().then(() => {
   setupPtyHandlers();
+  socketServer = setupSocketServer(handleSocketMessage);
 
   createWindow();
 
@@ -98,4 +118,7 @@ app.on("will-quit", () => {
     p.kill();
   }
   ptys.clear();
+  if (socketServer) {
+    cleanupSocket(socketServer);
+  }
 });

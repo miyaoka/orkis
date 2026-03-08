@@ -167,6 +167,15 @@ importers:
         specifier: 3.2.5
         version: 3.2.5(typescript@5.9.3)
 
+  packages/cli:
+    dependencies:
+      '@miyaoka/fsss':
+        specifier: ^0.3.0
+        version: 0.3.0
+      zod:
+        specifier: 4.3.6
+        version: 4.3.6
+
   packages/preload:
     devDependencies:
       '@types/node':
@@ -472,6 +481,10 @@ packages:
   '@malept/cross-spawn-promise@2.0.0':
     resolution: {integrity: sha512-1DpKU0Z5ThltBwjNySMC14g0CkbyhCaz9FkhxqNsZI6uAPJXFS8cMXlBKo26FJ8ZuW6S9GCMcR9IO5k2X5/9Fg==}
     engines: {node: '>= 12.13.0'}
+
+  '@miyaoka/fsss@0.3.0':
+    resolution: {integrity: sha512-vTWqNsJdLPs6aW3zaY6Ko4Dj+6347VjTiqJAiMx67/EljT2wAjfom7/G4alq0UQYZfFAKNQibiD4HAjHTbGOBQ==}
+    hasBin: true
 
   '@napi-rs/wasm-runtime@0.2.12':
     resolution: {integrity: sha512-ZVWUcfwY4E/yPitQJl481FjFo3K22D6qF0DuFH6Y/nbnE11GY5uguDxZMGXPQ8WQ0128MXQD7TnfHyK4oWoIJQ==}
@@ -2742,6 +2755,9 @@ packages:
     resolution: {integrity: sha512-rVksvsnNCdJ/ohGc6xgPwyN8eheCxsiLM8mxuE/t/mOVqJewPuO1miLpTHQiRgTKCLexL4MeAFVagts7HmNZ2Q==}
     engines: {node: '>=10'}
 
+  zod@4.3.6:
+    resolution: {integrity: sha512-rftlrkhHZOcjDwkGlnUtZZkvaPHCsDATp4pGpuOOMDaTdDDXF91wuVDJoWoPsKX/3YPQ5fHuF3STjcYyKr+Qhg==}
+
 snapshots:
 
   '@antfu/install-pkg@1.1.0':
@@ -3002,6 +3018,10 @@ snapshots:
   '@malept/cross-spawn-promise@2.0.0':
     dependencies:
       cross-spawn: 7.0.6
+
+  '@miyaoka/fsss@0.3.0':
+    dependencies:
+      zod: 4.3.6
 
   '@napi-rs/wasm-runtime@0.2.12':
     dependencies:
@@ -5143,3 +5163,5 @@ snapshots:
       fd-slicer: 1.1.0
 
   yocto-queue@0.1.0: {}
+
+  zod@4.3.6: {}
