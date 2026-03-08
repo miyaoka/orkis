@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from "vue";
+import { onUnmounted, ref, watch } from "vue";
 import FileTreeItem from "./FileTreeItem.vue";
 import { useWorkspace } from "./useWorkspace";
 
@@ -48,6 +48,24 @@ function onSelect(path: string) {
   selectedPath.value = path;
 }
 
+/**
+ * ファイル変更通知を受けてツリーを更新するコールバック。
+ * FileTreeItem の reloadDir を呼ぶため、ref 経由で子コンポーネントにアクセスする。
+ */
+const treeItemRefs = ref<InstanceType<typeof FileTreeItem>[]>([]);
+
+function handleFsChange(relDir: string) {
+  // ルートディレクトリの変更（"" or "."）
+  if (relDir === "" || relDir === ".") {
+    void loadRoot();
+    return;
+  }
+  // 子ディレクトリの変更 → 該当する FileTreeItem に通知
+  for (const item of treeItemRefs.value) {
+    item.notifyChange(relDir);
+  }
+}
+
 watch(
   dir,
   (newDir) => {
@@ -59,6 +77,11 @@ watch(
   },
   { immediate: true },
 );
+
+const unsubscribeFsChange = window.api.fs.onChange(handleFsChange);
+onUnmounted(() => {
+  unsubscribeFsChange();
+});
 </script>
 
 <template>
@@ -80,6 +103,7 @@ watch(
       <template v-else>
         <FileTreeItem
           v-for="entry in rootEntries"
+          ref="treeItemRefs"
           :key="entry.name"
           :name="entry.name"
           :path="entry.name"

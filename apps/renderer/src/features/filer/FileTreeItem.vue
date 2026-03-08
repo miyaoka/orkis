@@ -23,6 +23,7 @@ const emit = defineEmits<{
 
 const expanded = ref(false);
 const children = ref<FileEntry[]>();
+const childRefs = ref<InstanceType<typeof import("./FileTreeItem.vue").default>[]>([]);
 const loading = ref(false);
 
 async function toggle() {
@@ -35,18 +36,50 @@ async function toggle() {
 
   // 初回展開時のみ読み込む
   if (expanded.value && children.value === undefined) {
-    loading.value = true;
-    try {
-      const entries = await window.api.fs.readDir(props.path);
-      children.value = sortEntries(entries);
-    } catch (e) {
-      console.error(`Failed to read directory: ${props.path}`, e);
-      children.value = [];
-    } finally {
-      loading.value = false;
+    await loadChildren();
+  }
+}
+
+async function loadChildren() {
+  loading.value = true;
+  try {
+    const entries = await window.api.fs.readDir(props.path);
+    children.value = sortEntries(entries);
+  } catch (e) {
+    console.error(`Failed to read directory: ${props.path}`, e);
+    children.value = [];
+  } finally {
+    loading.value = false;
+  }
+}
+
+/**
+ * ファイル変更通知を受けて、該当するディレクトリの内容を再読み込みする。
+ * 自身のパスに一致すれば再読み込み、さもなくば子に伝播する。
+ */
+function notifyChange(relDir: string) {
+  if (!props.isDirectory) return;
+
+  // 自身のディレクトリが変更対象
+  if (relDir === props.path) {
+    if (expanded.value) {
+      void loadChildren();
+    } else {
+      // 折りたたみ中なら次回展開時に再読み込みするためキャッシュを破棄
+      children.value = undefined;
+    }
+    return;
+  }
+
+  // 自身の配下のパスなら子に伝播
+  if (relDir.startsWith(props.path + "/")) {
+    for (const child of childRefs.value) {
+      child.notifyChange(relDir);
     }
   }
 }
+
+defineExpose({ notifyChange });
 
 /** ディレクトリ優先 → 名前順 */
 function sortEntries(entries: FileEntry[]): FileEntry[] {
@@ -112,6 +145,7 @@ function onChildSelect(childPath: string) {
       <FileTreeItem
         v-for="child in children"
         v-else
+        ref="childRefs"
         :key="child.name"
         :name="child.name"
         :path="`${path}/${child.name}`"

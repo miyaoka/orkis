@@ -7,6 +7,8 @@ import { promisify } from "node:util";
 import type net from "node:net";
 
 const execFileAsync = promisify(execFile);
+import watcher from "@parcel/watcher";
+import type { AsyncSubscription } from "@parcel/watcher";
 import * as pty from "node-pty";
 import { cleanupSocket, setupSocketServer, type OrkisMessage } from "./socket-server";
 
@@ -92,6 +94,45 @@ let socketServer: net.Server | undefined;
 
 // ウィンドウが開いているディレクトリを管理
 const windowDirs = new Map<number, string>();
+// ウィンドウごとのファイル監視サブスクリプション
+const windowWatchers = new Map<number, AsyncSubscription>();
+
+/**
+ * 指定ウィンドウのワークスペースディレクトリをファイル監視する。
+ * 変更があったらレンダラーに変更されたディレクトリの相対パスを通知する。
+ */
+async function startWatching(windowId: number, root: string) {
+  const win = BrowserWindow.fromId(windowId);
+  if (!win) return;
+
+  const subscription = await watcher.subscribe(root, (err, events) => {
+    if (err) {
+      console.error("[orkis] watcher error:", err);
+      return;
+    }
+    if (win.isDestroyed()) return;
+
+    // 変更のあったディレクトリパスを重複排除して通知
+    const changedDirs = new Set<string>();
+    for (const event of events) {
+      const rel = path.relative(root, path.dirname(event.path));
+      changedDirs.add(rel);
+    }
+    for (const relDir of changedDirs) {
+      win.webContents.send("fs:change", relDir);
+    }
+  });
+
+  windowWatchers.set(windowId, subscription);
+}
+
+async function stopWatching(windowId: number) {
+  const subscription = windowWatchers.get(windowId);
+  if (subscription) {
+    await subscription.unsubscribe();
+    windowWatchers.delete(windowId);
+  }
+}
 
 /**
  * IPC の送信元ウィンドウに紐づくルートディレクトリを取得する。
@@ -190,8 +231,10 @@ function handleSocketMessage(message: OrkisMessage) {
       }
       const newWindow = createWindow();
       windowDirs.set(newWindow.id, message.dir);
+      void startWatching(newWindow.id, message.dir);
       newWindow.on("closed", () => {
         windowDirs.delete(newWindow.id);
+        void stopWatching(newWindow.id);
       });
       break;
     }
@@ -237,6 +280,10 @@ app.on("will-quit", () => {
     p.kill();
   }
   ptys.clear();
+  for (const subscription of windowWatchers.values()) {
+    void subscription.unsubscribe();
+  }
+  windowWatchers.clear();
   if (socketServer) {
     cleanupSocket(socketServer);
   }
