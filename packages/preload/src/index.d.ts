@@ -11,6 +11,7 @@ export interface FsAPI {
   readDir: (
     relPath: string,
   ) => Promise<Array<{ name: string; isDirectory: boolean; isIgnored: boolean }>>;
+  onChange: (callback: (relDir: string) => void) => () => void;
 }
 
 export interface OrkisAPI {
