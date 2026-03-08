@@ -161,6 +161,9 @@ function notifyGitStatusChange() {
 
   if (expanded.value && children.value !== undefined) {
     void loadChildren();
+  } else {
+    // 折りたたみ中なら次回展開時に再読み込みするためキャッシュを破棄
+    children.value = undefined;
   }
 
   for (const child of childRefs.value) {
