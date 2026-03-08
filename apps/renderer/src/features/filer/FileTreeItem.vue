@@ -51,7 +51,7 @@ const effectiveGitChange = computed<GitChangeKind | undefined>(() => {
   if (props.isDirectory) {
     return resolveDirectoryGitChange(props.path, props.gitStatuses);
   }
-  return resolveFileGitChange(props.path, props.gitStatuses) ?? props.gitChange;
+  return resolveFileGitChange(props.path, props.gitStatuses);
 });
 
 const textColorClass = computed(() => {
