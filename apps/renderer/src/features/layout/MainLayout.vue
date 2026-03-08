@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import DebugPane from "../debug/DebugPane.vue";
 import FilerPane from "../filer/FilerPane.vue";
+import PreviewPane from "../preview/PreviewPane.vue";
 import TerminalPane from "../terminal/TerminalPane.vue";
 import SidebarPane from "./SidebarPane.vue";
 </script>
@@ -10,6 +11,9 @@ import SidebarPane from "./SidebarPane.vue";
     <div class="flex min-h-0 flex-1">
       <SidebarPane />
       <FilerPane />
+      <div class="min-w-0 flex-1 border-r border-zinc-700">
+        <PreviewPane />
+      </div>
       <div class="min-w-0 flex-1 p-2">
         <TerminalPane />
       </div>
