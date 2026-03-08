@@ -96,16 +96,27 @@ function handleSocketMessage(message: OrkisMessage) {
   }
 }
 
-void app.whenReady().then(() => {
-  setupPtyHandlers();
-  socketServer = setupSocketServer(handleSocketMessage);
+// 単一インスタンス制御: 2つ目のプロセスは即終了し、最初のインスタンスが新しいウィンドウを開く
+const gotTheLock = app.requestSingleInstanceLock();
 
-  createWindow();
-
-  app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+if (!gotTheLock) {
+  app.quit();
+} else {
+  app.on("second-instance", () => {
+    createWindow();
   });
-});
+
+  void app.whenReady().then(() => {
+    setupPtyHandlers();
+    socketServer = setupSocketServer(handleSocketMessage);
+
+    createWindow();
+
+    app.on("activate", () => {
+      if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    });
+  });
+}
 
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") {

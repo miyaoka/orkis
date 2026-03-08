@@ -1,4 +1,5 @@
 import { defineCommand } from "@miyaoka/fsss";
+import { tryCatch } from "@orkis/shared";
 import { z } from "zod";
 import { sendMessage } from "../socket-client";
 
@@ -18,10 +19,9 @@ export default defineCommand({
     const input = await Bun.stdin.text();
     const payload = input.trim() ? JSON.parse(input) : {};
 
-    try {
-      await sendMessage({ type: "hook", event: args.event, payload });
-    } catch (err) {
-      console.error(err instanceof Error ? err.message : err);
+    const result = await tryCatch(sendMessage({ type: "hook", event: args.event, payload }));
+    if (!result.ok) {
+      console.error(result.error.message);
       process.exit(1);
     }
   },

@@ -172,6 +172,9 @@ importers:
       '@miyaoka/fsss':
         specifier: ^0.3.0
         version: 0.3.0
+      '@orkis/shared':
+        specifier: workspace:*
+        version: link:../shared
       zod:
         specifier: 4.3.6
         version: 4.3.6
@@ -203,6 +206,24 @@ importers:
       vite:
         specifier: 'catalog:'
         version: 8.0.0-beta.16(@types/node@24.11.0)(esbuild@0.27.3)(jiti@2.6.1)(tsx@4.21.0)
+
+  packages/shared:
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.11.0
+      '@typescript/native-preview':
+        specifier: 'catalog:'
+        version: 7.0.0-dev.20260302.1
+      oxfmt:
+        specifier: 'catalog:'
+        version: 0.36.0
+      oxlint:
+        specifier: 'catalog:'
+        version: 1.51.0(oxlint-tsgolint@0.15.0)
+      oxlint-tsgolint:
+        specifier: 'catalog:'
+        version: 0.15.0
 
 packages:
 
