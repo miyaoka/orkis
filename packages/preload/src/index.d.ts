@@ -23,6 +23,7 @@ export interface OrkisAPI {
   pty: PtyAPI;
   fs: FsAPI;
   git: GitAPI;
+  openExternal: (url: string) => void;
   notifyReady: () => void;
   onOpen: (callback: (dir: string, file?: string) => void) => () => void;
 }

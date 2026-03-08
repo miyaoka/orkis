@@ -39,6 +39,7 @@ const api = {
       return () => ipcRenderer.removeListener("git:statusChange", listener);
     },
   },
+  openExternal: (url: string) => ipcRenderer.send("shell:openExternal", url),
   notifyReady: () => ipcRenderer.send("renderer:ready"),
   onOpen: (callback: (dir: string, file?: string) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, dir: string, file?: string) =>

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { tryCatch } from "@orkis/shared";
 import { FitAddon } from "@xterm/addon-fit";
+import { WebLinksAddon } from "@xterm/addon-web-links";
 import { WebglAddon } from "@xterm/addon-webgl";
 import { Terminal } from "@xterm/xterm";
 import { onMounted, onBeforeUnmount, ref } from "vue";
@@ -28,11 +29,24 @@ onMounted(async () => {
       cursor: "#e4e4e7",
     },
     cursorBlink: true,
+    // OSC 8 ハイパーリンクのクリック時に外部ブラウザで開く
+    linkHandler: {
+      activate: (_event, text) => {
+        window.api.openExternal(text);
+      },
+    },
   });
 
   fitAddon = new FitAddon();
   terminal.loadAddon(fitAddon);
   terminal.open(container);
+
+  // テキスト中の URL パターンを検出してクリック可能にする
+  terminal.loadAddon(
+    new WebLinksAddon((_event, uri) => {
+      window.api.openExternal(uri);
+    }),
+  );
 
   // WebGL レンダラーを適用（非対応環境では canvas fallback）
   const t = terminal;

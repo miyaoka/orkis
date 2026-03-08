@@ -11,6 +11,7 @@ const execFileAsync = promisify(execFile);
 import watcher from "@parcel/watcher";
 import type { AsyncSubscription } from "@parcel/watcher";
 import * as pty from "node-pty";
+import { tryCatch } from "@orkis/shared";
 import { cleanupSocket, setupSocketServer, type OrkisMessage } from "./socket-server";
 
 const ptys = new Map<number, pty.IPty>();
@@ -78,7 +79,12 @@ function createWindow() {
   });
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
-    void shell.openExternal(details.url);
+    const validated = validateExternalUrl(details.url);
+    if (validated) {
+      shell.openExternal(validated).catch((err: unknown) => {
+        console.error("[orkis] Failed to open external URL:", validated, err);
+      });
+    }
     return { action: "deny" };
   });
 
@@ -265,6 +271,27 @@ async function filterIgnored(entries: string[], cwd: string): Promise<Set<string
   }
 }
 
+const ALLOWED_EXTERNAL_PROTOCOLS = new Set(["https:", "http:"]);
+
+/** URL を厳密にパースし、許可されたプロトコルの場合のみ返す */
+function validateExternalUrl(raw: unknown): string | undefined {
+  if (typeof raw !== "string") return undefined;
+  const result = tryCatch(() => new URL(raw));
+  if (!result.ok) return undefined;
+  if (!ALLOWED_EXTERNAL_PROTOCOLS.has(result.value.protocol)) return undefined;
+  return result.value.href;
+}
+
+function setupShellHandlers() {
+  ipcMain.on("shell:openExternal", (_event, url: unknown) => {
+    const validated = validateExternalUrl(url);
+    if (!validated) return;
+    shell.openExternal(validated).catch((err: unknown) => {
+      console.error("[orkis] Failed to open external URL:", validated, err);
+    });
+  });
+}
+
 function setupRendererReadyHandler() {
   ipcMain.on("renderer:ready", (event) => {
     const win = BrowserWindow.fromWebContents(event.sender);
@@ -430,6 +457,7 @@ if (!gotTheLock) {
     setupPtyHandlers();
     setupFsHandlers();
     setupGitHandlers();
+    setupShellHandlers();
     setupRendererReadyHandler();
     socketServer = setupSocketServer(handleSocketMessage);
 
