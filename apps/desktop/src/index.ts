@@ -145,6 +145,11 @@ const fileServer = Bun.serve({
   hostname: "localhost",
   port: 0,
   async fetch(req) {
+    // GET/HEAD 以外は拒否
+    if (req.method !== "GET" && req.method !== "HEAD") {
+      return new Response("Method Not Allowed", { status: 405 });
+    }
+
     const url = new URL(req.url);
     const segments = url.pathname.split("/").filter(Boolean);
     const windowId = segments[0];
@@ -154,33 +159,39 @@ const fileServer = Bun.serve({
     if (!dir) return new Response("Forbidden", { status: 403 });
 
     const source = segments[1];
-    const relPath = decodeURIComponent(segments.slice(2).join("/"));
+    const decodeResult = tryCatch(() => decodeURIComponent(segments.slice(2).join("/")));
+    if (!decodeResult.ok) return new Response("Bad Request", { status: 400 });
+    const relPath = decodeResult.value;
     if (!relPath) return new Response("Not Found", { status: 404 });
 
-    const headers = { "X-Content-Type-Options": "nosniff" } as Record<string, string>;
+    const headers = {
+      "X-Content-Type-Options": "nosniff",
+      "Cache-Control": "no-store",
+    } as Record<string, string>;
+
+    // 拡張子から MIME タイプを推定
+    const ext = relPath.split(".").pop()?.toLowerCase() ?? "";
+    const mimeType = Bun.file(`dummy.${ext}`).type;
+    headers["Content-Type"] = mimeType;
 
     // /{windowId}/git/{relPath} — git show HEAD:path でファイルを返す
     if (source === "git") {
-      assertInsideRoot(dir, relPath);
+      const insideResult = tryCatch(() => assertInsideRoot(dir, relPath));
+      if (!insideResult.ok) return new Response("Forbidden", { status: 403 });
       const proc = Bun.spawn(["git", "show", `HEAD:${relPath}`], { cwd: dir });
-      const result = await tryCatch(new Response(proc.stdout).arrayBuffer());
+      const bufResult = await tryCatch(new Response(proc.stdout).arrayBuffer());
       await proc.exited;
-      if (!result.ok || proc.exitCode !== 0) {
+      if (!bufResult.ok || proc.exitCode !== 0) {
         return new Response("Not Found", { status: 404 });
       }
-      // 拡張子から MIME タイプを推定
-      const ext = relPath.split(".").pop()?.toLowerCase() ?? "";
-      const mimeType = Bun.file(`dummy.${ext}`).type;
-      headers["Content-Type"] = mimeType;
-      return new Response(result.value, { headers });
+      return new Response(bufResult.value, { headers });
     }
 
     // /{windowId}/fs/{relPath} — ファイルシステムから直接返す
     if (source === "fs") {
-      const secureResult = tryCatch(() => resolveSecurePath(dir, relPath));
-      if (!secureResult.ok) return new Response("Forbidden", { status: 403 });
-      const absolutePath = await secureResult.value;
-      return new Response(Bun.file(absolutePath), { headers });
+      const pathResult = await tryCatch(resolveSecurePath(dir, relPath));
+      if (!pathResult.ok) return new Response("Forbidden", { status: 403 });
+      return new Response(Bun.file(pathResult.value), { headers });
     }
 
     return new Response("Not Found", { status: 404 });

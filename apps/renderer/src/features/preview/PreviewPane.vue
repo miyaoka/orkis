@@ -202,7 +202,8 @@ function buildFileServerUrl(
     ? fileServerBaseUrl.value
     : `${fileServerBaseUrl.value}/`;
   const prefix = gitOriginal ? "git/" : "fs/";
-  const url = new URL(`${prefix}${encodeURI(relPath)}`, base);
+  const encodedPath = relPath.split("/").map(encodeURIComponent).join("/");
+  const url = new URL(`${prefix}${encodedPath}`, base);
   url.searchParams.set("v", String(version));
   return url.href;
 }

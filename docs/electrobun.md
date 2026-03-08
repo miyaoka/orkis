@@ -32,7 +32,7 @@ flowchart TB
     end
 
     desktop <-->|Electrobun RPC| renderer
-    cli -->|Unix socket\n/tmp/orkis.sock| desktop
+    cli -->|Unix socket<br>/tmp/orkis.sock| desktop
 ```
 
 ## WKWebView の制約
