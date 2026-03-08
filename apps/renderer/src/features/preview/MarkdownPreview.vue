@@ -28,7 +28,7 @@ const mermaidExtension: MarkedExtension = {
     code({ text, lang }) {
       if (lang === "mermaid") {
         const id = `mermaid-placeholder-${mermaidIdCounter++}`;
-        return `<div class="mermaid-block" data-mermaid-id="${id}" data-mermaid-source="${encodeURIComponent(text)}"></div>`;
+        return `<div class="_mermaid-block" data-mermaid-id="${id}" data-mermaid-source="${encodeURIComponent(text)}"></div>`;
       }
       return false;
     },
@@ -58,7 +58,7 @@ async function renderMermaidBlocks() {
   if (!container.value) return;
   ensureMermaidInit();
 
-  const blocks = container.value.querySelectorAll<HTMLElement>(".mermaid-block");
+  const blocks = container.value.querySelectorAll<HTMLElement>("._mermaid-block");
   for (const block of blocks) {
     const source = block.dataset.mermaidSource;
     const id = block.dataset.mermaidId;
@@ -88,17 +88,17 @@ onMounted(() => {
 </script>
 
 <template>
-  <div ref="container" class="markdown-body p-6 text-sm/relaxed" v-html="renderedHtml" />
+  <div ref="container" class="_markdown-body p-6 text-sm/relaxed" v-html="renderedHtml" />
 </template>
 
 <style scoped>
 /* Markdown レンダリングのスタイル */
 /* 先頭要素の上マージンを消す */
-.markdown-body :deep(> :first-child) {
+._markdown-body :deep(> :first-child) {
   margin-top: 0;
 }
 
-.markdown-body :deep(h1) {
+._markdown-body :deep(h1) {
   font-size: 1.75em;
   font-weight: 700;
   margin: 1.5em 0 0.5em;
@@ -107,7 +107,7 @@ onMounted(() => {
   color: var(--color-zinc-100);
 }
 
-.markdown-body :deep(h2) {
+._markdown-body :deep(h2) {
   font-size: 1.4em;
   font-weight: 600;
   margin: 1.25em 0 0.5em;
@@ -116,62 +116,62 @@ onMounted(() => {
   color: var(--color-zinc-100);
 }
 
-.markdown-body :deep(h3) {
+._markdown-body :deep(h3) {
   font-size: 1.15em;
   font-weight: 600;
   margin: 1em 0 0.5em;
   color: var(--color-zinc-200);
 }
 
-.markdown-body :deep(h4),
-.markdown-body :deep(h5),
-.markdown-body :deep(h6) {
+._markdown-body :deep(h4),
+._markdown-body :deep(h5),
+._markdown-body :deep(h6) {
   font-weight: 600;
   margin: 1em 0 0.5em;
   color: var(--color-zinc-300);
 }
 
-.markdown-body :deep(p) {
+._markdown-body :deep(p) {
   margin: 0.75em 0;
   color: var(--color-zinc-300);
 }
 
-.markdown-body :deep(a) {
+._markdown-body :deep(a) {
   color: var(--color-blue-400);
   text-decoration: underline;
 }
 
-.markdown-body :deep(strong) {
+._markdown-body :deep(strong) {
   color: var(--color-zinc-100);
 }
 
-.markdown-body :deep(ul),
-.markdown-body :deep(ol) {
+._markdown-body :deep(ul),
+._markdown-body :deep(ol) {
   margin: 0.5em 0;
   padding-left: 1.5em;
   color: var(--color-zinc-300);
 }
 
-.markdown-body :deep(ul) {
+._markdown-body :deep(ul) {
   list-style-type: disc;
 }
 
-.markdown-body :deep(ol) {
+._markdown-body :deep(ol) {
   list-style-type: decimal;
 }
 
-.markdown-body :deep(li) {
+._markdown-body :deep(li) {
   margin: 0.25em 0;
 }
 
-.markdown-body :deep(blockquote) {
+._markdown-body :deep(blockquote) {
   margin: 0.75em 0;
   padding: 0.5em 1em;
   border-left: 3px solid var(--color-zinc-600);
   color: var(--color-zinc-400);
 }
 
-.markdown-body :deep(code) {
+._markdown-body :deep(code) {
   padding: 0.15em 0.4em;
   border-radius: 3px;
   background: var(--color-zinc-800);
@@ -179,7 +179,7 @@ onMounted(() => {
   font-size: 0.9em;
 }
 
-.markdown-body :deep(pre) {
+._markdown-body :deep(pre) {
   margin: 0.75em 0;
   padding: 1em;
   border-radius: 6px;
@@ -187,49 +187,49 @@ onMounted(() => {
   overflow-x: auto;
 }
 
-.markdown-body :deep(pre code) {
+._markdown-body :deep(pre code) {
   padding: 0;
   background: transparent;
   line-height: 1.375;
 }
 
-.markdown-body :deep(table) {
+._markdown-body :deep(table) {
   width: 100%;
   margin: 0.75em 0;
   border-collapse: collapse;
 }
 
-.markdown-body :deep(th),
-.markdown-body :deep(td) {
+._markdown-body :deep(th),
+._markdown-body :deep(td) {
   padding: 0.5em 0.75em;
   border: 1px solid var(--color-zinc-700);
   color: var(--color-zinc-300);
 }
 
-.markdown-body :deep(th) {
+._markdown-body :deep(th) {
   background: var(--color-zinc-800);
   font-weight: 600;
   color: var(--color-zinc-200);
 }
 
-.markdown-body :deep(hr) {
+._markdown-body :deep(hr) {
   margin: 1.5em 0;
   border: none;
   border-top: 1px solid var(--color-zinc-700);
 }
 
-.markdown-body :deep(img) {
+._markdown-body :deep(img) {
   max-width: 100%;
 }
 
 /* GitHub 形式のアラート (> [!NOTE] 等) */
-.markdown-body :deep(.mermaid-block) {
+._markdown-body :deep(._mermaid-block) {
   margin: 0.75em 0;
   display: flex;
   justify-content: center;
 }
 
-.markdown-body :deep(.mermaid-block svg) {
+._markdown-body :deep(._mermaid-block svg) {
   max-width: 100%;
 }
 </style>

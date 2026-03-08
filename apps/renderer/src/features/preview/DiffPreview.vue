@@ -20,10 +20,10 @@ function diffLineClass(line: string): string {
 </script>
 
 <template>
-  <pre class="line-numbered p-4 text-sm/tight"><span
+  <pre class="_line-numbered p-4 text-sm/tight"><span
       v-for="(line, i) in content.split('\n')"
       :key="i"
-      class="line"
+      class="_line"
       :class="diffLineClass(line)"
       :data-line="i + 1"
     >{{ line }}
@@ -31,11 +31,11 @@ function diffLineClass(line: string): string {
 </template>
 
 <style scoped>
-.line-numbered .line {
+._line-numbered ._line {
   display: block;
 }
 
-.line-numbered .line::before {
+._line-numbered ._line::before {
   content: attr(data-line);
   display: inline-block;
   width: 3ch;

@@ -23,21 +23,21 @@ watch(
 
 <template>
   <!-- ハイライト済み HTML -->
-  <div v-if="highlightedHtml" class="highlighted-code text-sm/tight" v-html="highlightedHtml" />
+  <div v-if="highlightedHtml" class="_highlighted-code text-sm/tight" v-html="highlightedHtml" />
 
   <!-- フォールバック: プレーンテキスト -->
-  <pre v-else class="line-numbered p-4 text-sm/tight text-zinc-300"><code><span
+  <pre v-else class="_line-numbered p-4 text-sm/tight text-zinc-300"><code><span
         v-for="(line, i) in content.split('\n')"
         :key="i"
-        class="line"
+        class="_line"
         :data-line="i + 1"
       >{{ line }}
 </span></code></pre>
 </template>
 
 <style scoped>
-.line-numbered .line::before,
-.highlighted-code :deep(.line::before) {
+._line-numbered ._line::before,
+._highlighted-code :deep(._line::before) {
   content: attr(data-line);
   display: inline-block;
   width: 3ch;
@@ -47,13 +47,13 @@ watch(
   user-select: none;
 }
 
-.highlighted-code :deep(pre) {
+._highlighted-code :deep(pre) {
   padding: 1rem;
   margin: 0;
   background: transparent !important;
 }
 
-.highlighted-code :deep(code) {
+._highlighted-code :deep(code) {
   font-family: inherit;
 }
 </style>
