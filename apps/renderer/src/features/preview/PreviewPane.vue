@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, onUnmounted, ref, watch } from "vue";
 import type { GitChangeKind } from "../filer/filer-utils";
 import { getFileIconName, getIconUrl } from "../filer/useFileIcon";
 import { useSelectedPath } from "../filer/useSelectedPath";
@@ -38,7 +38,7 @@ function hasRenderedView(ft: FileType): boolean {
 }
 
 const { selectedPath, selectedGitChange } = useSelectedPath();
-const { request } = useRpc();
+const { request, onFsChange } = useRpc();
 
 const currentContent = ref<string>();
 const originalContent = ref<string>();
@@ -88,60 +88,87 @@ const MODE_LABELS: Record<PreviewMode, { icon: string; label: string }> = {
 /** 非同期レース防止用のバージョンカウンター */
 let fetchVersion = 0;
 
+/** ファイル内容を取得する（watch と fsChange から共用） */
+async function fetchContent(path: string, gitChange: GitChangeKind | undefined) {
+  loading.value = true;
+  error.value = undefined;
+
+  const version = ++fetchVersion;
+
+  try {
+    const isDeleted = gitChange === "deleted";
+    const hasDiff = hasGitDiff(gitChange);
+
+    // 並列でデータ取得
+    const [currentResult, originalResult] = await Promise.all([
+      isDeleted ? undefined : request.fsReadFile({ relPath: path }),
+      hasDiff || isDeleted ? request.gitShowFile({ relPath: path }) : undefined,
+    ]);
+
+    // 別の読み込みが開始された場合は結果を破棄
+    if (version !== fetchVersion) return;
+
+    if (currentResult) {
+      currentContent.value = currentResult.content;
+      isBinary.value = currentResult.isBinary;
+      imageDataUrl.value = currentResult.dataUrl;
+    } else {
+      currentContent.value = undefined;
+      isBinary.value = false;
+      imageDataUrl.value = undefined;
+    }
+    if (originalResult) {
+      originalContent.value = originalResult.content;
+      isOriginalBinary.value = originalResult.isBinary;
+    } else {
+      originalContent.value = undefined;
+      isOriginalBinary.value = false;
+    }
+  } catch (e) {
+    if (version !== fetchVersion) return;
+    error.value = e instanceof Error ? e.message : "Failed to read file";
+  } finally {
+    if (version === fetchVersion) {
+      loading.value = false;
+    }
+  }
+}
+
+/** ファイル選択またはgit status変化時にリセット＋再取得 */
 watch(
   () => [selectedPath.value, selectedGitChange.value] as const,
   async ([path, gitChange]) => {
-    // リセット
-    currentContent.value = undefined;
-    originalContent.value = undefined;
-    imageDataUrl.value = undefined;
     previewEnabled.value = true;
-    isBinary.value = false;
-    isOriginalBinary.value = false;
-    error.value = undefined;
 
-    if (!path) return;
+    if (!path) {
+      currentContent.value = undefined;
+      originalContent.value = undefined;
+      imageDataUrl.value = undefined;
+      isBinary.value = false;
+      isOriginalBinary.value = false;
+      error.value = undefined;
+      return;
+    }
 
     activeMode.value = defaultMode(gitChange);
-    loading.value = true;
-
-    const version = ++fetchVersion;
-
-    try {
-      const isDeleted = gitChange === "deleted";
-      const hasDiff = hasGitDiff(gitChange);
-
-      // 並列でデータ取得
-      const [currentResult, originalResult] = await Promise.all([
-        isDeleted ? undefined : request.fsReadFile({ relPath: path }),
-        hasDiff || isDeleted ? request.gitShowFile({ relPath: path }) : undefined,
-      ]);
-
-      // 別のファイルが選択された場合は結果を破棄
-      if (version !== fetchVersion) return;
-
-      if (currentResult) {
-        currentContent.value = currentResult.content;
-        isBinary.value = currentResult.isBinary;
-        if (currentResult.dataUrl) {
-          imageDataUrl.value = currentResult.dataUrl;
-        }
-      }
-      if (originalResult) {
-        originalContent.value = originalResult.content;
-        isOriginalBinary.value = originalResult.isBinary;
-      }
-    } catch (e) {
-      if (version !== fetchVersion) return;
-      error.value = e instanceof Error ? e.message : "Failed to read file";
-    } finally {
-      if (version === fetchVersion) {
-        loading.value = false;
-      }
-    }
+    await fetchContent(path, gitChange);
   },
   { immediate: true },
 );
+
+/** ファイル変更通知で選択中ファイルの内容を再取得（モード・UI状態は維持） */
+function parentDir(filePath: string): string {
+  const idx = filePath.lastIndexOf("/");
+  if (idx < 0) return ".";
+  return filePath.substring(0, idx);
+}
+
+const unsubscribeFsChange = onFsChange(({ relDir }) => {
+  if (!selectedPath.value) return;
+  if (relDir !== parentDir(selectedPath.value)) return;
+  void fetchContent(selectedPath.value, selectedGitChange.value);
+});
+onUnmounted(unsubscribeFsChange);
 
 /** 表示中のテキストコンテンツ */
 const displayContent = computed(() => {
