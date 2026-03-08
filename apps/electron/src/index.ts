@@ -97,8 +97,8 @@ let socketServer: net.Server | undefined;
 const windowDirs = new Map<number, string>();
 // ウィンドウごとのファイル監視サブスクリプション
 const windowWatchers = new Map<number, AsyncSubscription>();
-// ウィンドウごとの .git/index 監視（git 操作の検知用）
-const gitIndexWatchers = new Map<number, string>();
+// ウィンドウごとの .git 関連ファイル監視（git 操作の検知用）
+const gitWatchedFiles = new Map<number, string[]>();
 
 /**
  * 指定ウィンドウのワークスペースディレクトリをファイル監視する。
@@ -133,13 +133,31 @@ async function startWatching(windowId: number, root: string) {
 
   windowWatchers.set(windowId, subscription);
 
-  // .git/index を監視して git 操作（commit, checkout, stash 等）を検知
-  const gitIndexPath = path.join(root, ".git", "index");
-  const GIT_INDEX_POLL_MS = 500;
-  nodeFs.watchFile(gitIndexPath, { interval: GIT_INDEX_POLL_MS }, () => {
-    scheduleGitStatusUpdate(windowId, root);
-  });
-  gitIndexWatchers.set(windowId, gitIndexPath);
+  // .git 関連ファイルを監視して git 操作（add, commit, checkout, stash 等）を検知
+  // .git/index: add/stage で更新
+  // .git/HEAD: checkout で更新
+  // .git/refs/heads/<branch>: commit/merge/rebase で更新
+  const gitDir = path.join(root, ".git");
+  const filesToWatch = [path.join(gitDir, "index"), path.join(gitDir, "HEAD")];
+
+  // 現在のブランチの ref ファイルを取得
+  try {
+    const headContent = nodeFs.readFileSync(path.join(gitDir, "HEAD"), "utf-8").trim();
+    if (headContent.startsWith("ref: ")) {
+      const refPath = path.join(gitDir, headContent.slice(5));
+      filesToWatch.push(refPath);
+    }
+  } catch {
+    // HEAD が読めない場合は index と HEAD のみ監視
+  }
+
+  const GIT_WATCH_POLL_MS = 500;
+  for (const filePath of filesToWatch) {
+    nodeFs.watchFile(filePath, { interval: GIT_WATCH_POLL_MS }, () => {
+      scheduleGitStatusUpdate(windowId, root);
+    });
+  }
+  gitWatchedFiles.set(windowId, filesToWatch);
 }
 
 async function stopWatching(windowId: number) {
@@ -148,10 +166,12 @@ async function stopWatching(windowId: number) {
     await subscription.unsubscribe();
     windowWatchers.delete(windowId);
   }
-  const gitIndexPath = gitIndexWatchers.get(windowId);
-  if (gitIndexPath) {
-    nodeFs.unwatchFile(gitIndexPath);
-    gitIndexWatchers.delete(windowId);
+  const watchedFiles = gitWatchedFiles.get(windowId);
+  if (watchedFiles) {
+    for (const filePath of watchedFiles) {
+      nodeFs.unwatchFile(filePath);
+    }
+    gitWatchedFiles.delete(windowId);
   }
 }
 
@@ -358,10 +378,12 @@ app.on("will-quit", () => {
     void subscription.unsubscribe();
   }
   windowWatchers.clear();
-  for (const gitIndexPath of gitIndexWatchers.values()) {
-    nodeFs.unwatchFile(gitIndexPath);
+  for (const watchedFiles of gitWatchedFiles.values()) {
+    for (const filePath of watchedFiles) {
+      nodeFs.unwatchFile(filePath);
+    }
   }
-  gitIndexWatchers.clear();
+  gitWatchedFiles.clear();
   if (socketServer) {
     cleanupSocket(socketServer);
   }

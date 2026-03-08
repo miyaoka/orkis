@@ -3,24 +3,15 @@ import { onUnmounted, ref, watch } from "vue";
 import { dirName, getDeletedEntries, resolveGitChangeKind, sortEntries } from "./filer-utils";
 import type { FileEntry } from "./filer-utils";
 import FileTreeItem from "./FileTreeItem.vue";
+import { useGitStatus } from "./useGitStatus";
 import { useWorkspace } from "./useWorkspace";
 
 const { dir } = useWorkspace();
+const { gitStatuses, loadGitStatus, setGitStatuses } = useGitStatus();
 
 const rootEntries = ref<FileEntry[]>();
-const gitStatuses = ref<Record<string, string>>({});
 const selectedPath = ref<string>();
 const loading = ref(false);
-
-/** git status を取得して gitStatuses を更新 */
-async function loadGitStatus() {
-  try {
-    gitStatuses.value = await window.api.git.status();
-  } catch (e) {
-    console.error("Failed to get git status", e);
-    gitStatuses.value = {};
-  }
-}
 
 /** readDir の結果に git 変更情報と削除ファイルをマージする */
 function mergeWithGitStatus(entries: FileEntry[], dirPath: string): FileEntry[] {
@@ -79,10 +70,16 @@ function handleFsChange(relDir: string) {
   }
 }
 
-function handleGitStatusChange(statuses: Record<string, string>) {
-  gitStatuses.value = statuses;
-  // ルートツリーを再構築して反映
-  void loadRoot();
+async function handleGitStatusChange(statuses: Record<string, string>) {
+  setGitStatuses(statuses);
+  // 削除ファイルのエントリ追加/除去のためルートを再構築
+  // loadGitStatus は不要（プッシュ通知で受け取った値を使う）
+  try {
+    const entries = await window.api.fs.readDir(".");
+    rootEntries.value = mergeWithGitStatus(entries, "");
+  } catch (e) {
+    console.error("Failed to rebuild root entries", e);
+  }
 }
 
 watch(

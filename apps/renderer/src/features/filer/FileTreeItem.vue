@@ -38,19 +38,21 @@ const children = ref<FileEntry[]>();
 const childRefs = ref<InstanceType<typeof import("./FileTreeItem.vue").default>[]>([]);
 const loading = ref(false);
 
-/** ディレクトリの場合は子の変更状態から色を推論、ファイルは自身の変更種別を使う */
+/** gitStatuses マップからリアルタイムに変更種別を算出する */
 const effectiveGitChange = computed<GitChangeKind | undefined>(() => {
-  if (props.gitChange) return props.gitChange;
   if (props.isDirectory) {
     return resolveDirectoryGitChange(props.path, props.gitStatuses);
   }
-  return undefined;
+  const statusCode = props.gitStatuses[props.path];
+  if (statusCode) return resolveGitChangeKind(statusCode);
+  // 削除ファイルは gitStatuses に含まれないが、親から gitChange で渡される
+  return props.gitChange;
 });
 
 const textColorClass = computed(() => {
-  if (props.selectedPath === props.path) return "text-white";
   if (effectiveGitChange.value) return GIT_CHANGE_COLOR_MAP[effectiveGitChange.value];
   if (props.isIgnored) return "text-zinc-500";
+  if (props.selectedPath === props.path) return "text-white";
   return "text-zinc-300";
 });
 
