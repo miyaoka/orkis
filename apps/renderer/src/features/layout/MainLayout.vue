@@ -1,3 +1,12 @@
+<doc lang="md">
+アプリ全体のレイアウトを構成するコンテナ。
+
+## 構成
+
+- 水平方向: SidebarPane → FilerPane → PreviewPane → TerminalPane
+- 最下部: DebugPane
+</doc>
+
 <script setup lang="ts">
 import DebugPane from "../debug/DebugPane.vue";
 import FilerPane from "../filer/FilerPane.vue";

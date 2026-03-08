@@ -1,3 +1,14 @@
+<doc lang="md">
+ghostty-web ベースのターミナルエミュレータ。
+
+## ライフサイクル
+
+- マウント時に WASM パーサーを初期化し、RPC 経由で PTY を生成
+- FitAddon + ResizeObserver でコンテナサイズに自動追従
+- PTY ↔ Terminal 間のデータを双方向にブリッジ
+- アンマウント時に PTY を kill し Terminal を dispose
+</doc>
+
 <script setup lang="ts">
 import { init, Terminal, FitAddon } from "ghostty-web";
 import { onMounted, onBeforeUnmount, ref } from "vue";

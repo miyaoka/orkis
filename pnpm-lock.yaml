@@ -170,6 +170,9 @@ importers:
       '@iconify/tailwind4':
         specifier: 1.2.3
         version: 1.2.3(tailwindcss@4.2.1)
+      '@miyaoka/vite-plugin-doc-block':
+        specifier: ^0.0.2
+        version: 0.0.2(vite@8.0.0-beta.16(@types/node@25.3.3)(esbuild@0.27.3)(jiti@2.6.1)(tsx@4.21.0))(vue@3.5.29(typescript@5.9.3))
       '@tailwindcss/vite':
         specifier: 'catalog:'
         version: 4.2.1(vite@8.0.0-beta.16(@types/node@25.3.3)(esbuild@0.27.3)(jiti@2.6.1)(tsx@4.21.0))
@@ -545,6 +548,12 @@ packages:
   '@miyaoka/fsss@0.3.1':
     resolution: {integrity: sha512-xy2BEuHJDe8fQJMVWrqIUnE8AQpl15/hzB68R/xBlJiLMkVF58KUBV28s6fCVQtC5BKSS3qGsdLfoY/mm50aMA==}
     hasBin: true
+
+  '@miyaoka/vite-plugin-doc-block@0.0.2':
+    resolution: {integrity: sha512-YRw8jgPIo1RyXNN4GY1lGOSrzillJzbor5gm2FT//cy3Xher069HoaZS7IMN9r2trpzfY3PkE14wEw9s/CGx+A==}
+    peerDependencies:
+      vite: ^5.0.0 || ^6.0.0 || ^7.0.0 || ^8.0.0
+      vue: ^3.0.0
 
   '@napi-rs/wasm-runtime@0.2.12':
     resolution: {integrity: sha512-ZVWUcfwY4E/yPitQJl481FjFo3K22D6qF0DuFH6Y/nbnE11GY5uguDxZMGXPQ8WQ0128MXQD7TnfHyK4oWoIJQ==}
@@ -3390,6 +3399,11 @@ snapshots:
   '@miyaoka/fsss@0.3.1':
     dependencies:
       zod: 4.3.6
+
+  '@miyaoka/vite-plugin-doc-block@0.0.2(vite@8.0.0-beta.16(@types/node@25.3.3)(esbuild@0.27.3)(jiti@2.6.1)(tsx@4.21.0))(vue@3.5.29(typescript@5.9.3))':
+    dependencies:
+      vite: 8.0.0-beta.16(@types/node@25.3.3)(esbuild@0.27.3)(jiti@2.6.1)(tsx@4.21.0)
+      vue: 3.5.29(typescript@5.9.3)
 
   '@napi-rs/wasm-runtime@0.2.12':
     dependencies:

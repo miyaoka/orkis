@@ -1,3 +1,10 @@
+<doc lang="md">
+marked で Markdown → HTML 変換し、DOMPurify でサニタイズして表示する。
+
+- YAML frontmatter はコードブロックとして描画
+- ` ```mermaid ` コードブロックは mermaid ライブラリで SVG にレンダリング
+</doc>
+
 <script setup lang="ts">
 import DOMPurify from "dompurify";
 import { marked, type MarkedExtension } from "marked";

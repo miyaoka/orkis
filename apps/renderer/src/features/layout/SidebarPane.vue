@@ -1,3 +1,7 @@
+<doc lang="md">
+左端のサイドバー。アプリロゴと今後実装予定の Todos セクションを表示する。
+</doc>
+
 <template>
   <div class="flex w-56 shrink-0 flex-col border-r border-zinc-700 p-4">
     <h1 class="mb-4 text-lg font-bold">

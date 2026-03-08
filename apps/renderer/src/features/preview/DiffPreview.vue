@@ -1,3 +1,8 @@
+<doc lang="md">
+jsdiff の `diffLines` による行単位の unified diff ビュー。
+追加行（緑）/ 削除行（赤）/ 変更なし行を旧行番号・新行番号付きで表示する。
+</doc>
+
 <script setup lang="ts">
 import { diffLines } from "diff";
 import { computed } from "vue";

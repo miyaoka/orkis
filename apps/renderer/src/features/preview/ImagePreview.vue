@@ -1,3 +1,8 @@
+<doc lang="md">
+画像ファイルのプレビュー。ファイルサーバー経由の URL を `src` として受け取り、
+アスペクト比を保ったまま中央に表示する。
+</doc>
+
 <script setup lang="ts">
 defineProps<{
   /** 画像の data: URL */

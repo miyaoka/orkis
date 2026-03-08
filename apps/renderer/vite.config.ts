@@ -1,9 +1,10 @@
+import { docBlockPlugin } from "@miyaoka/vite-plugin-doc-block";
 import tailwindcss from "@tailwindcss/vite";
 import vue from "@vitejs/plugin-vue";
 import { defineConfig } from "vite";
 
 export default defineConfig({
-  plugins: [tailwindcss(), vue()],
+  plugins: [docBlockPlugin(), tailwindcss(), vue()],
   base: "./",
   build: {
     outDir: "dist",

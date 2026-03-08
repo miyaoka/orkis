@@ -1,3 +1,10 @@
+<doc lang="md">
+Shiki によるシンタックスハイライト付きコード表示。
+
+- 非同期ハイライト完了までは行番号付きプレーンテキストをフォールバック表示
+- バージョンカウンターで非同期レースを防止
+</doc>
+
 <script setup lang="ts">
 import { watch, ref } from "vue";
 import { highlight } from "./useHighlight";
