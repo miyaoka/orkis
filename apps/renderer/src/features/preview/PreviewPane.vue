@@ -1,3 +1,25 @@
+<doc lang="md">
+ファイルプレビューの統合コンテナ。選択ファイルの拡張子に応じて子コンポーネントを切り替える。
+
+## プレビュー種別
+
+- コード → CodePreview（Shiki ハイライト）
+- 差分 → DiffPreview（jsdiff 行単位）
+- 画像 / SVG → ImagePreview（ファイルサーバー URL）
+- Markdown → MarkdownPreview（marked + mermaid）
+
+## モード切替
+
+- git 変更があるファイルでは Current / Diff / Original タブを表示
+- SVG・Markdown・画像は Preview チェックボックスでレンダリング/ソース表示を切替可能
+
+## データ取得
+
+- ファイル選択・git status 変化時に current / original を並列取得
+- fsChange メッセージで選択中ファイルをリアクティブに再取得
+- バージョンカウンターで非同期レースを防止
+</doc>
+
 <script setup lang="ts">
 import { computed, onUnmounted, ref, watch } from "vue";
 import type { GitChangeKind } from "../filer/filer-utils";

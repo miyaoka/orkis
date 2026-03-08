@@ -1,3 +1,13 @@
+<doc lang="md">
+開発用デバッグ情報パネル。
+
+## 表示内容
+
+- 現在のモード（dev / build）
+- 開いているディレクトリ・ファイル
+- git status（staged / unstaged）を変更種別ごとに色分けして一覧表示
+</doc>
+
 <script setup lang="ts">
 import { computed } from "vue";
 import { resolveGitChangeKind } from "../filer/filer-utils";

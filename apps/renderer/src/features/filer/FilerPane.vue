@@ -1,3 +1,13 @@
+<doc lang="md">
+ファイルツリーのルートコンテナ。
+
+## 動作
+
+- ワークスペースのディレクトリが設定されるとルートエントリを読み込み、FileTreeItem を再帰的にレンダリング
+- fsChange / gitStatusChange の RPC メッセージを購読し、変更があったディレクトリのみ差分更新
+- git 削除ファイルは仮想エントリとしてツリーに挿入
+</doc>
+
 <script setup lang="ts">
 import { onUnmounted, ref, watch } from "vue";
 import { useRpc } from "../rpc/useRpc";

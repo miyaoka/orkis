@@ -1,3 +1,17 @@
+<doc lang="md">
+ファイルツリーの再帰的なノード。
+
+## 動作
+
+- ディレクトリは展開/折りたたみ可能で、初回展開時に RPC で子エントリを遅延読み込み
+- material-icon-theme のアイコンを表示
+- git status に応じた色分け（modified=黄、added=緑、deleted=赤、renamed=青）と削除ファイルの打ち消し線
+
+## 更新
+
+- 親から `notifyChange` / `notifyGitStatusChange` を呼ばれてツリーを差分更新
+</doc>
+
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import { useRpc } from "../rpc/useRpc";
