@@ -1,20 +1,45 @@
 <script setup lang="ts">
 import { onUnmounted, ref, watch } from "vue";
-import { dirName, sortEntries } from "./filer-utils";
+import { dirName, getDeletedEntries, resolveGitChangeKind, sortEntries } from "./filer-utils";
+import type { FileEntry } from "./filer-utils";
 import FileTreeItem from "./FileTreeItem.vue";
+import { useGitStatus } from "./useGitStatus";
 import { useWorkspace } from "./useWorkspace";
 
 const { dir } = useWorkspace();
+const { gitStatuses, loadGitStatus, setGitStatuses } = useGitStatus();
 
-const rootEntries = ref<ReturnType<typeof sortEntries>>();
+const rootEntries = ref<FileEntry[]>();
 const selectedPath = ref<string>();
 const loading = ref(false);
+
+/** readDir の結果に git 変更情報と削除ファイルをマージする */
+function mergeWithGitStatus(entries: FileEntry[], dirPath: string): FileEntry[] {
+  const existingNames = new Set(entries.map((e) => e.name));
+
+  // 既存エントリに git 変更種別を付与
+  const withGitChange = entries.map((entry) => {
+    const filePath = dirPath === "" ? entry.name : `${dirPath}/${entry.name}`;
+    const statusCode = gitStatuses.value[filePath];
+    if (statusCode) {
+      return { ...entry, gitChange: resolveGitChangeKind(statusCode) } as FileEntry;
+    }
+    return entry;
+  });
+
+  // 削除ファイルを追加（既存エントリと重複しないもののみ）
+  const deletedEntries = getDeletedEntries(dirPath, gitStatuses.value).filter(
+    (e) => !existingNames.has(e.name),
+  );
+
+  return sortEntries([...withGitChange, ...deletedEntries]);
+}
 
 async function loadRoot() {
   loading.value = true;
   try {
-    const entries = await window.api.fs.readDir(".");
-    rootEntries.value = sortEntries(entries);
+    const [entries] = await Promise.all([window.api.fs.readDir("."), loadGitStatus()]);
+    rootEntries.value = mergeWithGitStatus(entries, "");
   } catch (e) {
     console.error("Failed to read root directory", e);
     rootEntries.value = [];
@@ -45,6 +70,18 @@ function handleFsChange(relDir: string) {
   }
 }
 
+async function handleGitStatusChange(statuses: Record<string, string>) {
+  setGitStatuses(statuses);
+  // 削除ファイルのエントリ追加/除去のためルートを再構築
+  // loadGitStatus は不要（プッシュ通知で受け取った値を使う）
+  try {
+    const entries = await window.api.fs.readDir(".");
+    rootEntries.value = mergeWithGitStatus(entries, "");
+  } catch (e) {
+    console.error("Failed to rebuild root entries", e);
+  }
+}
+
 watch(
   dir,
   (newDir) => {
@@ -58,8 +95,10 @@ watch(
 );
 
 const unsubscribeFsChange = window.api.fs.onChange(handleFsChange);
+const unsubscribeGitStatus = window.api.git.onStatusChange(handleGitStatusChange);
 onUnmounted(() => {
   unsubscribeFsChange();
+  unsubscribeGitStatus();
 });
 </script>
 
@@ -88,6 +127,8 @@ onUnmounted(() => {
           :path="entry.name"
           :is-directory="entry.isDirectory"
           :is-ignored="entry.isIgnored"
+          :git-change="entry.gitChange"
+          :git-statuses="gitStatuses"
           :depth="0"
           :selected-path="selectedPath"
           @select="onSelect"
