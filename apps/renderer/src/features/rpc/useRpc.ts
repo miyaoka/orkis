@@ -39,6 +39,15 @@ const rpc = Electroview.defineRPC<OrkisRPC>({
 
 const electrobun = new Electrobun.Electroview({ rpc });
 
+// Electrobun WebView では window.open が機能しないため、
+// RPC 経由で bun 側の openExternal に転送する
+window.open = (url) => {
+  if (typeof url === "string") {
+    electrobun.rpc!.send.openExternal({ url });
+  }
+  return null;
+};
+
 /** disposer パターンでリスナーを登録する */
 function subscribe<K extends keyof typeof listeners>(key: K, fn: (typeof listeners)[K][number]) {
   (listeners[key] as Array<typeof fn>).push(fn);
