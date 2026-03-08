@@ -60,6 +60,11 @@ orkis/
 
 ## コーディング規約
 
+### CSS クラス名
+
+- Tailwind ユーティリティ以外のカスタム CSS クラスには `_` プレフィックスを付ける（例: `_markdown-body`, `_line-numbered`）
+- ESLint の `better-tailwindcss/no-unknown-classes` ルールで `_.*` パターンが除外設定されている
+
 ### エラーハンドリング
 
 - try-catch は使わず、`@orkis/shared` の `tryCatch` を使って Result 型で処理する

@@ -4,10 +4,12 @@ import { useRpc } from "../rpc/useRpc";
 import {
   getDeletedEntries,
   resolveDirectoryGitChange,
+  resolveFileGitChange,
   resolveGitChangeKind,
   sortEntries,
 } from "./filer-utils";
 import type { FileEntry, GitChangeKind } from "./filer-utils";
+import { getFileIconName, getFolderIconName, getIconUrl } from "./useFileIcon";
 
 const GIT_CHANGE_COLOR_MAP: Record<GitChangeKind, string> = {
   modified: "text-yellow-400",
@@ -49,9 +51,7 @@ const effectiveGitChange = computed<GitChangeKind | undefined>(() => {
   if (props.isDirectory) {
     return resolveDirectoryGitChange(props.path, props.gitStatuses);
   }
-  const statusCode = props.gitStatuses[props.path];
-  if (statusCode) return resolveGitChangeKind(statusCode);
-  return props.gitChange;
+  return resolveFileGitChange(props.path, props.gitStatuses);
 });
 
 const textColorClass = computed(() => {
@@ -63,6 +63,14 @@ const textColorClass = computed(() => {
 
 /** 削除ファイルかどうか */
 const isDeleted = computed(() => props.gitChange === "deleted");
+
+/** material-icon-theme のアイコン URL */
+const iconUrl = computed(() => {
+  if (props.isDirectory) {
+    return getIconUrl(getFolderIconName(props.name, expanded.value));
+  }
+  return getIconUrl(getFileIconName(props.name));
+});
 
 async function toggle() {
   if (!props.isDirectory) {
@@ -171,7 +179,15 @@ function onChildSelect(childPath: string) {
       <!-- ファイル用のスペーサー -->
       <span v-else class="size-4 shrink-0" />
 
+      <img
+        v-if="iconUrl"
+        :src="iconUrl"
+        class="size-4 shrink-0"
+        :class="isIgnored ? 'opacity-50' : ''"
+        alt=""
+      />
       <span
+        v-else
         class="size-4 shrink-0"
         :class="
           isDirectory

@@ -5,14 +5,15 @@ import { dirName, getDeletedEntries, resolveGitChangeKind, sortEntries } from ".
 import type { FileEntry } from "./filer-utils";
 import FileTreeItem from "./FileTreeItem.vue";
 import { useGitStatus } from "./useGitStatus";
+import { useSelectedPath } from "./useSelectedPath";
 import { useWorkspace } from "./useWorkspace";
 
 const { dir } = useWorkspace();
 const { gitStatuses, loadGitStatus, setGitStatuses } = useGitStatus();
 const { request, onFsChange, onGitStatusChange } = useRpc();
+const { selectedPath, select, clear: clearSelection } = useSelectedPath();
 
 const rootEntries = ref<FileEntry[]>();
-const selectedPath = ref<string>();
 const loading = ref(false);
 
 /** readDir の結果に git 変更情報と削除ファイルをマージする */
@@ -51,7 +52,7 @@ async function loadRoot() {
 }
 
 function onSelect(path: string) {
-  selectedPath.value = path;
+  select(path);
 }
 
 /**
@@ -89,7 +90,7 @@ watch(
   (newDir) => {
     if (newDir) {
       rootEntries.value = undefined;
-      selectedPath.value = undefined;
+      clearSelection();
       void loadRoot();
     }
   },

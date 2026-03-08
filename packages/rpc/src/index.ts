@@ -6,6 +6,14 @@ export interface FileEntry {
   isIgnored: boolean;
 }
 
+export interface FileReadResult {
+  content: string;
+  /** バイナリ等で読み取れなかった場合 true */
+  isBinary: boolean;
+  /** 画像ファイルの場合、data: URL（base64） */
+  dataUrl?: string;
+}
+
 export type OrkisRPC = {
   bun: RPCSchema<{
     requests: {
@@ -16,6 +24,20 @@ export type OrkisRPC = {
       fsReadDir: {
         params: { relPath: string };
         response: FileEntry[];
+      };
+      fsReadFile: {
+        params: { relPath: string };
+        response: FileReadResult;
+      };
+      /** git show HEAD:<path> で変更前のファイル内容を取得 */
+      gitShowFile: {
+        params: { relPath: string };
+        response: FileReadResult;
+      };
+      /** git diff <path> で unified diff を取得 */
+      gitDiffFile: {
+        params: { relPath: string };
+        response: string;
       };
       gitStatus: {
         params: undefined;

@@ -84,6 +84,15 @@ async function resolveSecurePath(root: string, relPath: string): Promise<string>
   return real;
 }
 
+/** ファイルが存在しなくてもパストラバーサルだけを防ぐチェック（git 操作用） */
+function assertInsideRoot(root: string, relPath: string): void {
+  const resolved = path.resolve(root, relPath);
+  const relative = path.relative(root, resolved);
+  if (relative.startsWith("..") || path.isAbsolute(relative)) {
+    throw new Error("Access denied: path is outside workspace root");
+  }
+}
+
 // --- git ---
 
 async function filterIgnored(entries: string[], cwd: string): Promise<Set<string>> {
@@ -293,11 +302,67 @@ function createWindowWithRPC(dir: string): OrkisWindow {
           const names = visibleEntries.map((e) => e.name);
           const ignored = await filterIgnored(names, absolutePath);
 
-          return visibleEntries.map((entry) => ({
-            name: entry.name,
-            isDirectory: entry.isDirectory(),
-            isIgnored: ignored.has(entry.name),
-          }));
+          return Promise.all(
+            visibleEntries.map(async (entry) => {
+              let isDirectory = entry.isDirectory();
+              // Bun の readdir はシンボリックリンクで isDirectory() が false を返すため stat で確認
+              if (!isDirectory && entry.isSymbolicLink()) {
+                const statResult = await tryCatch(fsp.stat(path.join(absolutePath, entry.name)));
+                if (statResult.ok) {
+                  isDirectory = statResult.value.isDirectory();
+                }
+              }
+              return {
+                name: entry.name,
+                isDirectory,
+                isIgnored: ignored.has(entry.name),
+              };
+            }),
+          );
+        },
+        fsReadFile: async ({ relPath }) => {
+          const absolutePath = await resolveSecurePath(dir, relPath);
+          const file = Bun.file(absolutePath);
+          const MAX_FILE_SIZE = 1024 * 1024; // 1MB
+          if (file.size > MAX_FILE_SIZE) {
+            return { content: "", isBinary: true };
+          }
+          // NUL バイトの有無でバイナリ判定（git と同じ方式）
+          const bytes = new Uint8Array(await file.arrayBuffer());
+          if (bytes.includes(0x00)) {
+            // 画像ファイルなら data: URL を生成
+            const mimeType = file.type;
+            const dataUrl = mimeType.startsWith("image/")
+              ? `data:${mimeType};base64,${Buffer.from(bytes).toString("base64")}`
+              : undefined;
+            return { content: "", isBinary: true, dataUrl };
+          }
+          const content = new TextDecoder().decode(bytes);
+          return { content, isBinary: false };
+        },
+        gitShowFile: async ({ relPath }) => {
+          assertInsideRoot(dir, relPath);
+          const proc = Bun.spawn(["git", "show", `HEAD:${relPath}`], { cwd: dir });
+          const result = await tryCatch(new Response(proc.stdout).arrayBuffer());
+          await proc.exited;
+          if (!result.ok || proc.exitCode !== 0) {
+            return { content: "", isBinary: true };
+          }
+          const bytes = new Uint8Array(result.value);
+          if (bytes.includes(0x00)) {
+            return { content: "", isBinary: true };
+          }
+          return { content: new TextDecoder().decode(bytes), isBinary: false };
+        },
+        gitDiffFile: async ({ relPath }) => {
+          assertInsideRoot(dir, relPath);
+          const result = await tryCatch(
+            new Response(
+              Bun.spawn(["git", "diff", "HEAD", "--", relPath], { cwd: dir }).stdout,
+            ).text(),
+          );
+          if (!result.ok) return "";
+          return result.value;
         },
         gitStatus: () => getGitStatus(dir),
       },
@@ -470,6 +535,12 @@ ApplicationMenu.setApplicationMenu([
     ],
   },
   {
+    label: "View",
+    submenu: [
+      { label: "Toggle DevTools", action: "view-devtools", accelerator: "Alt+CommandOrControl+I" },
+    ],
+  },
+  {
     label: "Edit",
     submenu: [
       { role: "undo", accelerator: "CmdOrCtrl+Z" },
@@ -482,6 +553,18 @@ ApplicationMenu.setApplicationMenu([
     ],
   },
 ]);
+
+// --- メニューアクション ---
+
+ApplicationMenu.on("application-menu-clicked", (event) => {
+  const { action } = (event as { data: { action: string } }).data;
+  if (action === "view-devtools") {
+    const firstWin = windowDirs.keys().next().value;
+    if (firstWin) {
+      firstWin.webview.toggleDevTools();
+    }
+  }
+});
 
 // --- 起動 ---
 

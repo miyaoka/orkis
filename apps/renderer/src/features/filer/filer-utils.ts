@@ -35,6 +35,24 @@ function resolveGitChangeKind(statusCode: string): GitChangeKind {
 }
 
 /**
+ * ファイルパスの git 変更種別を解決する。
+ * 直接マッチしない場合、untracked ディレクトリ（末尾 / 付き）の配下かどうかも確認する。
+ */
+function resolveFileGitChange(
+  filePath: string,
+  gitStatuses: Record<string, string>,
+): GitChangeKind | undefined {
+  const statusCode = gitStatuses[filePath];
+  if (statusCode) return resolveGitChangeKind(statusCode);
+  // untracked ディレクトリの配下ファイル: git status は "dir/" のみ出力し中身は列挙しない
+  for (const [path, code] of Object.entries(gitStatuses)) {
+    if (code !== "??" || !path.endsWith("/")) continue;
+    if (filePath.startsWith(path)) return "untracked";
+  }
+  return undefined;
+}
+
+/**
  * git status マップからディレクトリの変更種別を推論する。
  * 配下の変更種別が1種類ならその種別を返し、複数種別が混在する場合は modified を返す。
  */
@@ -110,5 +128,12 @@ function sortEntries(entries: FileEntry[]): FileEntry[] {
   });
 }
 
-export { dirName, getDeletedEntries, resolveDirectoryGitChange, resolveGitChangeKind, sortEntries };
+export {
+  dirName,
+  getDeletedEntries,
+  resolveDirectoryGitChange,
+  resolveFileGitChange,
+  resolveGitChangeKind,
+  sortEntries,
+};
 export type { FileEntry, GitChangeKind };
