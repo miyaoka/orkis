@@ -4,7 +4,9 @@ import fsp from "node:fs/promises";
 import path from "node:path";
 import net from "node:net";
 import { tryCatch } from "@orkis/shared";
-import type { OrkisRPC } from "@orkis/rpc";
+import type { LspDiagnostic, OrkisRPC } from "@orkis/rpc";
+import { createLspClient } from "./lsp";
+import type { LspClient } from "./lsp";
 
 type OrkisRPCInstance = ReturnType<typeof BrowserView.defineRPC<OrkisRPC>>;
 type OrkisWindow = BrowserWindow<OrkisRPCInstance>;
@@ -200,6 +202,145 @@ const fileServer = Bun.serve({
 
 console.log(`[file-server] listening on http://localhost:${fileServer.port}`);
 
+// --- LSP 管理 ---
+
+/** ウィンドウごとに複数の LSP クライアント（tsgo + vue）を管理 */
+const windowLspClients = new Map<OrkisWindow, LspClient[]>();
+
+/** プロジェクトの node_modules から tsgo ネイティブバイナリを探す */
+async function resolveTsgoPath(projectDir: string): Promise<string | undefined> {
+  const packageName = `@typescript/native-preview-${process.platform}-${process.arch}`;
+
+  // 直接パス（npm / yarn hoisted）
+  const directPath = path.join(projectDir, "node_modules", packageName, "lib", "tsgo");
+  if (fs.existsSync(directPath)) return directPath;
+
+  // pnpm .pnpm 配下
+  const pnpmBase = path.join(projectDir, "node_modules", ".pnpm");
+  const prefix = `@typescript+native-preview-${process.platform}-${process.arch}@`;
+  const entriesResult = await tryCatch(fsp.readdir(pnpmBase));
+  if (entriesResult.ok) {
+    for (const entry of entriesResult.value) {
+      if (entry.startsWith(prefix)) {
+        const candidate = path.join(pnpmBase, entry, "node_modules", packageName, "lib", "tsgo");
+        if (fs.existsSync(candidate)) return candidate;
+      }
+    }
+  }
+
+  return undefined;
+}
+
+/**
+ * vue-language-server のエントリポイントと tsdk パスを探す。
+ * pnpm モノレポでは .pnpm はルートの node_modules にのみ存在する。
+ */
+interface VueLspPaths {
+  serverPath: string;
+  tsdkPath: string;
+  /** @vue/typescript-plugin の親 node_modules ディレクトリ（tsserver --pluginProbeLocations 用） */
+  pluginProbeLocation: string;
+}
+
+function resolveVueLspPaths(projectRoot: string, packageDir: string): VueLspPaths | undefined {
+  const prefix = "@vue+language-server@";
+
+  // pnpm: ルートの node_modules/.pnpm から探す
+  const pnpmBase = path.join(projectRoot, "node_modules", ".pnpm");
+  console.log(`[lsp:vue/resolve] pnpmBase: ${pnpmBase}`);
+
+  let serverPath: string | undefined;
+
+  const entriesResult = tryCatch(() => fs.readdirSync(pnpmBase));
+  if (entriesResult.ok) {
+    const matchingEntries = entriesResult.value.filter((e) => e.startsWith(prefix));
+    console.log(`[lsp:vue/resolve] matching entries: ${matchingEntries.join(", ") || "(none)"}`);
+
+    for (const entry of matchingEntries) {
+      const candidate = path.join(
+        pnpmBase,
+        entry,
+        "node_modules",
+        "@vue",
+        "language-server",
+        "bin",
+        "vue-language-server.js",
+      );
+      if (fs.existsSync(candidate)) {
+        serverPath = candidate;
+        break;
+      }
+    }
+  }
+
+  // パッケージの node_modules から直接探す（hoisted の場合）
+  if (!serverPath) {
+    const directPath = path.join(
+      packageDir,
+      "node_modules",
+      "@vue",
+      "language-server",
+      "bin",
+      "vue-language-server.js",
+    );
+    console.log(`[lsp:vue/resolve] direct: ${directPath}, exists: ${fs.existsSync(directPath)}`);
+    if (fs.existsSync(directPath)) {
+      serverPath = directPath;
+    }
+  }
+
+  if (!serverPath) {
+    console.log("[lsp:vue/resolve] server not found");
+    return undefined;
+  }
+  console.log(`[lsp:vue/resolve] serverPath: ${serverPath}`);
+
+  // tsdk パス（typescript/lib ディレクトリ）— パッケージの node_modules から探す
+  const tsdkPath = path.join(packageDir, "node_modules", "typescript", "lib");
+  const tsdkExists = fs.existsSync(path.join(tsdkPath, "typescript.js"));
+  console.log(`[lsp:vue/resolve] tsdk: ${tsdkPath}, exists: ${tsdkExists}`);
+  if (!tsdkExists) return undefined;
+
+  // @vue/typescript-plugin のパスを探す（tsserver --pluginProbeLocations 用）
+  const pluginPrefix = "@vue+typescript-plugin@";
+  let pluginProbeLocation: string | undefined;
+
+  if (entriesResult.ok) {
+    for (const entry of entriesResult.value) {
+      if (entry.startsWith(pluginPrefix)) {
+        const candidate = path.join(pnpmBase, entry, "node_modules");
+        const pluginIndex = path.join(candidate, "@vue", "typescript-plugin", "index.js");
+        if (fs.existsSync(pluginIndex)) {
+          pluginProbeLocation = candidate;
+          break;
+        }
+      }
+    }
+  }
+
+  // hoisted の場合
+  if (!pluginProbeLocation) {
+    const directPlugin = path.join(
+      packageDir,
+      "node_modules",
+      "@vue",
+      "typescript-plugin",
+      "index.js",
+    );
+    if (fs.existsSync(directPlugin)) {
+      pluginProbeLocation = path.join(packageDir, "node_modules");
+    }
+  }
+
+  if (!pluginProbeLocation) {
+    console.log("[lsp:vue/resolve] @vue/typescript-plugin not found");
+    return undefined;
+  }
+  console.log(`[lsp:vue/resolve] pluginProbeLocation: ${pluginProbeLocation}`);
+
+  return { serverPath, tsdkPath, pluginProbeLocation };
+}
+
 // --- ウィンドウ管理 ---
 
 /** ウィンドウ → UUID */
@@ -255,6 +396,30 @@ function startWatching(win: OrkisWindow, root: string) {
     const relDir = path.dirname(filename);
     win.webview.rpc?.send.fsChange({ relDir });
     scheduleGitStatusUpdate(win, root);
+
+    // TS/Vue ファイルの変更を LSP に通知
+    if (/\.[tj]sx?$|\.vue$/.test(filename)) {
+      const clients = windowLspClients.get(win);
+      if (clients) {
+        void (async () => {
+          const absPath = path.join(root, filename);
+          const fileResult = await tryCatch(fsp.readFile(absPath, "utf-8"));
+          for (const lsp of clients) {
+            // プロジェクトルートからの相対パスを各 LSP の rootDir からの相対パスに変換
+            const lspRelPath = path.relative(lsp.rootDir, absPath);
+            if (lspRelPath.startsWith("..")) continue; // この LSP の管轄外
+            if (fileResult.ok) {
+              lsp.didChange(lspRelPath, fileResult.value);
+            } else {
+              lsp.didClose(lspRelPath);
+            }
+          }
+          if (!fileResult.ok) {
+            win.webview.rpc?.send.lspDiagnostics({ relPath: filename, diagnostics: [] });
+          }
+        })();
+      }
+    }
   });
 
   windowFsWatchers.set(win, watcher);
@@ -351,6 +516,14 @@ function cleanupWindow(win: OrkisWindow) {
     if (entry.win === win) {
       entry.proc.kill();
       ptys.delete(id);
+    }
+  }
+  // LSP クライアントをシャットダウン
+  const clients = windowLspClients.get(win);
+  if (clients) {
+    windowLspClients.delete(win);
+    for (const lsp of clients) {
+      void lsp.shutdown();
     }
   }
 }
@@ -458,6 +631,67 @@ function createWindowWithRPC(dir: string): OrkisWindow {
             dir,
             fileServerBaseUrl: `http://localhost:${fileServer.port}/${windowId}`,
           });
+
+          // webview 準備完了後に LSP を起動
+          void (async () => {
+            const clients: LspClient[] = [];
+            const diagCallback = (
+              source: string,
+              relPath: string,
+              diagnostics: LspDiagnostic[],
+            ) => {
+              if (diagnostics.length > 0) {
+                console.log(`[diag:${source}] ${relPath}: ${diagnostics.length} items`);
+              }
+              win.webview.rpc?.send.lspDiagnostics({ relPath, diagnostics });
+            };
+
+            // tsgo（TS/JS 用）
+            const tsgoPath = await resolveTsgoPath(dir);
+            if (tsgoPath) {
+              clients.push(
+                createLspClient({
+                  rootDir: dir,
+                  server: { kind: "tsgo", binaryPath: tsgoPath },
+                  onDiagnostics: (relPath, diags) => diagCallback("tsgo", relPath, diags),
+                  onError: (msg) => console.error(`[lsp:tsgo] ${msg}`),
+                }),
+              );
+            }
+
+            // Vue Language Server（Vue SFC 用、apps/renderer をルートにする）
+            const rendererDir = path.join(dir, "apps", "renderer");
+            console.log(`[lsp:vue] rendererDir: ${rendererDir}`);
+            const vuePaths = resolveVueLspPaths(dir, rendererDir);
+            console.log(`[lsp:vue] resolved paths:`, vuePaths ?? "not found");
+            if (vuePaths) {
+              console.log(`[lsp:vue] server: ${vuePaths.serverPath}, tsdk: ${vuePaths.tsdkPath}`);
+              const RENDERER_PREFIX = "apps/renderer/";
+              clients.push(
+                createLspClient({
+                  rootDir: rendererDir,
+                  server: {
+                    kind: "vue",
+                    serverPath: vuePaths.serverPath,
+                    tsdkPath: vuePaths.tsdkPath,
+                    pluginProbeLocation: vuePaths.pluginProbeLocation,
+                  },
+                  onDiagnostics: (relPath, diagnostics) => {
+                    diagCallback("vue", `${RENDERER_PREFIX}${relPath}`, diagnostics);
+                  },
+                  onError: (msg) => console.error(`[lsp:vue] ${msg}`),
+                }),
+              );
+            }
+
+            if (clients.length === 0) {
+              console.log("[lsp] no LSP servers found, skipping");
+              return;
+            }
+
+            windowLspClients.set(win, clients);
+            await Promise.all(clients.map((lsp) => lsp.scanProject()));
+          })();
         },
       },
     },

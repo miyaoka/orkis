@@ -16,6 +16,7 @@
     "electrobun": "catalog:"
   },
   "devDependencies": {
-    "@types/bun": "catalog:"
+    "@types/bun": "catalog:",
+    "@typescript/native-preview": "catalog:"
   }
 }
