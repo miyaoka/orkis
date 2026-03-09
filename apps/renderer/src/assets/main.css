@@ -1,6 +1,10 @@
 @import "tailwindcss";
 @plugin "@iconify/tailwind4";
 
+button {
+  cursor: pointer;
+}
+
 /* 細いオーバーレイスクロールバー */
 ::-webkit-scrollbar {
   width: 6px;
