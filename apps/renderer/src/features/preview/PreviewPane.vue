@@ -21,11 +21,11 @@
 </doc>
 
 <script setup lang="ts">
+import { storeToRefs } from "pinia";
 import { computed, onUnmounted, ref, watch } from "vue";
 import type { GitChangeKind } from "../filer/filer-utils";
 import { getFileIconName, getIconUrl } from "../filer/useFileIcon";
-import { useSelectedPath } from "../filer/useSelectedPath";
-import { useWorkspace } from "../filer/useWorkspace";
+import { useWorkspaceStore } from "../filer/useWorkspaceStore";
 import { useRpc } from "../rpc/useRpc";
 import CodePreview from "./CodePreview.vue";
 import DiffPreview from "./DiffPreview.vue";
@@ -60,8 +60,8 @@ function hasRenderedView(ft: FileType): boolean {
   return ft === "svg" || ft === "markdown" || ft === "image";
 }
 
-const { selectedPath, selectedGitChange } = useSelectedPath();
-const { fileServerBaseUrl } = useWorkspace();
+const workspaceStore = useWorkspaceStore();
+const { selectedPath, selectedGitChange, fileServerBaseUrl } = storeToRefs(workspaceStore);
 const { request, onFsChange } = useRpc();
 
 const currentContent = ref<string>();

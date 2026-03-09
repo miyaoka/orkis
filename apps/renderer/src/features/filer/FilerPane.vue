@@ -9,19 +9,20 @@
 </doc>
 
 <script setup lang="ts">
+import { storeToRefs } from "pinia";
 import { onUnmounted, ref, watch } from "vue";
 import { useRpc } from "../rpc/useRpc";
 import { dirName, getDeletedEntries, resolveGitChangeKind, sortEntries } from "./filer-utils";
 import type { FileEntry } from "./filer-utils";
 import FileTreeItem from "./FileTreeItem.vue";
-import { useGitStatus } from "./useGitStatus";
-import { useSelectedPath } from "./useSelectedPath";
-import { useWorkspace } from "./useWorkspace";
+import { useGitStatusStore } from "./useGitStatusStore";
+import { useWorkspaceStore } from "./useWorkspaceStore";
 
-const { dir } = useWorkspace();
-const { gitStatuses, loadGitStatus, setGitStatuses } = useGitStatus();
+const workspaceStore = useWorkspaceStore();
+const { dir, selectedPath } = storeToRefs(workspaceStore);
+const gitStatusStore = useGitStatusStore();
+const { gitStatuses } = storeToRefs(gitStatusStore);
 const { request, onFsChange, onGitStatusChange } = useRpc();
-const { selectedPath, select, clear: clearSelection } = useSelectedPath();
 
 const rootEntries = ref<FileEntry[]>();
 const loading = ref(false);
@@ -51,7 +52,10 @@ function mergeWithGitStatus(entries: FileEntry[], dirPath: string): FileEntry[] 
 async function loadRoot() {
   loading.value = true;
   try {
-    const [entries] = await Promise.all([request.fsReadDir({ relPath: "." }), loadGitStatus()]);
+    const [entries] = await Promise.all([
+      request.fsReadDir({ relPath: "." }),
+      gitStatusStore.loadGitStatus(),
+    ]);
     rootEntries.value = mergeWithGitStatus(entries, "");
   } catch (e) {
     console.error("Failed to read root directory", e);
@@ -62,7 +66,7 @@ async function loadRoot() {
 }
 
 function onSelect(path: string) {
-  select(path);
+  workspaceStore.selectPath(path);
 }
 
 /**
@@ -84,7 +88,7 @@ function handleFsChange(relDir: string) {
 }
 
 async function handleGitStatusChange(statuses: Record<string, string>) {
-  setGitStatuses(statuses);
+  gitStatusStore.setGitStatuses(statuses);
   // 削除ファイルのエントリ追加/除去のためルートを再構築
   // loadGitStatus は不要（プッシュ通知で受け取った値を使う）
   try {
@@ -104,7 +108,7 @@ watch(
   (newDir) => {
     if (newDir) {
       rootEntries.value = undefined;
-      clearSelection();
+      workspaceStore.clearSelectedPath();
       void loadRoot();
     }
   },
