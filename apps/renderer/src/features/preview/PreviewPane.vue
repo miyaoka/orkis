@@ -75,6 +75,9 @@ const activeMode = ref<PreviewMode>("current");
 /** Preview チェックボックス（SVG / Markdown / 画像で使用） */
 const previewEnabled = ref(true);
 
+/** コード折り返しトグル */
+const wordWrap = ref(true);
+
 /** diff がある変更種別か */
 function hasGitDiff(gitChange: GitChangeKind | undefined): boolean {
   if (gitChange === undefined) return false;
@@ -107,8 +110,6 @@ const availableModes = computed<PreviewMode[]>(() => {
 /** デフォルトモードの決定 */
 function defaultMode(gitChange: GitChangeKind | undefined): PreviewMode {
   if (gitChange === "deleted") return "original";
-  // 画像プレビュー中はデフォルト current
-  if (hasGitDiff(gitChange)) return isImagePreview.value ? "current" : "diff";
   return "current";
 }
 
@@ -273,14 +274,11 @@ const headerIconUrl = computed(() => {
         <span class="truncate text-sm text-zinc-300" :title="selectedPath">{{
           fileName(selectedPath)
         }}</span>
-        <span class="ml-auto text-xs text-zinc-500">{{ selectedPath }}</span>
       </div>
 
-      <!-- モード切替タブ -->
-      <div
-        v-if="availableModes.length > 1 || showPreviewCheckbox"
-        class="flex items-center border-b border-zinc-700"
-      >
+      <!-- ツールバー -->
+      <div class="flex items-center border-b border-zinc-700">
+        <!-- モード切替タブ -->
         <button
           v-for="mode in availableModes"
           :key="mode"
@@ -296,14 +294,28 @@ const headerIconUrl = computed(() => {
           {{ MODE_LABELS[mode].label }}
         </button>
 
-        <!-- Preview チェックボックス -->
-        <label
-          v-if="showPreviewCheckbox"
-          class="ml-auto flex items-center gap-1.5 px-3 py-1.5 text-xs text-zinc-400 select-none"
-        >
-          <input v-model="previewEnabled" type="checkbox" class="accent-blue-400" />
-          Preview
-        </label>
+        <div class="ml-auto flex items-center">
+          <!-- Preview トグル -->
+          <button
+            v-if="showPreviewCheckbox"
+            class="flex items-center gap-1 px-3 py-1.5 text-xs transition-colors"
+            :class="previewEnabled ? 'text-blue-400' : 'text-zinc-500 hover:text-zinc-300'"
+            @click="previewEnabled = !previewEnabled"
+          >
+            <span class="icon-[lucide--eye] size-3.5" />
+            Preview
+          </button>
+
+          <!-- Wrap トグル -->
+          <button
+            class="flex items-center gap-1 px-3 py-1.5 text-xs transition-colors"
+            :class="wordWrap ? 'text-blue-400' : 'text-zinc-500 hover:text-zinc-300'"
+            @click="wordWrap = !wordWrap"
+          >
+            <span class="icon-[lucide--wrap-text] size-3.5" />
+            Wrap
+          </button>
+        </div>
       </div>
 
       <!-- コンテンツ -->
@@ -319,6 +331,7 @@ const headerIconUrl = computed(() => {
           "
           :original="originalContent"
           :current="currentContent"
+          :word-wrap="wordWrap"
         />
 
         <!-- 画像プレビュー（バイナリ画像 + SVG preview モード） -->
@@ -340,6 +353,7 @@ const headerIconUrl = computed(() => {
           v-else-if="displayContent !== undefined"
           :content="displayContent"
           :file-path="selectedPath"
+          :word-wrap="wordWrap"
         />
       </div>
     </template>

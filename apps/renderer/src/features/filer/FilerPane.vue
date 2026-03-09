@@ -120,7 +120,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="flex w-64 shrink-0 flex-col border-r border-zinc-700">
+  <div class="flex size-full flex-col">
     <!-- ヘッダー -->
     <div class="flex items-center gap-2 border-b border-zinc-700 px-3 py-2">
       <span class="icon-[lucide--folder-tree] text-blue-400" />
