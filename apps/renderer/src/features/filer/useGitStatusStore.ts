@@ -1,10 +1,10 @@
+import { acceptHMRUpdate, defineStore } from "pinia";
 import { ref } from "vue";
 import { useRpc } from "../rpc/useRpc";
 
-/** モジュールレベルで保持するため HMR でも状態が消えない */
-const gitStatuses = ref<Record<string, string>>({});
+export const useGitStatusStore = defineStore("gitStatus", () => {
+  const gitStatuses = ref<Record<string, string>>({});
 
-export function useGitStatus() {
   const { request } = useRpc();
 
   async function loadGitStatus() {
@@ -21,4 +21,8 @@ export function useGitStatus() {
   }
 
   return { gitStatuses, loadGitStatus, setGitStatuses };
+});
+
+if (import.meta.hot) {
+  import.meta.hot.accept(acceptHMRUpdate(useGitStatusStore, import.meta.hot));
 }

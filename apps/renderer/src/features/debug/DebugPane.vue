@@ -9,15 +9,18 @@
 </doc>
 
 <script setup lang="ts">
+import { storeToRefs } from "pinia";
 import { computed } from "vue";
 import { resolveGitChangeKind } from "../filer/filer-utils";
 import type { GitChangeKind } from "../filer/filer-utils";
-import { useGitStatus } from "../filer/useGitStatus";
-import { useWorkspace } from "../filer/useWorkspace";
+import { useGitStatusStore } from "../filer/useGitStatusStore";
+import { useWorkspaceStore } from "../filer/useWorkspaceStore";
 
 const mode = import.meta.env.DEV ? "dev" : "build";
-const { dir, file } = useWorkspace();
-const { gitStatuses } = useGitStatus();
+const workspaceStore = useWorkspaceStore();
+const { dir, selectedPath } = storeToRefs(workspaceStore);
+const gitStatusStore = useGitStatusStore();
+const { gitStatuses } = storeToRefs(gitStatusStore);
 
 const GIT_CHANGE_COLOR_MAP: Record<GitChangeKind, string> = {
   modified: "text-yellow-400",
@@ -72,7 +75,7 @@ const unstagedEntries = computed<GitStatusEntry[]>(() =>
     </div>
     <template v-if="dir">
       <div>dir: {{ dir }}</div>
-      <div v-if="file">file: {{ file }}</div>
+      <div v-if="selectedPath">file: {{ selectedPath }}</div>
 
       <!-- git status -->
       <div class="mt-2 border-t border-zinc-700 pt-2">

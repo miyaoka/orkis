@@ -1,4 +1,5 @@
 import type { FileDiagnostics, LspDiagnostic } from "@orkis/rpc";
+import { acceptHMRUpdate, defineStore } from "pinia";
 import { computed, ref } from "vue";
 import { useRpc } from "../rpc/useRpc";
 
@@ -6,16 +7,10 @@ import { useRpc } from "../rpc/useRpc";
 const SEVERITY_ERROR = 1;
 const SEVERITY_WARNING = 2;
 
-/** ファイルごとの診断結果をリアクティブに保持する */
-const diagnosticsMap = ref<Map<string, LspDiagnostic[]>>(new Map());
+export const useDiagnosticsStore = defineStore("diagnostics", () => {
+  const diagnosticsMap = ref<Map<string, LspDiagnostic[]>>(new Map());
 
-let subscribed = false;
-
-/** RPC 購読を開始する（アプリ内で一度だけ） */
-function ensureSubscribed() {
-  if (subscribed) return;
-  subscribed = true;
-
+  /** RPC 購読を開始する（store 初期化時に一度だけ） */
   const { onLspDiagnostics } = useRpc();
   onLspDiagnostics((payload: FileDiagnostics) => {
     const map = new Map(diagnosticsMap.value);
@@ -26,10 +21,6 @@ function ensureSubscribed() {
     }
     diagnosticsMap.value = map;
   });
-}
-
-export function useDiagnostics() {
-  ensureSubscribed();
 
   /** エラーがあるファイルの一覧（severity=1 のみ） */
   const errorFiles = computed(() => {
@@ -72,4 +63,8 @@ export function useDiagnostics() {
     errorCount,
     warningCount,
   };
+});
+
+if (import.meta.hot) {
+  import.meta.hot.accept(acceptHMRUpdate(useDiagnosticsStore, import.meta.hot));
 }
