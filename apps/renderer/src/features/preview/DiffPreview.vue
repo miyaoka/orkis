@@ -10,6 +10,7 @@ import { computed } from "vue";
 const props = defineProps<{
   original: string;
   current: string;
+  wordWrap: boolean;
 }>();
 
 interface DiffLine {
@@ -57,7 +58,7 @@ const LINE_TYPE_CLASSES: Record<DiffLine["type"], string> = {
     >
       <span class="_line-no">{{ line.oldLineNo ?? "" }}</span>
       <span class="_line-no">{{ line.newLineNo ?? "" }}</span>
-      <span class="_line-text">{{ line.text }}</span>
+      <span class="_line-text" :class="wordWrap ? '_word-wrap' : ''">{{ line.text }}</span>
     </div>
   </div>
 </template>
@@ -82,5 +83,11 @@ const LINE_TYPE_CLASSES: Record<DiffLine["type"], string> = {
 
 ._line-text {
   white-space: pre;
+  min-width: 0;
+}
+
+._line-text._word-wrap {
+  white-space: pre-wrap;
+  word-break: break-all;
 }
 </style>
