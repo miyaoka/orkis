@@ -13,10 +13,10 @@
     "@orkis/renderer": "workspace:*",
     "@orkis/rpc": "workspace:*",
     "@orkis/shared": "workspace:*",
-    "@typescript/native-preview": "catalog:",
     "electrobun": "catalog:"
   },
   "devDependencies": {
-    "@types/bun": "catalog:"
+    "@types/bun": "catalog:",
+    "@typescript/native-preview": "catalog:"
   }
 }

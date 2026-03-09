@@ -11,8 +11,5 @@
   },
   "devDependencies": {
     "electrobun": "catalog:"
-  },
-  "dependencies": {
-    "@typescript/native-preview": "catalog:"
   }
 }
