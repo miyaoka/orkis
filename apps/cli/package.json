@@ -2,11 +2,11 @@
   "name": "@orkis/cli",
   "version": "0.0.0",
   "private": true,
-  "type": "module",
-  "main": "./src/index.ts",
   "bin": {
     "orkis": "./src/index.ts"
   },
+  "type": "module",
+  "main": "./src/index.ts",
   "scripts": {
     "cli": "bun run src/index.ts",
     "typecheck": "tsgo --noEmit",
