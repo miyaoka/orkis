@@ -11,7 +11,7 @@
 <script setup lang="ts">
 import type { WorktreeEntry } from "@orkis/rpc";
 import { tryCatch } from "@orkis/shared";
-import { onMounted, onUnmounted, ref, watch } from "vue";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useWorkspaceStore } from "../filer/useWorkspaceStore";
 import { useRpc } from "../rpc/useRpc";
 
@@ -22,6 +22,17 @@ const worktrees = ref<WorktreeEntry[]>([]);
 /** worktree 化されていないローカルブランチ */
 const freeBranches = ref<string[]>([]);
 const isCreating = ref(false);
+
+/** main 先頭、残りはブランチ名のアルファベット順 */
+const sortedWorktrees = computed(() =>
+  [...worktrees.value].sort((a, b) => {
+    if (a.isMain) return -1;
+    if (b.isMain) return 1;
+    return (a.branch ?? "").localeCompare(b.branch ?? "");
+  }),
+);
+
+const sortedBranches = computed(() => [...freeBranches.value].sort((a, b) => a.localeCompare(b)));
 
 /** ダイアログの状態 */
 const dialogRef = ref<HTMLDialogElement>();
@@ -59,12 +70,15 @@ async function fetchData() {
 
 async function addWorktree(branch?: string) {
   isCreating.value = true;
+  if (branch) {
+    freeBranches.value = freeBranches.value.filter((b) => b !== branch);
+  }
+
   const result = await tryCatch(request.gitWorktreeAdd({ branch }));
   if (result.ok) {
     worktrees.value.push(result.value);
-    if (branch) {
-      freeBranches.value = freeBranches.value.filter((b) => b !== branch);
-    }
+  } else if (branch) {
+    freeBranches.value.push(branch);
   }
   isCreating.value = false;
 }
@@ -117,65 +131,58 @@ onUnmounted(() => {
       <h2 class="mb-1 text-xs font-medium text-zinc-500">WORKTREES</h2>
 
       <div
-        v-for="wt in worktrees"
+        v-for="wt in sortedWorktrees"
         :key="wt.path"
-        class="group/wt flex items-center rounded-sm text-left hover:bg-zinc-800"
+        class="group/wt grid grid-cols-[auto_1fr_auto] gap-x-2 rounded-sm py-1.5 pl-2 hover:bg-zinc-800"
       >
-        <button class="flex min-w-0 flex-1 items-center gap-2 py-1.5 pl-2">
-          <span
-            class="shrink-0 text-base"
-            :class="
-              wt.isMain
-                ? 'icon-[lucide--home] text-zinc-500'
-                : 'icon-[lucide--git-branch] text-zinc-400'
-            "
-          />
-          <div class="flex min-w-0 flex-col">
-            <span class="truncate text-sm" :class="wt.isMain ? 'text-zinc-400' : 'text-zinc-200'">
-              {{ wt.branch ?? "(detached)" }}
-            </span>
-            <span class="font-mono text-xs text-zinc-600">{{ wt.head }}</span>
-          </div>
-        </button>
-
-        <span v-if="wt.isMain" class="shrink-0 pr-2 text-xs text-zinc-600">ref</span>
+        <span
+          class="row-span-2 mt-0.5 text-base"
+          :class="
+            wt.isMain
+              ? 'icon-[lucide--home] text-zinc-500'
+              : 'icon-[lucide--git-branch] text-zinc-400'
+          "
+        />
+        <span class="truncate text-sm" :class="wt.isMain ? 'text-zinc-400' : 'text-zinc-200'">
+          {{ wt.branch ?? "(detached)" }}
+        </span>
+        <span v-if="wt.isMain" class="row-span-2 self-center pr-2 text-xs text-zinc-600">ref</span>
         <button
-          v-if="!wt.isMain"
-          class="grid size-10 shrink-0 place-items-center text-zinc-600 opacity-0 transition-opacity group-hover/wt:opacity-100 hover:text-red-400"
-          @click.stop="handleWorktreeRemove(wt)"
+          v-else
+          class="row-span-2 grid size-10 place-items-center self-center text-zinc-600 opacity-0 transition-opacity group-hover/wt:opacity-100 hover:text-red-400"
+          @click="handleWorktreeRemove(wt)"
         >
           <span class="icon-[lucide--unlink] text-sm" />
         </button>
+        <span class="font-mono text-xs text-zinc-600">{{ wt.head }}</span>
       </div>
 
       <p v-if="worktrees.length === 0" class="py-2 pl-2 text-sm text-zinc-500">読み込み中...</p>
 
       <button
-        class="mt-1 flex items-center gap-2 rounded-sm py-1.5 pl-2 text-sm text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300"
+        class="mt-1 grid grid-cols-[auto_1fr] gap-x-2 rounded-sm py-1.5 pl-2 text-left text-sm text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300"
         :disabled="isCreating"
         @click="addWorktree()"
       >
         <span class="icon-[lucide--plus] text-base" />
-        {{ isCreating ? "作成中..." : "New worktree" }}
+        <span>New worktree</span>
       </button>
     </div>
 
-    <div v-if="freeBranches.length > 0" class="mt-4 flex flex-col">
+    <div v-if="sortedBranches.length > 0" class="mt-4 flex flex-col">
       <h2 class="mb-1 text-xs font-medium text-zinc-500">BRANCHES</h2>
 
       <div
-        v-for="branch in freeBranches"
+        v-for="branch in sortedBranches"
         :key="branch"
-        class="group/br flex items-center rounded-sm hover:bg-zinc-800"
+        class="group/br grid grid-cols-[auto_1fr_auto] gap-x-2 rounded-sm py-1.5 pl-2 text-sm text-zinc-500 hover:bg-zinc-800"
       >
-        <div class="flex min-w-0 flex-1 items-center gap-2 py-1.5 pl-2 text-sm text-zinc-500">
-          <span class="icon-[lucide--git-branch] shrink-0 text-base" />
-          <span class="truncate">{{ branch }}</span>
-        </div>
+        <span class="icon-[lucide--git-branch] text-base" />
+        <span class="truncate">{{ branch }}</span>
         <button
-          class="grid size-10 shrink-0 place-items-center text-zinc-600 opacity-0 transition-opacity group-hover/br:opacity-100 hover:text-zinc-300"
+          class="grid size-8 place-items-center self-center text-zinc-600 opacity-0 transition-opacity group-hover/br:opacity-100 hover:text-zinc-300"
           :disabled="isCreating"
-          @click.stop="addWorktree(branch)"
+          @click="addWorktree(branch)"
         >
           <span class="icon-[lucide--link] text-sm" />
         </button>
