@@ -38,21 +38,27 @@ export function createFilePathLinkProvider(terminal: Terminal): ILinkProvider {
       const dirPrefix = dir.endsWith("/") ? dir : `${dir}/`;
       const homeDir = resolveHomeDir(dirPrefix);
 
+      // 現在行 + インデント付き継続行を結合したテキストでパスを検索する。
+      // dirPrefix が長く1行に収まらない場合に備え、上方向にも辿る。
+      const [joinedText, topLineIdx] = collectIndentedBlock(buf, bufferLineNumber - 1);
+      const currentLineOffset = getLineOffset(buf, topLineIdx, bufferLineNumber - 1);
+
       const links: ILink[] = [];
 
-      // 絶対パスの検出（`/...` および `~/...`）
+      // 絶対パスの検出（結合テキストから検索し、現在行に範囲があるもののみリンク化）
       findAbsolutePathLinks(
-        text,
+        joinedText,
+        currentLineOffset,
+        text.length,
         dirPrefix,
         homeDir,
         bufLine,
         bufferLineNumber,
-        buf,
         workspaceStore,
         links,
       );
 
-      // 相対パスの検出
+      // 相対パスの検出（現在行のテキストのみ）
       findRelativePathLinks(text, bufLine, bufferLineNumber, workspaceStore, links);
 
       callback(links.length > 0 ? links : undefined);
@@ -71,53 +77,118 @@ function resolveHomeDir(dirPrefix: string): string {
 }
 
 /**
- * 絶対パス（`/...` および `~/...`）を検出してリンクを作成する。
- * ワークスペース内なら相対パス、外なら絶対パスで selectPath する。
+ * インデント付き継続行ブロックを収集する。
+ * 現在行から上方向にインデント行を辿り、非インデント行（ブロック先頭）を見つけ、
+ * そこから下方向にインデント行が続く限り結合する。
+ * 返り値: [結合テキスト, 先頭行の0-basedインデックス]
+ */
+function collectIndentedBlock(buf: IBuffer, lineIdx: number): [string, number] {
+  // 上方向: 現在行がインデント行なら上に辿る
+  let topIdx = lineIdx;
+  while (topIdx > 0) {
+    const line = buf.getLine(topIdx);
+    if (!line) break;
+    const lineText = line.translateToString(true);
+    if (lineText.length === 0 || lineText[0] !== " ") break;
+    topIdx--;
+  }
+
+  // topIdx から下方向に結合
+  const parts: string[] = [];
+  let idx = topIdx;
+  const topLine = buf.getLine(idx);
+  if (topLine) {
+    parts.push(topLine.translateToString(true));
+    idx++;
+    let nextLine = buf.getLine(idx);
+    while (nextLine) {
+      const nextText = nextLine.translateToString(true);
+      if (nextText.length === 0 || nextText[0] !== " ") break;
+      // インデントを除去して結合（パスの途中なのでスペースは不要）
+      parts.push(nextText.trimStart());
+      idx++;
+      nextLine = buf.getLine(idx);
+    }
+  }
+
+  return [parts.join(""), topIdx];
+}
+
+/**
+ * 結合テキスト中での、特定行の開始オフセットを算出する。
+ * topLineIdx から targetLineIdx までの各行のテキスト長を合算する。
+ */
+function getLineOffset(buf: IBuffer, topLineIdx: number, targetLineIdx: number): number {
+  let offset = 0;
+  for (let i = topLineIdx; i < targetLineIdx; i++) {
+    const line = buf.getLine(i);
+    if (!line) break;
+    if (i === topLineIdx) {
+      offset += line.translateToString(true).length;
+    } else {
+      offset += line.translateToString(true).trimStart().length;
+    }
+  }
+  return offset;
+}
+
+/**
+ * 結合テキストから絶対パス（`/...` および `~/...`）を検出してリンクを作成する。
+ * currentLineOffset/currentLineLength で現在行の範囲を指定し、
+ * パスが現在行に重なる場合のみリンク化する。
  */
 function findAbsolutePathLinks(
-  text: string,
+  joinedText: string,
+  currentLineOffset: number,
+  currentLineLength: number,
   dirPrefix: string,
   homeDir: string,
   bufLine: IBufferLine,
   lineNumber: number,
-  buf: IBuffer,
   workspaceStore: ReturnType<typeof useWorkspaceStore>,
   links: ILink[],
 ): void {
+  const currentLineEnd = currentLineOffset + currentLineLength;
   let searchStart = 0;
 
-  while (searchStart < text.length) {
-    const directIdx = text.indexOf(dirPrefix, searchStart);
-    const tildeIdx = homeDir ? text.indexOf("~/", searchStart) : -1;
+  while (searchStart < joinedText.length) {
+    const directIdx = joinedText.indexOf(dirPrefix, searchStart);
+    const tildeIdx = homeDir ? joinedText.indexOf("~/", searchStart) : -1;
 
     if (directIdx === -1 && tildeIdx === -1) break;
 
     const useTilde = tildeIdx !== -1 && (directIdx === -1 || tildeIdx < directIdx);
     const idx = useTilde ? tildeIdx : directIdx;
 
+    let fullPath: string;
+    let pathEnd: number;
+
     if (useTilde) {
       const afterTilde = idx + 2;
-      const end = findPathEnd(text, afterTilde);
-      let expandedPath = `${homeDir}/${text.slice(afterTilde, end)}`;
+      pathEnd = findPathEnd(joinedText, afterTilde);
+      fullPath = `${homeDir}/${joinedText.slice(afterTilde, pathEnd)}`;
+    } else {
+      pathEnd = findPathEnd(joinedText, idx + dirPrefix.length);
+      fullPath = joinedText.slice(idx, pathEnd);
+    }
 
-      if (end === text.length) {
-        const continuation = getPathContinuation(buf, lineNumber);
-        if (continuation.length > 0) {
-          expandedPath += continuation;
-        }
-      }
-
-      // ワークスペース内なら相対パス、外なら絶対パスで selectPath
-      const selectPath = expandedPath.startsWith(dirPrefix)
-        ? expandedPath.slice(dirPrefix.length)
-        : expandedPath;
+    // パスが現在行と重なるかチェック
+    if (idx < currentLineEnd && pathEnd > currentLineOffset) {
+      const resolvedPath = useTilde ? fullPath : fullPath;
+      const selectPath = resolvedPath.startsWith(dirPrefix)
+        ? resolvedPath.slice(dirPrefix.length)
+        : resolvedPath;
 
       if (selectPath.length > 0) {
+        // 現在行内のリンク範囲を算出
+        const linkStart = Math.max(idx, currentLineOffset) - currentLineOffset;
+        const linkEnd = Math.min(pathEnd, currentLineEnd) - currentLineOffset;
+
         pushLink(
           bufLine,
           lineNumber,
-          idx,
-          Math.min(end, text.length),
+          linkStart,
+          linkEnd,
           selectPath,
           () => {
             workspaceStore.selectPath(selectPath);
@@ -125,36 +196,9 @@ function findAbsolutePathLinks(
           links,
         );
       }
-
-      searchStart = end;
-    } else {
-      const end = findPathEnd(text, idx + dirPrefix.length);
-      let pathText = text.slice(idx, end);
-
-      if (end === text.length) {
-        const continuation = getPathContinuation(buf, lineNumber);
-        if (continuation.length > 0) {
-          pathText += continuation;
-        }
-      }
-
-      const relPath = pathText.slice(dirPrefix.length);
-      if (relPath.length > 0) {
-        pushLink(
-          bufLine,
-          lineNumber,
-          idx,
-          Math.min(end, text.length),
-          relPath,
-          () => {
-            workspaceStore.selectPath(relPath);
-          },
-          links,
-        );
-      }
-
-      searchStart = end;
     }
+
+    searchStart = pathEnd;
   }
 }
 
@@ -181,39 +225,6 @@ function pushLink(
     text: displayText,
     activate,
   });
-}
-
-/**
- * 次行以降のテキストからパスの続きを取得する。
- * Claude Code は長いパスを改行+インデントで折り返すため、
- * 次行がインデント付きかつパス文字で始まる場合にのみ結合する。
- */
-function getPathContinuation(buf: IBuffer, currentLineNumber: number): string {
-  let continuation = "";
-  let nextLineIdx = currentLineNumber; // currentLineNumber は 1-based なので 0-based の次行インデックスと一致
-
-  while (true) {
-    const nextLine = buf.getLine(nextLineIdx);
-    if (!nextLine) break;
-
-    const nextText = nextLine.translateToString(true);
-
-    // 次行が先頭インデント付きでない場合は折り返しではない
-    if (nextText.length === 0 || nextText[0] !== " ") break;
-
-    const trimmed = nextText.trimStart();
-
-    if (trimmed.length === 0 || PATH_TERMINATORS.test(trimmed[0]!)) break;
-
-    const end = findPathEnd(trimmed, 0);
-    continuation += trimmed.slice(0, end);
-
-    if (end < trimmed.length) break;
-
-    nextLineIdx++;
-  }
-
-  return continuation;
 }
 
 /** 相対パスを検出してリンクを作成する */
