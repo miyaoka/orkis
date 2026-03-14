@@ -3,7 +3,7 @@
 
 ## 表示内容
 
-- 現在のモード（dev / build）
+- 現在のモード（dev / build）とチャンネル（dev / stable）
 - 開いているディレクトリ・ファイル
 - git status（staged / unstaged）を変更種別ごとに色分けして一覧表示
 </doc>
@@ -18,7 +18,7 @@ import { useWorkspaceStore } from "../filer/useWorkspaceStore";
 
 const mode = import.meta.env.DEV ? "dev" : "build";
 const workspaceStore = useWorkspaceStore();
-const { dir, selectedPath } = storeToRefs(workspaceStore);
+const { dir, selectedPath, channel } = storeToRefs(workspaceStore);
 const gitStatusStore = useGitStatusStore();
 const { gitStatuses } = storeToRefs(gitStatusStore);
 
@@ -66,11 +66,10 @@ const unstagedEntries = computed<GitStatusEntry[]>(() =>
       <span class="icon-[lucide--bug]" />
       Debug
       <span
-        v-if="mode"
         class="rounded-sm bg-zinc-700 px-1.5 py-0.5 text-xs"
         :class="mode === 'dev' ? 'text-green-400' : 'text-blue-400'"
       >
-        {{ mode }}
+        {{ mode === "dev" ? "dev" : `build:${channel ?? "?"}` }}
       </span>
     </div>
     <template v-if="dir">

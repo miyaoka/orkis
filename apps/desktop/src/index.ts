@@ -17,7 +17,6 @@ const ALLOWED_PROTOCOLS = new Set(["https:", "http:"]);
 const VITE_DEV_SERVER_URL = "http://localhost:5173";
 
 const channel = await Updater.localInfo.channel();
-const SOCKET_PATH = `/tmp/orkis-${channel}.sock`;
 
 /** dev チャンネルかつ Vite dev server が起動していれば HMR 用 URL を返す */
 async function getViewUrl(): Promise<string> {
@@ -32,7 +31,7 @@ async function getViewUrl(): Promise<string> {
 }
 
 const viewUrl = await getViewUrl();
-const shellEnv = await getShellEnv();
+const SOCKET_PATH = `/tmp/orkis-${channel}.sock`;
 const GIT_STATUS_DEBOUNCE_MS = 300;
 const GIT_WATCH_POLL_MS = 500;
 
@@ -640,6 +639,7 @@ function createWindowWithRPC(dir: string): OrkisWindow {
           win.webview.rpc?.send.orkisOpen({
             dir,
             fileServerBaseUrl: `http://localhost:${fileServer.port}/${windowId}`,
+            channel,
           });
 
           // webview 準備完了後に LSP を起動
@@ -767,6 +767,7 @@ function handleSocketMessage(message: OrkisMessage) {
           dir: message.dir,
           file: message.file,
           fileServerBaseUrl: `http://localhost:${fileServer.port}/${existingId}`,
+          channel,
         });
         break;
       }
@@ -838,6 +839,8 @@ if (await isAlreadyRunning()) {
   console.log("[orkis] Another instance is already running.");
   process.exit(0);
 }
+
+const shellEnv = await getShellEnv();
 
 // --- アプリメニュー ---
 

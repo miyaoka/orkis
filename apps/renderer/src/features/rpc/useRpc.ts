@@ -8,7 +8,7 @@ const listeners = {
   fsChange: [] as Array<(payload: { relDir: string }) => void>,
   gitStatusChange: [] as Array<(payload: { statuses: Record<string, string> }) => void>,
   orkisOpen: [] as Array<
-    (payload: { dir: string; file?: string; fileServerBaseUrl: string }) => void
+    (payload: { dir: string; file?: string; fileServerBaseUrl: string; channel: string }) => void
   >,
   orkisHook: [] as Array<(payload: { event: string; payload: Record<string, unknown> }) => void>,
   lspDiagnostics: [] as Array<(payload: FileDiagnostics) => void>,
@@ -79,7 +79,12 @@ export function useRpc() {
     onGitStatusChange: (fn: (payload: { statuses: Record<string, string> }) => void) =>
       subscribe("gitStatusChange", fn),
     onOrkisOpen: (
-      fn: (payload: { dir: string; file?: string; fileServerBaseUrl: string }) => void,
+      fn: (payload: {
+        dir: string;
+        file?: string;
+        fileServerBaseUrl: string;
+        channel: string;
+      }) => void,
     ) => subscribe("orkisOpen", fn),
     onOrkisHook: (fn: (payload: { event: string; payload: Record<string, unknown> }) => void) =>
       subscribe("orkisHook", fn),
