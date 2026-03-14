@@ -1,0 +1,23 @@
+import { readdir } from "node:fs/promises";
+import { join } from "node:path";
+
+const commandsDir = join(import.meta.dirname, "src/commands");
+const commandFiles = await readdir(commandsDir);
+const commandEntrypoints = commandFiles
+  .filter((f) => f.endsWith(".ts"))
+  .map((f) => join(commandsDir, f));
+
+const result = await Bun.build({
+  entrypoints: [join(import.meta.dirname, "src/index.ts"), ...commandEntrypoints],
+  outdir: join(import.meta.dirname, "dist"),
+  target: "bun",
+  format: "esm",
+});
+
+if (!result.success) {
+  console.error("CLI build failed:");
+  for (const log of result.logs) {
+    console.error(log);
+  }
+  process.exit(1);
+}
