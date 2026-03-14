@@ -724,8 +724,15 @@ function stopWatching(win: OrkisWindow) {
 
 // --- 非アクティブ worktree 監視 ---
 
-/** ウィンドウごとの非アクティブ worktree の fs.watch */
-const windowWorktreeWatchers = new Map<OrkisWindow, Map<string, fs.FSWatcher>>();
+interface WorktreeWatchEntry {
+  /** ワークツリー全体の recursive watcher */
+  fsWatcher: fs.FSWatcher;
+  /** .git/index の watchFile パス（unwatchFile 用） */
+  gitIndexPath: string;
+}
+
+/** ウィンドウごとの非アクティブ worktree 監視 */
+const windowWorktreeWatchers = new Map<OrkisWindow, Map<string, WorktreeWatchEntry>>();
 const wtChangeTimers = new Map<OrkisWindow, ReturnType<typeof setTimeout>>();
 /** syncWorktreeWatchers の世代管理（並行実行で stale な結果を破棄するため） */
 const wtSyncGen = new Map<OrkisWindow, number>();
@@ -760,7 +767,7 @@ async function syncWorktreeWatchers(win: OrkisWindow, repoRoot: string, activeDi
   const activeReal = await tryCatch(fsp.realpath(activeDir));
   const activePath = activeReal.ok ? activeReal.value : activeDir;
 
-  const existing = windowWorktreeWatchers.get(win) ?? new Map<string, fs.FSWatcher>();
+  const existing = windowWorktreeWatchers.get(win) ?? new Map<string, WorktreeWatchEntry>();
   const desiredPaths = new Set<string>();
 
   for (const entry of entries) {
@@ -774,6 +781,7 @@ async function syncWorktreeWatchers(win: OrkisWindow, repoRoot: string, activeDi
     // 既に監視中ならスキップ
     if (existing.has(entryPath)) continue;
 
+    // ワークツリー全体の recursive watcher
     const watchResult = tryCatch(() =>
       fs.watch(entryPath, { recursive: true }, (_eventType, filename) => {
         if (!filename) return;
@@ -783,15 +791,23 @@ async function syncWorktreeWatchers(win: OrkisWindow, repoRoot: string, activeDi
       }),
     );
 
-    if (watchResult.ok) {
-      existing.set(entryPath, watchResult.value);
-    }
+    if (!watchResult.ok) continue;
+
+    // .git/index の監視（git add / commit / reset 等の検知用）
+    const gitDir = await resolveGitDir(entryPath);
+    const gitIndexPath = path.join(gitDir, "index");
+    fs.watchFile(gitIndexPath, { interval: GIT_WATCH_POLL_MS }, () => {
+      scheduleWorktreeChangeNotify(win);
+    });
+
+    existing.set(entryPath, { fsWatcher: watchResult.value, gitIndexPath });
   }
 
   // 不要な監視を停止（削除された worktree やアクティブに切り替わった worktree）
-  for (const [wtPath, watcher] of existing) {
+  for (const [wtPath, watchEntry] of existing) {
     if (!desiredPaths.has(wtPath)) {
-      watcher.close();
+      watchEntry.fsWatcher.close();
+      fs.unwatchFile(watchEntry.gitIndexPath);
       existing.delete(wtPath);
     }
   }
@@ -802,8 +818,9 @@ async function syncWorktreeWatchers(win: OrkisWindow, repoRoot: string, activeDi
 function stopWorktreeWatchers(win: OrkisWindow) {
   const watchers = windowWorktreeWatchers.get(win);
   if (watchers) {
-    for (const watcher of watchers.values()) {
-      watcher.close();
+    for (const watchEntry of watchers.values()) {
+      watchEntry.fsWatcher.close();
+      fs.unwatchFile(watchEntry.gitIndexPath);
     }
     windowWorktreeWatchers.delete(win);
   }
