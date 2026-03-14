@@ -215,7 +215,7 @@ async function removeWorktree(cwd: string, wtPath: string, force?: boolean): Pro
 
 /** ブランチ名にシェルメタ文字が含まれていないことを検証する */
 function assertBranchName(branch: string): void {
-  if (!/^[\w./-]+$/.test(branch)) {
+  if (!/^[\w./-]+$/.test(branch) || branch.startsWith("-")) {
     throw new Error("Invalid branch name");
   }
 }
@@ -223,7 +223,7 @@ function assertBranchName(branch: string): void {
 async function deleteBranch(cwd: string, branch: string): Promise<void> {
   assertBranchName(branch);
 
-  const proc = Bun.spawn(["git", "branch", "-D", branch], { cwd });
+  const proc = Bun.spawn(["git", "branch", "-D", "--", branch], { cwd });
   await proc.exited;
   if (proc.exitCode !== 0) {
     throw new Error(`git branch delete failed with exit code ${proc.exitCode}`);

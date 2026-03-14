@@ -104,6 +104,8 @@ async function handleWorktreeRemove(wt: WorktreeEntry) {
       const forceResult = await tryCatch(request.gitWorktreeRemove({ path: wt.path, force: true }));
       if (forceResult.ok) {
         removeFromList(wt);
+      } else {
+        showDialog(`"${wt.branch}" の強制解除に失敗しました。`, async () => {});
       }
     },
   );
