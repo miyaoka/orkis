@@ -10,7 +10,7 @@
 
 ## 階層構造
 
-```
+```text
 プロジェクト一覧
 └── プロジェクト（git リポジトリ）
     ├── main（メインディレクトリ = 参照・確認用）
@@ -55,7 +55,7 @@
 
 デフォルトは `.orkis/worktrees/`。`.orkis/` は `.gitignore` に追加する。配置場所は設定で変更可能にする。
 
-```
+```text
 ~/projects/orkis/                               ← main（メインディレクトリ）
 ~/projects/orkis/.orkis/worktrees/wt-a1b2/      ← feature-a
 ~/projects/orkis/.orkis/worktrees/wt-c3d4/      ← fix-bug

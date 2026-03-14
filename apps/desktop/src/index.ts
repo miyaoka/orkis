@@ -175,10 +175,11 @@ async function addWorktree(
     ? ["git", "worktree", "add", wtPath, branch]
     : ["git", "worktree", "add", "-b", id, wtPath];
 
-  const proc = Bun.spawn(args, { cwd });
+  const proc = Bun.spawn(args, { cwd, stderr: "pipe" });
   await proc.exited;
   if (proc.exitCode !== 0) {
-    throw new Error(`git worktree add failed with exit code ${proc.exitCode}`);
+    const stderr = await new Response(proc.stderr).text();
+    throw new Error(`git worktree add failed: ${stderr.trim() || `exit code ${proc.exitCode}`}`);
   }
 
   // 作成した worktree の情報を取得
@@ -206,10 +207,11 @@ async function removeWorktree(cwd: string, wtPath: string, force?: boolean): Pro
   if (force) args.push("--force");
   args.push(wtPath);
 
-  const proc = Bun.spawn(args, { cwd });
+  const proc = Bun.spawn(args, { cwd, stderr: "pipe" });
   await proc.exited;
   if (proc.exitCode !== 0) {
-    throw new Error(`git worktree remove failed with exit code ${proc.exitCode}`);
+    const stderr = await new Response(proc.stderr).text();
+    throw new Error(`git worktree remove failed: ${stderr.trim() || `exit code ${proc.exitCode}`}`);
   }
 }
 
@@ -223,10 +225,11 @@ function assertBranchName(branch: string): void {
 async function deleteBranch(cwd: string, branch: string): Promise<void> {
   assertBranchName(branch);
 
-  const proc = Bun.spawn(["git", "branch", "-D", "--", branch], { cwd });
+  const proc = Bun.spawn(["git", "branch", "-D", "--", branch], { cwd, stderr: "pipe" });
   await proc.exited;
   if (proc.exitCode !== 0) {
-    throw new Error(`git branch delete failed with exit code ${proc.exitCode}`);
+    const stderr = await new Response(proc.stderr).text();
+    throw new Error(`git branch delete failed: ${stderr.trim() || `exit code ${proc.exitCode}`}`);
   }
 }
 
