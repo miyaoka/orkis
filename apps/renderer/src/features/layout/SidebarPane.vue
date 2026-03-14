@@ -16,9 +16,11 @@ import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useDiagnosticsStore } from "../diagnostics/useDiagnosticsStore";
 import { useWorkspaceStore } from "../filer/useWorkspaceStore";
 import { useRpc } from "../rpc/useRpc";
+import { useTerminalStore } from "../terminal/useTerminalStore";
 
 const workspaceStore = useWorkspaceStore();
 const diagnosticsStore = useDiagnosticsStore();
+const terminalStore = useTerminalStore();
 const { request, onGitStatusChange } = useRpc();
 
 const worktrees = ref<WorktreeEntry[]>([]);
@@ -119,6 +121,8 @@ function removeFromList(wt: WorktreeEntry) {
   if (wt.branch) {
     freeBranches.value.push(wt.branch);
   }
+  // ターミナルの visitedDirs から除去（TerminalPane を破棄させる）
+  terminalStore.remove(wt.path);
 }
 
 /** worktree 解除: まず通常削除、失敗したら確認後 --force */

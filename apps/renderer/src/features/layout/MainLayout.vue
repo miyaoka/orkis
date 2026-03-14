@@ -14,17 +14,28 @@
 
 <script setup lang="ts">
 import { useWindowSize } from "@vueuse/core";
-import { ref, watchEffect } from "vue";
+import { ref, watch, watchEffect } from "vue";
 import DebugPane from "../debug/DebugPane.vue";
 import DiagnosticsPane from "../diagnostics/DiagnosticsPane.vue";
 import FilerPane from "../filer/FilerPane.vue";
 import { useWorkspaceStore } from "../filer/useWorkspaceStore";
 import PreviewPane from "../preview/PreviewPane.vue";
 import TerminalPane from "../terminal/TerminalPane.vue";
+import { useTerminalStore } from "../terminal/useTerminalStore";
 import ResizeHandle from "./ResizeHandle.vue";
 import SidebarPane from "./SidebarPane.vue";
 
 const workspaceStore = useWorkspaceStore();
+const terminalStore = useTerminalStore();
+
+// worktree を初めて訪問したときに visitedDirs に登録
+watch(
+  () => workspaceStore.dir,
+  (dir) => {
+    if (dir) terminalStore.visit(dir);
+  },
+  { immediate: true },
+);
 
 const SIDEBAR_MIN_WIDTH = 120;
 const FILER_MIN_WIDTH = 160;
@@ -96,7 +107,11 @@ watchEffect(() => {
       />
 
       <div class="shrink-0 overflow-hidden p-2" :style="{ width: `${terminalWidth}px` }">
-        <TerminalPane :key="workspaceStore.dir" />
+        <TerminalPane
+          v-for="d in terminalStore.visitedDirs"
+          :key="d"
+          v-show="d === workspaceStore.dir"
+        />
       </div>
     </div>
 
