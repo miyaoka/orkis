@@ -40,6 +40,8 @@ const GIT_WATCH_POLL_MS = 500;
 interface PtyEntry {
   proc: ReturnType<typeof Bun.spawn>;
   win: OrkisWindow;
+  /** PTY が起動された worktree ディレクトリ */
+  worktreeDir: string;
 }
 
 const ptys = new Map<number, PtyEntry>();
@@ -72,7 +74,7 @@ function spawnPty(win: OrkisWindow, cwd: string, cols: number, rows: number): nu
     },
   });
 
-  ptys.set(id, { proc, win });
+  ptys.set(id, { proc, win, worktreeDir: cwd });
   return id;
 }
 
@@ -771,7 +773,17 @@ function createWindowWithRPC(dir: string): OrkisWindow {
         gitWorktreeList: () => getWorktreeList(repoRootDir),
         gitBranchList: () => getBranchList(repoRootDir),
         gitWorktreeAdd: ({ branch }) => addWorktree(repoRootDir, branch),
-        gitWorktreeRemove: ({ path: wtPath, force }) => removeWorktree(repoRootDir, wtPath, force),
+        gitWorktreeRemove: async ({ path: wtPath, force }) => {
+          // 削除対象 worktree の PTY を先に kill する
+          const wtReal = await fsp.realpath(wtPath);
+          for (const [id, entry] of ptys) {
+            if (entry.win === win && entry.worktreeDir === wtReal) {
+              entry.proc.kill();
+              ptys.delete(id);
+            }
+          }
+          return removeWorktree(repoRootDir, wtPath, force);
+        },
         gitBranchDelete: ({ branch }) => deleteBranch(repoRootDir, branch),
         switchDir: async ({ dir: targetDir }) => {
           // バリデーション: worktree list に含まれるパスのみ許可
@@ -791,14 +803,6 @@ function createWindowWithRPC(dir: string): OrkisWindow {
           // 世代を進めて stale event を無効化
           const gen = (windowSwitchGen.get(win) ?? 0) + 1;
           windowSwitchGen.set(win, gen);
-
-          // 既存 PTY を kill
-          for (const [id, entry] of ptys) {
-            if (entry.win === win) {
-              entry.proc.kill();
-              ptys.delete(id);
-            }
-          }
 
           // 既存 LSP を shutdown（再起動はしない）
           const clients = windowLspClients.get(win);
