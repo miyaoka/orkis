@@ -481,6 +481,10 @@ function resolveVueLspPaths(projectRoot: string, packageDir: string): VueLspPath
 /** ウィンドウ → UUID */
 const windowIds = new Map<OrkisWindow, string>();
 const windowDirs = new Map<OrkisWindow, string>();
+/** CLI からの open 時に window を再利用するための repo root → window マッピング */
+const windowRepoRoots = new Map<OrkisWindow, string>();
+/** switchDir の世代管理。stale な非同期結果を捨てるために使う */
+const windowSwitchGen = new Map<OrkisWindow, number>();
 
 // git status デバウンス
 const gitStatusTimers = new Map<OrkisWindow, ReturnType<typeof setTimeout>>();
@@ -490,6 +494,8 @@ const gitStatusNeedsRerun = new Set<OrkisWindow>();
 function scheduleGitStatusUpdate(win: OrkisWindow, root: string) {
   const existing = gitStatusTimers.get(win);
   if (existing) clearTimeout(existing);
+
+  const gen = windowSwitchGen.get(win) ?? 0;
 
   const timer = setTimeout(async () => {
     gitStatusTimers.delete(win);
@@ -502,6 +508,8 @@ function scheduleGitStatusUpdate(win: OrkisWindow, root: string) {
     gitStatusInFlight.add(win);
     try {
       const statuses = await getGitStatus(root);
+      // 世代が変わっていたら stale な結果を捨てる
+      if ((windowSwitchGen.get(win) ?? 0) !== gen) return;
       win.webview.rpc?.send.gitStatusChange({ statuses });
     } finally {
       gitStatusInFlight.delete(win);
@@ -518,6 +526,16 @@ function scheduleGitStatusUpdate(win: OrkisWindow, root: string) {
 // ファイル監視
 const windowFsWatchers = new Map<OrkisWindow, fs.FSWatcher>();
 const windowGitWatchedFiles = new Map<OrkisWindow, string[]>();
+
+/** linked worktree 対応: `.git` がファイル（gitdir: ...）の場合に実際の git ディレクトリを解決 */
+async function resolveGitDir(root: string): Promise<string> {
+  const result = await tryCatch(
+    new Response(Bun.spawn(["git", "rev-parse", "--git-dir"], { cwd: root }).stdout).text(),
+  );
+  if (!result.ok) return path.join(root, ".git");
+  const gitDir = result.value.trim();
+  return path.isAbsolute(gitDir) ? gitDir : path.resolve(root, gitDir);
+}
 
 function startWatching(win: OrkisWindow, root: string) {
   // ワークスペースのファイル監視（recursive, macOS）
@@ -536,9 +554,13 @@ function startWatching(win: OrkisWindow, root: string) {
     if (/\.[tj]sx?$|\.vue$/.test(filename)) {
       const clients = windowLspClients.get(win);
       if (clients) {
+        const gen = windowSwitchGen.get(win) ?? 0;
         void (async () => {
+          // 世代が変わっていたら stale な通知を捨てる
+          if ((windowSwitchGen.get(win) ?? 0) !== gen) return;
           const absPath = path.join(root, filename);
           const fileResult = await tryCatch(fsp.readFile(absPath, "utf-8"));
+          if ((windowSwitchGen.get(win) ?? 0) !== gen) return;
           for (const lsp of clients) {
             // プロジェクトルートからの相対パスを各 LSP の rootDir からの相対パスに変換
             const lspRelPath = path.relative(lsp.rootDir, absPath);
@@ -559,62 +581,64 @@ function startWatching(win: OrkisWindow, root: string) {
 
   windowFsWatchers.set(win, watcher);
 
-  // .git 関連ファイルの監視
-  const gitDir = path.join(root, ".git");
-  const indexPath = path.join(gitDir, "index");
-  const headPath = path.join(gitDir, "HEAD");
+  // .git 関連ファイルの監視（linked worktree では .git がファイルなので git rev-parse で解決）
+  void (async () => {
+    const gitDir = await resolveGitDir(root);
+    const indexPath = path.join(gitDir, "index");
+    const headPath = path.join(gitDir, "HEAD");
 
-  function resolveCurrentRefPath(): string | undefined {
-    try {
-      const headContent = fs.readFileSync(headPath, "utf-8").trim();
-      if (headContent.startsWith("ref: ")) {
-        return path.join(gitDir, headContent.slice(5));
+    function resolveCurrentRefPath(): string | undefined {
+      try {
+        const headContent = fs.readFileSync(headPath, "utf-8").trim();
+        if (headContent.startsWith("ref: ")) {
+          return path.join(gitDir, headContent.slice(5));
+        }
+      } catch {
+        // detached HEAD 等
       }
-    } catch {
-      // detached HEAD 等
+      return undefined;
     }
-    return undefined;
-  }
 
-  let currentRefPath = resolveCurrentRefPath();
+    let currentRefPath = resolveCurrentRefPath();
 
-  function syncGitWatchedFiles() {
-    const files = [indexPath, headPath];
-    if (currentRefPath) files.push(currentRefPath);
-    windowGitWatchedFiles.set(win, files);
-  }
-
-  function updateRefWatch() {
-    const newRefPath = resolveCurrentRefPath();
-    if (newRefPath === currentRefPath) return;
-
-    if (currentRefPath) {
-      fs.unwatchFile(currentRefPath);
+    function syncGitWatchedFiles() {
+      const files = [indexPath, headPath];
+      if (currentRefPath) files.push(currentRefPath);
+      windowGitWatchedFiles.set(win, files);
     }
-    currentRefPath = newRefPath;
+
+    function updateRefWatch() {
+      const newRefPath = resolveCurrentRefPath();
+      if (newRefPath === currentRefPath) return;
+
+      if (currentRefPath) {
+        fs.unwatchFile(currentRefPath);
+      }
+      currentRefPath = newRefPath;
+      if (currentRefPath) {
+        fs.watchFile(currentRefPath, { interval: GIT_WATCH_POLL_MS }, () => {
+          scheduleGitStatusUpdate(win, root);
+        });
+      }
+      syncGitWatchedFiles();
+    }
+
+    fs.watchFile(indexPath, { interval: GIT_WATCH_POLL_MS }, () => {
+      scheduleGitStatusUpdate(win, root);
+    });
+
+    fs.watchFile(headPath, { interval: GIT_WATCH_POLL_MS }, () => {
+      updateRefWatch();
+      scheduleGitStatusUpdate(win, root);
+    });
+
     if (currentRefPath) {
       fs.watchFile(currentRefPath, { interval: GIT_WATCH_POLL_MS }, () => {
         scheduleGitStatusUpdate(win, root);
       });
     }
     syncGitWatchedFiles();
-  }
-
-  fs.watchFile(indexPath, { interval: GIT_WATCH_POLL_MS }, () => {
-    scheduleGitStatusUpdate(win, root);
-  });
-
-  fs.watchFile(headPath, { interval: GIT_WATCH_POLL_MS }, () => {
-    updateRefWatch();
-    scheduleGitStatusUpdate(win, root);
-  });
-
-  if (currentRefPath) {
-    fs.watchFile(currentRefPath, { interval: GIT_WATCH_POLL_MS }, () => {
-      scheduleGitStatusUpdate(win, root);
-    });
-  }
-  syncGitWatchedFiles();
+  })();
 }
 
 function stopWatching(win: OrkisWindow) {
@@ -646,6 +670,8 @@ function cleanupWindow(win: OrkisWindow) {
   if (windowId) fileServerDirs.delete(windowId);
   windowIds.delete(win);
   windowDirs.delete(win);
+  windowRepoRoots.delete(win);
+  windowSwitchGen.delete(win);
   // このウィンドウが所有する PTY をすべて kill
   for (const [id, entry] of ptys) {
     if (entry.win === win) {
@@ -668,12 +694,17 @@ function cleanupWindow(win: OrkisWindow) {
 function createWindowWithRPC(dir: string): OrkisWindow {
   let win: OrkisWindow;
 
+  /** worktree/branch 管理用（固定） */
+  const repoRootDir = dir;
+  /** ファイル操作用（switchDir で切り替え可能） */
+  let currentDir = dir;
+
   const rpc: OrkisRPCInstance = BrowserView.defineRPC<OrkisRPC>({
     handlers: {
       requests: {
-        ptySpawn: ({ cols, rows }) => spawnPty(win, dir, cols, rows),
+        ptySpawn: ({ cols, rows }) => spawnPty(win, currentDir, cols, rows),
         fsReadDir: async ({ relPath }) => {
-          const absolutePath = await resolveSecurePath(dir, relPath);
+          const absolutePath = await resolveSecurePath(currentDir, relPath);
           const entries = await fsp.readdir(absolutePath, { withFileTypes: true });
           const visibleEntries = entries.filter((e) => e.name !== ".git");
           const names = visibleEntries.map((e) => e.name);
@@ -698,7 +729,7 @@ function createWindowWithRPC(dir: string): OrkisWindow {
           );
         },
         fsReadFile: async ({ relPath }) => {
-          const absolutePath = await resolveSecurePath(dir, relPath);
+          const absolutePath = await resolveSecurePath(currentDir, relPath);
           const file = Bun.file(absolutePath);
           const MAX_FILE_SIZE = 1024 * 1024; // 1MB
           if (file.size > MAX_FILE_SIZE) {
@@ -713,8 +744,8 @@ function createWindowWithRPC(dir: string): OrkisWindow {
           return { content, isBinary: false };
         },
         gitShowFile: async ({ relPath }) => {
-          assertInsideRoot(dir, relPath);
-          const proc = Bun.spawn(["git", "show", `HEAD:${relPath}`], { cwd: dir });
+          assertInsideRoot(currentDir, relPath);
+          const proc = Bun.spawn(["git", "show", `HEAD:${relPath}`], { cwd: currentDir });
           const result = await tryCatch(new Response(proc.stdout).arrayBuffer());
           await proc.exited;
           if (!result.ok || proc.exitCode !== 0) {
@@ -727,21 +758,77 @@ function createWindowWithRPC(dir: string): OrkisWindow {
           return { content: new TextDecoder().decode(bytes), isBinary: false };
         },
         gitDiffFile: async ({ relPath }) => {
-          assertInsideRoot(dir, relPath);
+          assertInsideRoot(currentDir, relPath);
           const result = await tryCatch(
             new Response(
-              Bun.spawn(["git", "diff", "HEAD", "--", relPath], { cwd: dir }).stdout,
+              Bun.spawn(["git", "diff", "HEAD", "--", relPath], { cwd: currentDir }).stdout,
             ).text(),
           );
           if (!result.ok) return "";
           return result.value;
         },
-        gitStatus: () => getGitStatus(dir),
-        gitWorktreeList: () => getWorktreeList(dir),
-        gitBranchList: () => getBranchList(dir),
-        gitWorktreeAdd: ({ branch }) => addWorktree(dir, branch),
-        gitWorktreeRemove: ({ path: wtPath, force }) => removeWorktree(dir, wtPath, force),
-        gitBranchDelete: ({ branch }) => deleteBranch(dir, branch),
+        gitStatus: () => getGitStatus(currentDir),
+        gitWorktreeList: () => getWorktreeList(repoRootDir),
+        gitBranchList: () => getBranchList(repoRootDir),
+        gitWorktreeAdd: ({ branch }) => addWorktree(repoRootDir, branch),
+        gitWorktreeRemove: ({ path: wtPath, force }) => removeWorktree(repoRootDir, wtPath, force),
+        gitBranchDelete: ({ branch }) => deleteBranch(repoRootDir, branch),
+        switchDir: async ({ dir: targetDir }) => {
+          // バリデーション: worktree list に含まれるパスのみ許可
+          const worktrees = await getWorktreeList(repoRootDir);
+          const targetReal = await fsp.realpath(targetDir);
+          const validEntry = await (async () => {
+            for (const wt of worktrees) {
+              const wtReal = await tryCatch(fsp.realpath(wt.path));
+              if (wtReal.ok && wtReal.value === targetReal) return wt;
+            }
+            return undefined;
+          })();
+          if (!validEntry) {
+            throw new Error("Access denied: dir is not a known worktree");
+          }
+
+          // 世代を進めて stale event を無効化
+          const gen = (windowSwitchGen.get(win) ?? 0) + 1;
+          windowSwitchGen.set(win, gen);
+
+          // 既存 PTY を kill
+          for (const [id, entry] of ptys) {
+            if (entry.win === win) {
+              entry.proc.kill();
+              ptys.delete(id);
+            }
+          }
+
+          // 既存 LSP を shutdown（再起動はしない）
+          const clients = windowLspClients.get(win);
+          if (clients) {
+            windowLspClients.delete(win);
+            for (const lsp of clients) {
+              void lsp.shutdown();
+            }
+          }
+
+          // ディレクトリを切り替え
+          currentDir = targetReal;
+
+          // ファイル監視を付け替え
+          stopWatching(win);
+          startWatching(win, currentDir);
+
+          // Map を更新
+          const windowId = windowIds.get(win) ?? "";
+          windowDirs.set(win, currentDir);
+          fileServerDirs.set(windowId, currentDir);
+
+          // 初回 git status をプッシュ
+          scheduleGitStatusUpdate(win, currentDir);
+
+          return {
+            dir: currentDir,
+            fileServerBaseUrl: `http://localhost:${fileServer.port}/${windowId}`,
+          };
+        },
       },
       messages: {
         ptyWrite: ({ id, data }) => {
@@ -765,10 +852,10 @@ function createWindowWithRPC(dir: string): OrkisWindow {
           }
         },
         rendererReady: () => {
-          console.log("[orkis] rendererReady received, sending orkisOpen:", dir);
+          console.log("[orkis] rendererReady received, sending orkisOpen:", currentDir);
           const windowId = windowIds.get(win) ?? "";
           win.webview.rpc?.send.orkisOpen({
-            dir,
+            dir: currentDir,
             fileServerBaseUrl: `http://localhost:${fileServer.port}/${windowId}`,
             channel,
           });
@@ -776,11 +863,14 @@ function createWindowWithRPC(dir: string): OrkisWindow {
           // webview 準備完了後に LSP を起動
           void (async () => {
             const clients: LspClient[] = [];
+            const gen = windowSwitchGen.get(win) ?? 0;
             const diagCallback = (
               source: string,
               relPath: string,
               diagnostics: LspDiagnostic[],
             ) => {
+              // 世代が変わっていたら stale な診断を捨てる
+              if ((windowSwitchGen.get(win) ?? 0) !== gen) return;
               if (diagnostics.length > 0) {
                 console.log(`[diag:${source}] ${relPath}: ${diagnostics.length} items`);
               }
@@ -788,11 +878,11 @@ function createWindowWithRPC(dir: string): OrkisWindow {
             };
 
             // tsgo（TS/JS 用）
-            const tsgoPath = await resolveTsgoPath(dir);
+            const tsgoPath = await resolveTsgoPath(repoRootDir);
             if (tsgoPath) {
               clients.push(
                 createLspClient({
-                  rootDir: dir,
+                  rootDir: repoRootDir,
                   server: { kind: "tsgo", binaryPath: tsgoPath },
                   onDiagnostics: (relPath, diags) => diagCallback("tsgo", relPath, diags),
                   onError: (msg) => console.error(`[lsp:tsgo] ${msg}`),
@@ -801,9 +891,9 @@ function createWindowWithRPC(dir: string): OrkisWindow {
             }
 
             // Vue Language Server（Vue SFC 用、apps/renderer をルートにする）
-            const rendererDir = path.join(dir, "apps", "renderer");
+            const rendererDir = path.join(repoRootDir, "apps", "renderer");
             console.log(`[lsp:vue] rendererDir: ${rendererDir}`);
-            const vuePaths = resolveVueLspPaths(dir, rendererDir);
+            const vuePaths = resolveVueLspPaths(repoRootDir, rendererDir);
             console.log(`[lsp:vue] resolved paths:`, vuePaths ?? "not found");
             if (vuePaths) {
               console.log(`[lsp:vue] server: ${vuePaths.serverPath}, tsdk: ${vuePaths.tsdkPath}`);
@@ -869,8 +959,8 @@ interface OpenMessage {
 type OrkisMessage = HookMessage | OpenMessage;
 
 function findWindowByDir(dir: string): OrkisWindow | undefined {
-  for (const [win, windowDir] of windowDirs) {
-    if (windowDir === dir) return win;
+  for (const [win, repoRoot] of windowRepoRoots) {
+    if (repoRoot === dir) return win;
   }
   return undefined;
 }
@@ -907,6 +997,8 @@ function handleSocketMessage(message: OrkisMessage) {
       windowIds.set(newWin, windowId);
       fileServerDirs.set(windowId, message.dir);
       windowDirs.set(newWin, message.dir);
+      windowRepoRoots.set(newWin, message.dir);
+      windowSwitchGen.set(newWin, 0);
       startWatching(newWin, message.dir);
       break;
     }

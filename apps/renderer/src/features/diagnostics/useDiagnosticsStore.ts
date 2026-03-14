@@ -56,12 +56,18 @@ export const useDiagnosticsStore = defineStore("diagnostics", () => {
     warningFiles.value.reduce((sum, f) => sum + f.diagnostics.length, 0),
   );
 
+  /** worktree 切り替え時に全診断をクリアする */
+  function clear() {
+    diagnosticsMap.value = new Map();
+  }
+
   return {
     diagnosticsMap,
     errorFiles,
     warningFiles,
     errorCount,
     warningCount,
+    clear,
   };
 });
 

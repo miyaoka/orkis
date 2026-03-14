@@ -101,6 +101,11 @@ export type OrkisRPC = {
         params: { branch: string };
         response: void;
       };
+      /** 表示対象ディレクトリを切り替える（worktree 選択） */
+      switchDir: {
+        params: { dir: string };
+        response: { dir: string; fileServerBaseUrl: string };
+      };
     };
     messages: {
       ptyWrite: { id: number; data: string };

@@ -3,6 +3,7 @@
 
 ## 操作
 
+- worktree クリック: 表示対象ディレクトリを切り替え
 - worktree の unlink: 解除（まず通常削除を試行、未コミット変更がある場合は確認後 --force）
 - ブランチの link: そのブランチで worktree を作成
 - New worktree: 新規一時ブランチで worktree を作成
@@ -12,16 +13,19 @@
 import type { WorktreeEntry } from "@orkis/rpc";
 import { tryCatch } from "@orkis/shared";
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+import { useDiagnosticsStore } from "../diagnostics/useDiagnosticsStore";
 import { useWorkspaceStore } from "../filer/useWorkspaceStore";
 import { useRpc } from "../rpc/useRpc";
 
 const workspaceStore = useWorkspaceStore();
+const diagnosticsStore = useDiagnosticsStore();
 const { request, onGitStatusChange } = useRpc();
 
 const worktrees = ref<WorktreeEntry[]>([]);
 /** worktree 化されていないローカルブランチ */
 const freeBranches = ref<string[]>([]);
 const isCreating = ref(false);
+const isSwitching = ref(false);
 
 /** main 先頭、残りはブランチ名のアルファベット順 */
 const sortedWorktrees = computed(() =>
@@ -33,6 +37,11 @@ const sortedWorktrees = computed(() =>
 );
 
 const sortedBranches = computed(() => [...freeBranches.value].sort((a, b) => a.localeCompare(b)));
+
+/** 現在表示中の worktree かどうか */
+function isActive(wt: WorktreeEntry): boolean {
+  return workspaceStore.dir === wt.path;
+}
 
 /** 確認ダイアログ */
 const confirmRef = ref<HTMLDialogElement>();
@@ -75,6 +84,18 @@ async function fetchData() {
   worktrees.value = wtList;
   const wtBranches = new Set(wtList.map((wt) => wt.branch).filter(Boolean));
   freeBranches.value = branchList.filter((b) => !wtBranches.has(b));
+}
+
+/** worktree をクリックして表示対象を切り替える */
+async function handleWorktreeSelect(wt: WorktreeEntry) {
+  if (isActive(wt) || isSwitching.value) return;
+  isSwitching.value = true;
+  const result = await tryCatch(request.switchDir({ dir: wt.path }));
+  if (result.ok) {
+    diagnosticsStore.clear();
+    workspaceStore.setOpen(result.value.dir, undefined, result.value.fileServerBaseUrl);
+  }
+  isSwitching.value = false;
 }
 
 async function addWorktree(branch?: string) {
@@ -144,7 +165,9 @@ onUnmounted(() => {
       <div
         v-for="wt in sortedWorktrees"
         :key="wt.path"
-        class="group/wt grid grid-cols-[auto_1fr_auto] gap-x-2 rounded-sm py-1.5 pl-2 hover:bg-zinc-800"
+        class="group/wt grid cursor-pointer grid-cols-[auto_1fr_auto] gap-x-2 rounded-sm py-1.5 pl-2"
+        :class="isActive(wt) ? 'bg-zinc-700/50' : 'hover:bg-zinc-800'"
+        @click="handleWorktreeSelect(wt)"
       >
         <span
           class="row-span-2 mt-0.5 text-base"
@@ -154,17 +177,31 @@ onUnmounted(() => {
               : 'icon-[lucide--git-branch] text-zinc-400'
           "
         />
-        <span class="truncate text-sm" :class="wt.isMain ? 'text-zinc-400' : 'text-zinc-200'">
+        <span
+          class="truncate text-sm"
+          :class="
+            isActive(wt)
+              ? 'font-medium text-blue-300'
+              : wt.isMain
+                ? 'text-zinc-400'
+                : 'text-zinc-200'
+          "
+        >
           {{ wt.branch ?? "(detached)" }}
         </span>
-        <span v-if="wt.isMain" class="row-span-2 self-center pr-2 text-xs text-zinc-600">ref</span>
+        <span
+          v-if="wt.isMain && !isActive(wt)"
+          class="row-span-2 self-center pr-2 text-xs text-zinc-600"
+          >ref</span
+        >
         <button
-          v-else
+          v-else-if="!wt.isMain && !isActive(wt)"
           class="row-span-2 grid size-10 place-items-center self-center text-zinc-600 opacity-0 transition-opacity group-hover/wt:opacity-100 hover:text-red-400"
-          @click="handleWorktreeRemove(wt)"
+          @click.stop="handleWorktreeRemove(wt)"
         >
           <span class="icon-[lucide--unlink] text-sm" />
         </button>
+        <span v-else class="row-span-2" />
         <span class="font-mono text-xs text-zinc-600">{{ wt.head }}</span>
       </div>
 

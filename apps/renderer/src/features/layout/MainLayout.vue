@@ -18,10 +18,13 @@ import { ref, watchEffect } from "vue";
 import DebugPane from "../debug/DebugPane.vue";
 import DiagnosticsPane from "../diagnostics/DiagnosticsPane.vue";
 import FilerPane from "../filer/FilerPane.vue";
+import { useWorkspaceStore } from "../filer/useWorkspaceStore";
 import PreviewPane from "../preview/PreviewPane.vue";
 import TerminalPane from "../terminal/TerminalPane.vue";
 import ResizeHandle from "./ResizeHandle.vue";
 import SidebarPane from "./SidebarPane.vue";
+
+const workspaceStore = useWorkspaceStore();
 
 const SIDEBAR_MIN_WIDTH = 120;
 const FILER_MIN_WIDTH = 160;
@@ -93,7 +96,7 @@ watchEffect(() => {
       />
 
       <div class="shrink-0 overflow-hidden p-2" :style="{ width: `${terminalWidth}px` }">
-        <TerminalPane />
+        <TerminalPane :key="workspaceStore.dir" />
       </div>
     </div>
 
