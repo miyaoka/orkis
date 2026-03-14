@@ -3,9 +3,8 @@
 
 ## 操作
 
-- worktree の x: 解除（まず通常削除を試行、未コミット変更がある場合は確認後 --force）
-- ブランチの x: 確認ダイアログ後にブランチ削除
-- ブランチクリック: そのブランチで worktree を作成
+- worktree の unlink: 解除（まず通常削除を試行、未コミット変更がある場合は確認後 --force）
+- ブランチの link: そのブランチで worktree を作成
 - New worktree: 新規一時ブランチで worktree を作成
 </doc>
 
@@ -60,38 +59,40 @@ async function fetchData() {
 
 async function addWorktree(branch?: string) {
   isCreating.value = true;
-  const entry = await request.gitWorktreeAdd({ branch });
-  worktrees.value.push(entry);
-  if (branch) {
-    freeBranches.value = freeBranches.value.filter((b) => b !== branch);
+  const result = await tryCatch(request.gitWorktreeAdd({ branch }));
+  if (result.ok) {
+    worktrees.value.push(result.value);
+    if (branch) {
+      freeBranches.value = freeBranches.value.filter((b) => b !== branch);
+    }
   }
   isCreating.value = false;
 }
 
-function removeFromList(wtPath: string) {
-  worktrees.value = worktrees.value.filter((w) => w.path !== wtPath);
+function removeFromList(wt: WorktreeEntry) {
+  worktrees.value = worktrees.value.filter((w) => w.path !== wt.path);
+  // ブランチが残る場合は freeBranches に戻す
+  if (wt.branch) {
+    freeBranches.value.push(wt.branch);
+  }
 }
 
 /** worktree 解除: まず通常削除、失敗したら確認後 --force */
 async function handleWorktreeRemove(wt: WorktreeEntry) {
   const result = await tryCatch(request.gitWorktreeRemove({ path: wt.path }));
   if (result.ok) {
-    removeFromList(wt.path);
+    removeFromList(wt);
     return;
   }
-  // 未コミット変更がある場合
-  showDialog(`"${wt.branch}" に未コミットの変更があります。強制的に解除しますか？`, async () => {
-    await request.gitWorktreeRemove({ path: wt.path, force: true });
-    removeFromList(wt.path);
-  });
-}
-
-/** ブランチ削除: 確認ダイアログ */
-function handleBranchDelete(branch: string) {
-  showDialog(`ブランチ "${branch}" を削除しますか？`, async () => {
-    await request.gitBranchDelete({ branch });
-    freeBranches.value = freeBranches.value.filter((b) => b !== branch);
-  });
+  showDialog(
+    `"${wt.branch}" の解除に失敗しました（未コミットの変更がある可能性があります）。強制的に解除しますか？`,
+    async () => {
+      const forceResult = await tryCatch(request.gitWorktreeRemove({ path: wt.path, force: true }));
+      if (forceResult.ok) {
+        removeFromList(wt);
+      }
+    },
+  );
 }
 
 watch(() => workspaceStore.dir, fetchData, { immediate: true });

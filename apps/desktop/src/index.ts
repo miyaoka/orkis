@@ -190,7 +190,18 @@ async function addWorktree(
   return { path: wtPath, head, branch: branch ?? id, isMain: false };
 }
 
+/** wtPath が WORKTREE_DIR 配下であることを検証する */
+function assertWorktreePath(cwd: string, wtPath: string): void {
+  const allowed = path.resolve(cwd, WORKTREE_DIR);
+  const resolved = path.resolve(wtPath);
+  if (!resolved.startsWith(allowed + path.sep) && resolved !== allowed) {
+    throw new Error("Access denied: path is outside worktree directory");
+  }
+}
+
 async function removeWorktree(cwd: string, wtPath: string, force?: boolean): Promise<void> {
+  assertWorktreePath(cwd, wtPath);
+
   const args = ["git", "worktree", "remove"];
   if (force) args.push("--force");
   args.push(wtPath);
@@ -202,7 +213,16 @@ async function removeWorktree(cwd: string, wtPath: string, force?: boolean): Pro
   }
 }
 
+/** ブランチ名にシェルメタ文字が含まれていないことを検証する */
+function assertBranchName(branch: string): void {
+  if (!/^[\w./-]+$/.test(branch)) {
+    throw new Error("Invalid branch name");
+  }
+}
+
 async function deleteBranch(cwd: string, branch: string): Promise<void> {
+  assertBranchName(branch);
+
   const proc = Bun.spawn(["git", "branch", "-D", branch], { cwd });
   await proc.exited;
   if (proc.exitCode !== 0) {
