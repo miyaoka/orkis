@@ -135,9 +135,16 @@ async function fetchContent(path: string, gitChange: GitChangeKind | undefined) 
     const isDeleted = gitChange === "deleted";
     const hasDiff = hasGitDiff(gitChange);
 
+    // 絶対パスの場合は fsReadFileAbsolute を使い、git diff は不要
+    const isAbsolute = path.startsWith("/");
+
     // 並列でデータ取得
     const [currentResult, originalResult] = await Promise.all([
-      isDeleted ? undefined : request.fsReadFile({ relPath: path }),
+      isDeleted
+        ? undefined
+        : isAbsolute
+          ? request.fsReadFileAbsolute({ absolutePath: path })
+          : request.fsReadFile({ relPath: path }),
       hasDiff || isDeleted ? request.gitShowFile({ relPath: path }) : undefined,
     ]);
 
