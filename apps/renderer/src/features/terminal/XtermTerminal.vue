@@ -109,8 +109,13 @@ onMounted(async () => {
   });
 
   // コンテナリサイズ時に xterm と PTY を同期
-  resizeObserver = new ResizeObserver(() => {
-    fitAddon?.fit();
+  // v-show=false（display:none）でサイズが 0 になった時に fit() すると
+  // cols が極小値になり、再表示後もターミナルが狭いままになるため、サイズ 0 はスキップする
+  resizeObserver = new ResizeObserver((entries) => {
+    const entry = entries[0];
+    if (entry && entry.contentRect.width > 0 && entry.contentRect.height > 0) {
+      fitAddon?.fit();
+    }
   });
   resizeObserver.observe(container);
 
