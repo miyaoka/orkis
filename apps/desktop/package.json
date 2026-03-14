@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "ORKIS_PROJECT_ROOT=$PWD pnpm exec electrobun dev",
     "build": "pnpm exec electrobun build",
+    "build:stable": "pnpm exec electrobun build --env=stable",
     "start": "ORKIS_PROJECT_ROOT=$PWD pnpm exec electrobun run",
     "typecheck": "tsgo --noEmit",
     "lint": "oxlint --type-aware",

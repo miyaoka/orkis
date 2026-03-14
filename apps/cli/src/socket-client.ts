@@ -1,6 +1,8 @@
 import net from "node:net";
+import { tryCatch } from "@orkis/shared";
 
-const SOCKET_PATH = "/tmp/orkis.sock";
+/** stable → dev の順で探す */
+const SOCKET_CANDIDATES = ["/tmp/orkis-stable.sock", "/tmp/orkis-dev.sock"];
 
 interface HookMessage {
   type: "hook";
@@ -16,13 +18,10 @@ interface OpenMessage {
 
 type OrkisMessage = HookMessage | OpenMessage;
 
-/**
- * ソケットにメッセージを送信して切断する。
- * アプリが起動していない場合はエラーを stderr に出力する。
- */
-function sendMessage(message: OrkisMessage): Promise<void> {
+/** ソケットに接続してメッセージを送信する。接続失敗時は reject する。 */
+function trySend(socketPath: string, message: OrkisMessage): Promise<void> {
   return new Promise((resolve, reject) => {
-    const client = net.createConnection(SOCKET_PATH, () => {
+    const client = net.createConnection(socketPath, () => {
       client.write(JSON.stringify(message) + "\n");
       client.end();
     });
@@ -32,13 +31,21 @@ function sendMessage(message: OrkisMessage): Promise<void> {
     });
 
     client.on("error", (err) => {
-      if ("code" in err && err.code === "ENOENT") {
-        reject(new Error("orkis アプリが起動していません"));
-        return;
-      }
       reject(err);
     });
   });
+}
+
+/**
+ * ソケット候補を順に試してメッセージを送信する。
+ * すべて失敗した場合はエラーを reject する。
+ */
+async function sendMessage(message: OrkisMessage): Promise<void> {
+  for (const socketPath of SOCKET_CANDIDATES) {
+    const result = await tryCatch(trySend(socketPath, message));
+    if (result.ok) return;
+  }
+  throw new Error("orkis アプリが起動していません");
 }
 
 export { sendMessage };

@@ -6,6 +6,7 @@ import { useGitStatusStore } from "./useGitStatusStore";
 export const useWorkspaceStore = defineStore("workspace", () => {
   const dir = ref<string>();
   const fileServerBaseUrl = ref<string>();
+  const channel = ref<string>();
 
   /** ファイラーで選択中のファイルパス（相対パス） */
   const selectedPath = ref<string>();
@@ -19,10 +20,18 @@ export const useWorkspaceStore = defineStore("workspace", () => {
   });
 
   /** RPC orkisOpen イベントで呼ばれる */
-  function setOpen(newDir: string, newFile?: string, newFileServerBaseUrl?: string) {
+  function setOpen(
+    newDir: string,
+    newFile?: string,
+    newFileServerBaseUrl?: string,
+    newChannel?: string,
+  ) {
     dir.value = newDir;
     if (newFileServerBaseUrl) {
       fileServerBaseUrl.value = newFileServerBaseUrl;
+    }
+    if (newChannel) {
+      channel.value = newChannel;
     }
     // CLI から file が指定された場合、選択状態に反映する
     if (newFile) {
@@ -41,6 +50,7 @@ export const useWorkspaceStore = defineStore("workspace", () => {
   return {
     dir,
     fileServerBaseUrl,
+    channel,
     selectedPath,
     selectedGitChange,
     setOpen,

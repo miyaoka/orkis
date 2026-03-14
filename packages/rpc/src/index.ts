@@ -80,7 +80,7 @@ export type OrkisRPC = {
       ptyExit: { id: number; exitCode: number };
       fsChange: { relDir: string };
       gitStatusChange: { statuses: Record<string, string> };
-      orkisOpen: { dir: string; file?: string; fileServerBaseUrl: string };
+      orkisOpen: { dir: string; file?: string; fileServerBaseUrl: string; channel: string };
       orkisHook: { event: string; payload: Record<string, unknown> };
       /** LSP 診断結果の更新（ファイル単位） */
       lspDiagnostics: FileDiagnostics;

@@ -2,6 +2,7 @@ node_modules
 dist
 out
 apps/desktop/build
+apps/desktop/artifacts
 .DS_Store
 *.log*
 .eslintcache

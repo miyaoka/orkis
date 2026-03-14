@@ -1,23 +1,25 @@
 import { ApplicationMenu, BrowserView, BrowserWindow, Updater, Utils } from "electrobun/bun";
 import fs from "node:fs";
 import fsp from "node:fs/promises";
+import { homedir } from "node:os";
 import path from "node:path";
 import net from "node:net";
 import { tryCatch } from "@orkis/shared";
 import type { LspDiagnostic, OrkisRPC } from "@orkis/rpc";
 import { createLspClient } from "./lsp";
 import type { LspClient } from "./lsp";
+import { getShellEnv } from "./shellEnv";
 
 type OrkisRPCInstance = ReturnType<typeof BrowserView.defineRPC<OrkisRPC>>;
 type OrkisWindow = BrowserWindow<OrkisRPCInstance>;
 
-const SOCKET_PATH = "/tmp/orkis.sock";
 const ALLOWED_PROTOCOLS = new Set(["https:", "http:"]);
 const VITE_DEV_SERVER_URL = "http://localhost:5173";
 
+const channel = await Updater.localInfo.channel();
+
 /** dev チャンネルかつ Vite dev server が起動していれば HMR 用 URL を返す */
 async function getViewUrl(): Promise<string> {
-  const channel = await Updater.localInfo.channel();
   if (channel === "dev") {
     const result = tryCatch(fetch(VITE_DEV_SERVER_URL, { method: "HEAD" }));
     if ((await result).ok) {
@@ -29,6 +31,7 @@ async function getViewUrl(): Promise<string> {
 }
 
 const viewUrl = await getViewUrl();
+const SOCKET_PATH = `/tmp/orkis-${channel}.sock`;
 const GIT_STATUS_DEBOUNCE_MS = 300;
 const GIT_WATCH_POLL_MS = 500;
 
@@ -44,11 +47,17 @@ let nextPtyId = 0;
 
 function spawnPty(win: OrkisWindow, cwd: string, cols: number, rows: number): number {
   const id = nextPtyId++;
-  const shell = process.env.SHELL ?? "zsh";
 
-  const proc = Bun.spawn([shell], {
+  const proc = Bun.spawn([shellEnv.SHELL ?? "/bin/zsh"], {
     cwd,
-    env: process.env as Record<string, string>,
+    env: {
+      ...shellEnv,
+      // TERM 系は PTY 側で明示設定する（親の値を持ち込まない）
+      TERM: "xterm-256color",
+      COLORTERM: "truecolor",
+      TERM_PROGRAM: "orkis",
+      LANG: shellEnv.LANG ?? "en_US.UTF-8",
+    },
     terminal: {
       cols,
       rows,
@@ -630,6 +639,7 @@ function createWindowWithRPC(dir: string): OrkisWindow {
           win.webview.rpc?.send.orkisOpen({
             dir,
             fileServerBaseUrl: `http://localhost:${fileServer.port}/${windowId}`,
+            channel,
           });
 
           // webview 準備完了後に LSP を起動
@@ -757,6 +767,7 @@ function handleSocketMessage(message: OrkisMessage) {
           dir: message.dir,
           file: message.file,
           fileServerBaseUrl: `http://localhost:${fileServer.port}/${existingId}`,
+          channel,
         });
         break;
       }
@@ -829,6 +840,8 @@ if (await isAlreadyRunning()) {
   process.exit(0);
 }
 
+const shellEnv = await getShellEnv();
+
 // --- アプリメニュー ---
 
 ApplicationMenu.setApplicationMenu([
@@ -880,7 +893,7 @@ ApplicationMenu.on("application-menu-clicked", (event) => {
 
 const socketServer = setupSocketServer();
 
-const dir = process.env.ORKIS_PROJECT_ROOT ?? process.cwd();
+const dir = process.env.ORKIS_PROJECT_ROOT ?? homedir();
 handleSocketMessage({ type: "open", dir });
 
 // --- クリーンアップ ---
