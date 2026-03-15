@@ -28,6 +28,8 @@ const worktrees = ref<WorktreeEntry[]>([]);
 const freeBranches = ref<string[]>([]);
 const isCreating = ref(false);
 const isSwitching = ref(false);
+/** fetchData の世代管理（並行実行で stale なレスポンスを破棄するため） */
+let fetchGen = 0;
 
 /** main 先頭、残りはブランチ名のアルファベット順 */
 const sortedWorktrees = computed(() =>
@@ -85,10 +87,13 @@ function showAlert(message: string) {
 
 async function fetchData() {
   if (!workspaceStore.dir) return;
+  const gen = ++fetchGen;
   const [wtList, branchList] = await Promise.all([
     request.gitWorktreeList(),
     request.gitBranchList(),
   ]);
+  // 並行実行された新しい fetchData が先に完了していたら、この結果は stale なので破棄
+  if (gen !== fetchGen) return;
   worktrees.value = wtList;
   const wtBranches = new Set(wtList.map((wt) => wt.branch).filter(Boolean));
   freeBranches.value = branchList.filter((b) => !wtBranches.has(b));
@@ -114,7 +119,7 @@ async function addWorktree(branch?: string) {
 
   const result = await tryCatch(request.gitWorktreeAdd({ branch }));
   if (result.ok) {
-    worktrees.value.push(result.value);
+    await fetchData();
   } else if (branch) {
     freeBranches.value.push(branch);
   }
