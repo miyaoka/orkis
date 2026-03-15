@@ -59,7 +59,7 @@ const filerWidth = ref(256);
 const terminalWidth = ref(400);
 /** ユーザーが決めた希望幅 */
 const previewWidth = ref(400);
-const previewOpen = ref(true);
+const previewOpen = ref(false);
 const mainHeight = ref(600);
 const debugHeight = ref(128);
 
