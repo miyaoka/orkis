@@ -10,13 +10,15 @@ interface LeafRect {
   rect: DOMRect;
 }
 
-/** 全 visible leaf の DOMRect を収集する */
+/** active dir の visible leaf の DOMRect を収集する。v-show で非表示の leaf は除外する */
 function collectLeafRects(container: Element): LeafRect[] {
   const elements = container.querySelectorAll<HTMLElement>("[data-leaf-id]");
   const results: LeafRect[] = [];
   for (const el of elements) {
     const leafId = el.dataset.leafId;
     if (leafId === undefined) continue;
+    // v-show="false" の要素は offsetParent が null になる
+    if (el.offsetParent === null) continue;
     results.push({ leafId, rect: el.getBoundingClientRect() });
   }
   return results;
