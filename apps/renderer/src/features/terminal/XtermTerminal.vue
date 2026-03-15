@@ -11,10 +11,15 @@ import { WebLinksAddon } from "@xterm/addon-web-links";
 import { WebglAddon } from "@xterm/addon-webgl";
 import { Terminal } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
-import { onMounted, onBeforeUnmount, ref } from "vue";
+import { onMounted, onBeforeUnmount, ref, watch } from "vue";
 import { useRpc } from "../rpc/useRpc";
 import { TERMINAL_FONT_FAMILY, TERMINAL_FONT_SIZE, TERMINAL_THEME } from "./terminalConfig";
 import { createFilePathLinkProvider } from "./useFilePathLinkProvider";
+
+const props = defineProps<{
+  /** true の間は ResizeObserver による自動 fit() を抑制する */
+  fitSuspended?: boolean;
+}>();
 
 const containerRef = ref<HTMLElement>();
 const { request, send, onPtyData, onPtyExit } = useRpc();
@@ -25,6 +30,37 @@ let ptyId: number | undefined;
 let removeDataListener: (() => void) | undefined;
 let removeExitListener: (() => void) | undefined;
 let resizeObserver: ResizeObserver | undefined;
+
+/** fit() の RAF デバウンス制御 */
+let fitRafId = 0;
+let lastFitWidth = 0;
+let lastFitHeight = 0;
+
+function scheduleFit() {
+  if (props.fitSuspended || fitRafId) return;
+  fitRafId = requestAnimationFrame(() => {
+    fitRafId = 0;
+    const el = containerRef.value;
+    if (!el || !fitAddon) return;
+
+    const width = el.clientWidth;
+    const height = el.clientHeight;
+    if (width <= 0 || height <= 0) return;
+    if (width === lastFitWidth && height === lastFitHeight) return;
+
+    lastFitWidth = width;
+    lastFitHeight = height;
+    fitAddon.fit();
+  });
+}
+
+// suspend 解除時に fit を実行
+watch(
+  () => props.fitSuspended,
+  (suspended) => {
+    if (!suspended) scheduleFit();
+  },
+);
 
 onMounted(async () => {
   const container = containerRef.value;
@@ -113,13 +149,9 @@ onMounted(async () => {
   });
 
   // コンテナリサイズ時に xterm と PTY を同期
-  // v-show=false（display:none）でサイズが 0 になった時に fit() すると
-  // cols が極小値になり、再表示後もターミナルが狭いままになるため、サイズ 0 はスキップする
-  resizeObserver = new ResizeObserver((entries) => {
-    const entry = entries[0];
-    if (entry && entry.contentRect.width > 0 && entry.contentRect.height > 0) {
-      fitAddon?.fit();
-    }
+  // scheduleFit() で RAF デバウンス + 幅変化なしスキップ + suspend 対応
+  resizeObserver = new ResizeObserver(() => {
+    scheduleFit();
   });
   resizeObserver.observe(container);
 
@@ -131,6 +163,7 @@ onMounted(async () => {
 });
 
 onBeforeUnmount(() => {
+  if (fitRafId) cancelAnimationFrame(fitRafId);
   resizeObserver?.disconnect();
   removeDataListener?.();
   removeExitListener?.();
