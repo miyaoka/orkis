@@ -14,30 +14,49 @@
 </doc>
 
 <script setup lang="ts">
-import { useWindowSize } from "@vueuse/core";
-import { computed, ref, useTemplateRef, watch, watchEffect } from "vue";
+import { useEventListener, useWindowSize } from "@vueuse/core";
+import { computed, onUnmounted, ref, useTemplateRef, watch, watchEffect } from "vue";
+import { useContextKeys } from "../command/useContextKeys";
 import DebugPane from "../debug/DebugPane.vue";
 import DiagnosticsPane from "../diagnostics/DiagnosticsPane.vue";
 import FilerPane from "../filer/FilerPane.vue";
 import { useWorkspaceStore } from "../filer/useWorkspaceStore";
 import PreviewPane from "../preview/PreviewPane.vue";
+import { registerTerminalCommands } from "../terminal/registerTerminalCommands";
 import TerminalPane from "../terminal/TerminalPane.vue";
-import { useTerminalShortcuts } from "../terminal/useTerminalShortcuts";
 import { useTerminalStore } from "../terminal/useTerminalStore";
 import ResizeHandle from "./ResizeHandle.vue";
 import SidebarPane from "./SidebarPane.vue";
 
 const workspaceStore = useWorkspaceStore();
 const terminalStore = useTerminalStore();
+const contextKeys = useContextKeys();
 const terminalContainerRef = useTemplateRef<HTMLElement>("terminalContainer");
 
 const currentDir = computed(() => workspaceStore.dir);
-useTerminalShortcuts(currentDir, terminalContainerRef);
+const disposeTerminalCommands = registerTerminalCommands(currentDir, terminalContainerRef);
+onUnmounted(disposeTerminalCommands);
+
+// ウィンドウの表示状態変更時に terminalFocus を同期
+// hidden 時は false にリセット、復帰時は activeElement から再判定
+// （WKWebView では復帰時に xterm の focus が再発火しない場合がある）
+useEventListener(document, "visibilitychange", () => {
+  if (document.hidden) {
+    contextKeys.set("terminalFocus", false);
+  } else {
+    const container = terminalContainerRef.value;
+    const active = document.activeElement;
+    const isFocused = container !== null && active !== null && container.contains(active);
+    contextKeys.set("terminalFocus", isFocused);
+  }
+});
 
 // worktree を初めて訪問したときに visitedDirs に登録
+// worktree 切り替え時に terminalFocus をリセット
 watch(
   () => workspaceStore.dir,
   (dir) => {
+    contextKeys.set("terminalFocus", false);
     if (dir) terminalStore.visit(dir);
   },
   { immediate: true },
@@ -82,6 +101,11 @@ const dockedPreviewWidth = computed(() => {
 
 /** プレビューを表示できるだけの余白があるか */
 const canDockPreview = computed(() => dockedPreviewWidth.value >= PREVIEW_MIN_WIDTH);
+
+// previewVisible context key を実際の表示状態と同期
+watchEffect(() => {
+  contextKeys.set("previewVisible", previewOpen.value && canDockPreview.value);
+});
 
 /** プレビュー開閉の過渡期に xterm の自動 fit を抑制する */
 const fitSuspended = ref(false);

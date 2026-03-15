@@ -1,5 +1,6 @@
 import { acceptHMRUpdate, defineStore } from "pinia";
 import { ref } from "vue";
+import { useContextKeys } from "../command/useContextKeys";
 import { useRpc } from "../rpc/useRpc";
 import type { SplitDirection, SplitNode } from "./splitTree";
 import {
@@ -27,6 +28,7 @@ interface PaneEntry {
  */
 export const useTerminalStore = defineStore("terminal", () => {
   const { send } = useRpc();
+  const contextKeys = useContextKeys();
 
   /** 訪問済みの worktree ディレクトリ一覧（初回訪問順） */
   const visitedDirs = ref<string[]>([]);
@@ -81,14 +83,22 @@ export const useTerminalStore = defineStore("terminal", () => {
     }
   }
 
-  /** ペインを閉じる。削除可否を先に判定してから副作用を実行する */
-  function closePane(dir: string, leafId: string) {
+  /**
+   * ペインを閉じる。削除可否を先に判定してから副作用を実行する。
+   * @returns 実際に閉じた場合 true。最後の1リーフ等で閉じられなかった場合 false
+   */
+  function closePane(dir: string, leafId: string): boolean {
     const layout = layoutsByDir.value[dir];
-    if (layout === undefined) return;
+    if (layout === undefined) return false;
 
     // 最後の1リーフや存在しない leafId では changed: false で何もしない
     const result = removeNode(layout.root, leafId);
-    if (!result.changed) return;
+    if (!result.changed) return false;
+
+    // フォーカス中のペインを閉じる場合、unmount より先に terminalFocus をリセット
+    if (leafId === layout.focusedLeafId) {
+      contextKeys.set("terminalFocus", false);
+    }
 
     // 削除確定後に PTY kill + paneRegistry 削除
     const entry = paneRegistry.value[leafId];
@@ -101,6 +111,8 @@ export const useTerminalStore = defineStore("terminal", () => {
       root: result.root,
       focusedLeafId: result.nextFocusedLeafId,
     };
+
+    return true;
   }
 
   /** branch の ratio を更新する */
