@@ -214,7 +214,17 @@ function countChanges(statuses: Record<string, string>): WorktreeChangeCounts {
 const WORKTREE_DIR = ".orkis/worktrees";
 
 function generateWorktreeId(): string {
-  return `wt-${crypto.randomUUID().slice(0, 8)}`;
+  const now = new Date();
+  const timestamp = [
+    now.getFullYear(),
+    String(now.getMonth() + 1).padStart(2, "0"),
+    String(now.getDate()).padStart(2, "0"),
+    "_",
+    String(now.getHours()).padStart(2, "0"),
+    String(now.getMinutes()).padStart(2, "0"),
+    String(now.getSeconds()).padStart(2, "0"),
+  ].join("");
+  return `wt-${timestamp}`;
 }
 
 async function getBranchList(cwd: string): Promise<string[]> {
