@@ -11,10 +11,15 @@ import { WebLinksAddon } from "@xterm/addon-web-links";
 import { WebglAddon } from "@xterm/addon-webgl";
 import { Terminal } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
-import { onMounted, onBeforeUnmount, ref } from "vue";
+import { onMounted, onBeforeUnmount, ref, watch } from "vue";
 import { useRpc } from "../rpc/useRpc";
 import { TERMINAL_FONT_FAMILY, TERMINAL_FONT_SIZE, TERMINAL_THEME } from "./terminalConfig";
 import { createFilePathLinkProvider } from "./useFilePathLinkProvider";
+
+const props = defineProps<{
+  /** true の間は ResizeObserver による自動 fit() を抑制する */
+  fitSuspended?: boolean;
+}>();
 
 const containerRef = ref<HTMLElement>();
 const { request, send, onPtyData, onPtyExit } = useRpc();
@@ -26,14 +31,13 @@ let removeDataListener: (() => void) | undefined;
 let removeExitListener: (() => void) | undefined;
 let resizeObserver: ResizeObserver | undefined;
 
-/** fit() の RAF デバウンスと suspend/resume 制御 */
+/** fit() の RAF デバウンス制御 */
 let fitRafId = 0;
-let fitSuspended = false;
 let lastFitWidth = 0;
 let lastFitHeight = 0;
 
 function scheduleFit() {
-  if (fitSuspended || fitRafId) return;
+  if (props.fitSuspended || fitRafId) return;
   fitRafId = requestAnimationFrame(() => {
     fitRafId = 0;
     const el = containerRef.value;
@@ -50,16 +54,13 @@ function scheduleFit() {
   });
 }
 
-function suspendAutoFit() {
-  fitSuspended = true;
-}
-
-function resumeAutoFit() {
-  fitSuspended = false;
-  scheduleFit();
-}
-
-defineExpose({ suspendAutoFit, resumeAutoFit });
+// suspend 解除時に fit を実行
+watch(
+  () => props.fitSuspended,
+  (suspended) => {
+    if (!suspended) scheduleFit();
+  },
+);
 
 onMounted(async () => {
   const container = containerRef.value;

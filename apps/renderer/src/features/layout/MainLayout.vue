@@ -15,7 +15,7 @@
 
 <script setup lang="ts">
 import { useWindowSize } from "@vueuse/core";
-import { computed, nextTick, ref, useTemplateRef, watch, watchEffect } from "vue";
+import { computed, ref, watch, watchEffect } from "vue";
 import DebugPane from "../debug/DebugPane.vue";
 import DiagnosticsPane from "../diagnostics/DiagnosticsPane.vue";
 import FilerPane from "../filer/FilerPane.vue";
@@ -78,18 +78,19 @@ const dockedPreviewWidth = computed(() => {
 /** プレビューを表示できるだけの余白があるか */
 const canDockPreview = computed(() => dockedPreviewWidth.value >= PREVIEW_MIN_WIDTH);
 
-/** アクティブな TerminalPane の ref（suspend/resume 呼び出し用） */
-const activeTerminalRef = useTemplateRef<InstanceType<typeof TerminalPane>>("activeTerminalRef");
+/** プレビュー開閉の過渡期に xterm の自動 fit を抑制する */
+const fitSuspended = ref(false);
+let fitSuspendTimer = 0;
 
-// プレビュー開閉時に xterm の autoFit を一時停止し、レイアウト確定後に再開する
-// suspend と resume を同じインスタンスに対して行うためローカル変数に固定する
-watch(previewOpen, async () => {
-  const terminal = activeTerminalRef.value;
-  terminal?.suspendAutoFit();
-  await nextTick();
-  await new Promise(requestAnimationFrame);
-  await new Promise(requestAnimationFrame);
-  terminal?.resumeAutoFit();
+watch(previewOpen, () => {
+  fitSuspended.value = true;
+  // 過渡期の複数フレームを待ってから解除
+  cancelAnimationFrame(fitSuspendTimer);
+  fitSuspendTimer = requestAnimationFrame(() => {
+    fitSuspendTimer = requestAnimationFrame(() => {
+      fitSuspended.value = false;
+    });
+  });
 });
 
 // ファイル選択時にプレビューを自動オープン
@@ -139,7 +140,7 @@ watchEffect(() => {
           v-for="d in terminalStore.visitedDirs"
           :key="d"
           v-show="d === workspaceStore.dir"
-          :ref="d === workspaceStore.dir ? 'activeTerminalRef' : undefined"
+          :fit-suspended="d === workspaceStore.dir ? fitSuspended : undefined"
         />
       </div>
 
