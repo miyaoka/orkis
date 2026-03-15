@@ -61,22 +61,22 @@ export function findNavigationTarget(
     let distance = 0;
 
     if (direction === "right") {
-      isCandidate = tr.left >= cr.left + 1;
+      isCandidate = tr.left >= cr.right - 1;
       overlapAmount = overlap(cr.top, cr.bottom, tr.top, tr.bottom);
       distance = centerDistance(cr.left, cr.right, tr.left, tr.right);
     }
     if (direction === "left") {
-      isCandidate = tr.right <= cr.right - 1;
+      isCandidate = tr.right <= cr.left + 1;
       overlapAmount = overlap(cr.top, cr.bottom, tr.top, tr.bottom);
       distance = centerDistance(cr.left, cr.right, tr.left, tr.right);
     }
     if (direction === "down") {
-      isCandidate = tr.top >= cr.top + 1;
+      isCandidate = tr.top >= cr.bottom - 1;
       overlapAmount = overlap(cr.left, cr.right, tr.left, tr.right);
       distance = centerDistance(cr.top, cr.bottom, tr.top, tr.bottom);
     }
     if (direction === "up") {
-      isCandidate = tr.bottom <= cr.bottom - 1;
+      isCandidate = tr.bottom <= cr.top + 1;
       overlapAmount = overlap(cr.left, cr.right, tr.left, tr.right);
       distance = centerDistance(cr.top, cr.bottom, tr.top, tr.bottom);
     }

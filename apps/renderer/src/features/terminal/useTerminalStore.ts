@@ -81,20 +81,21 @@ export const useTerminalStore = defineStore("terminal", () => {
     }
   }
 
-  /** ペインを閉じる。PTY kill → paneRegistry 削除 → tree 更新 */
+  /** ペインを閉じる。削除可否を先に判定してから副作用を実行する */
   function closePane(dir: string, leafId: string) {
     const layout = layoutsByDir.value[dir];
     if (layout === undefined) return;
 
-    // PTY が残っていれば kill
+    // 最後の1リーフや存在しない leafId では changed: false で何もしない
+    const result = removeNode(layout.root, leafId);
+    if (!result.changed) return;
+
+    // 削除確定後に PTY kill + paneRegistry 削除
     const entry = paneRegistry.value[leafId];
     if (entry?.ptyId !== undefined) {
       send.ptyKill({ id: entry.ptyId });
     }
     delete paneRegistry.value[leafId];
-
-    const result = removeNode(layout.root, leafId);
-    if (!result.changed) return;
 
     layoutsByDir.value[dir] = {
       root: result.root,
