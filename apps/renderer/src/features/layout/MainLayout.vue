@@ -82,12 +82,14 @@ const canDockPreview = computed(() => dockedPreviewWidth.value >= PREVIEW_MIN_WI
 const activeTerminalRef = useTemplateRef<InstanceType<typeof TerminalPane>>("activeTerminalRef");
 
 // プレビュー開閉時に xterm の autoFit を一時停止し、レイアウト確定後に再開する
+// suspend と resume を同じインスタンスに対して行うためローカル変数に固定する
 watch(previewOpen, async () => {
-  activeTerminalRef.value?.suspendAutoFit();
+  const terminal = activeTerminalRef.value;
+  terminal?.suspendAutoFit();
   await nextTick();
   await new Promise(requestAnimationFrame);
   await new Promise(requestAnimationFrame);
-  activeTerminalRef.value?.resumeAutoFit();
+  terminal?.resumeAutoFit();
 });
 
 // ファイル選択時にプレビューを自動オープン
