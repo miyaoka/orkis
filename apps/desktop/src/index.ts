@@ -1206,14 +1206,24 @@ function readLaunchRequests(): LaunchRequestResult {
       errors.push(`${name}: ${content.error.message}`);
       continue;
     }
-    const parsed = tryCatch(() => JSON.parse(content.value) as { dir: string; file?: string });
+    const parsed = tryCatch(() => JSON.parse(content.value) as unknown);
     if (!parsed.ok) {
       errors.push(`${name}: ${parsed.error.message}`);
       continue;
     }
+    const obj = parsed.value;
+    if (
+      typeof obj !== "object" ||
+      obj === null ||
+      typeof (obj as Record<string, unknown>).dir !== "string"
+    ) {
+      errors.push(`${name}: 不正なペイロード`);
+      continue;
+    }
+    const req = obj as { dir: string; file?: string };
     // 処理済みにする
     tryCatch(() => fs.renameSync(filePath, `${filePath}.claimed`));
-    requests.push(parsed.value);
+    requests.push(req);
   }
   return { requests, errors };
 }
