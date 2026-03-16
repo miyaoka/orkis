@@ -72,9 +72,28 @@ flowchart TB
 
 アクティブでない worktree の `.git/index` を `fs.watchFile` で監視し、ファイル変更を検知して `worktreeChange` メッセージを送信する。`syncWorktreeWatchers()` でアクティブ/非アクティブの切り替えに応じてウォッチャーを動的に管理する。
 
-## シングルインスタンス制御
+## 起動フロー
 
-- 起動時に `/tmp/orkis-${channel}.sock` への接続を試行（dev / stable が共存可能）
+launcher（main.zig）は bun を固定引数（`./bun`, `Resources/main.js`）で起動する。`open --args` の引数は bun の `process.argv` に転送されない。
+
+### 起動パターン
+
+| 起動方法                   | 動作                                                                                 |
+| -------------------------- | ------------------------------------------------------------------------------------ |
+| 開発用 `bin/orkis`         | `ORKIS_PROJECT_ROOT` 環境変数で即座にウィンドウを開く                                |
+| `.app` 内 CLI（`orkis .`） | `open` でアプリ起動 → ソケット待ち → CLI が open メッセージを送信 → ウィンドウが開く |
+| Dock/Finder                | 1秒待っても open メッセージが届かなければホームディレクトリで開く                    |
+
+### ソケット通信
+
+- ソケットパスは `/tmp/orkis-stable.sock` 固定（`Updater.localInfo.channel()` は `build:stable` で `"stable"` を返す）
+- CLI → アプリへのメッセージ: `open`（dir, file）、`hook`（event, payload）
+- open メッセージの dir は `git rev-parse --show-toplevel` で repo root に解決される
+- 残骸ソケットの検出には `echo "" | nc -U`（macOS デフォルトの `nc -zU` では Node.js ソケットへの接続テストが失敗する）
+
+### シングルインスタンス制御
+
+- 起動時に既存ソケットへの接続を試行
 - 接続成功 → 既存インスタンスが存在 → exit
 - 接続失敗 → 残骸ソケットを削除して新規起動
 
