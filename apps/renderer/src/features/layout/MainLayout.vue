@@ -15,7 +15,7 @@
 
 <script setup lang="ts">
 import { useEventListener, useWindowSize } from "@vueuse/core";
-import { computed, onUnmounted, ref, useTemplateRef, watch, watchEffect } from "vue";
+import { computed, nextTick, onUnmounted, ref, useTemplateRef, watch, watchEffect } from "vue";
 import { useContextKeys } from "../command/useContextKeys";
 import DebugPane from "../debug/DebugPane.vue";
 import DiagnosticsPane from "../diagnostics/DiagnosticsPane.vue";
@@ -33,6 +33,7 @@ const terminalStore = useTerminalStore();
 const contextKeys = useContextKeys();
 const terminalContainerRef = useTemplateRef<HTMLElement>("terminalContainer");
 const explorerContainerRef = useTemplateRef<HTMLElement>("explorerContainer");
+const filerPaneRef = useTemplateRef<InstanceType<typeof FilerPane>>("filerPane");
 
 const currentDir = computed(() => workspaceStore.dir);
 const disposeTerminalCommands = registerTerminalCommands(currentDir, terminalContainerRef);
@@ -173,11 +174,15 @@ watch(explorerOpen, () => {
   });
 });
 
-// ファイル選択時に Explorer を自動オープン
+// ファイル選択時に Explorer を自動オープンし、ツリーを対象パスまで展開する
+// explorerOpen 変更後の v-show 反映を nextTick で待ってから reveal を呼ぶ
 watch(
   () => workspaceStore.selectedPath,
-  (path) => {
-    if (path) explorerOpen.value = true;
+  async (path) => {
+    if (!path) return;
+    explorerOpen.value = true;
+    await nextTick();
+    void filerPaneRef.value?.reveal(path);
   },
 );
 
@@ -232,7 +237,7 @@ watchEffect(() => {
         class="flex shrink-0 overflow-hidden"
       >
         <div class="shrink-0 overflow-hidden" :style="{ width: `${filerWidth}px` }">
-          <FilerPane />
+          <FilerPane ref="filerPane" />
         </div>
 
         <ResizeHandle

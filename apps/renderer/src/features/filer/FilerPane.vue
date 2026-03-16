@@ -6,11 +6,12 @@
 - ワークスペースのディレクトリが設定されるとルートエントリを読み込み、FileTreeItem を再帰的にレンダリング
 - fsChange / gitStatusChange の RPC メッセージを購読し、変更があったディレクトリのみ差分更新
 - git 削除ファイルは仮想エントリとしてツリーに挿入
+- `reveal(targetPath)` で指定パスまでツリーを展開しスクロール
 </doc>
 
 <script setup lang="ts">
 import { storeToRefs } from "pinia";
-import { onUnmounted, ref, watch } from "vue";
+import { nextTick, onUnmounted, ref, watch } from "vue";
 import { useRpc } from "../rpc/useRpc";
 import { dirName, getDeletedEntries, resolveGitChangeKind, sortEntries } from "./filer-utils";
 import type { FileEntry } from "./filer-utils";
@@ -26,6 +27,8 @@ const { request, onFsChange, onGitStatusChange } = useRpc();
 
 const rootEntries = ref<FileEntry[]>();
 const loading = ref(false);
+/** rootEntries 未読み込み時に保留する reveal 対象パス */
+let pendingRevealPath: string | undefined;
 
 /** readDir の結果に git 変更情報と削除ファイルをマージする */
 function mergeWithGitStatus(entries: FileEntry[], dirPath: string): FileEntry[] {
@@ -63,11 +66,43 @@ async function loadRoot() {
   } finally {
     loading.value = false;
   }
+
+  // rootEntries 読み込み完了後に保留中の reveal を実行
+  // v-for の FileTreeItem がマウントされるのを nextTick で待つ
+  if (pendingRevealPath) {
+    const path = pendingRevealPath;
+    pendingRevealPath = undefined;
+    await nextTick();
+    void reveal(path);
+  }
 }
 
 function onSelect(path: string) {
   workspaceStore.selectPath(path);
 }
+
+/**
+ * 指定パスまでファイルツリーを展開し、対象ノードをスクロールインビューする。
+ * ルートエントリの中から先頭セグメントに一致するアイテムを探して FileTreeItem.reveal に委譲する。
+ */
+async function reveal(targetPath: string): Promise<void> {
+  if (!rootEntries.value) {
+    // ルート読み込み中なら完了後に再試行する
+    pendingRevealPath = targetPath;
+    return;
+  }
+
+  const firstSegment = targetPath.split("/")[0];
+  const index = rootEntries.value.findIndex((e) => e.name === firstSegment);
+  if (index < 0) return;
+
+  const item = treeItemRefs.value[index];
+  if (item) {
+    await item.reveal(targetPath);
+  }
+}
+
+defineExpose({ reveal });
 
 /**
  * ファイル変更通知を受けてツリーを更新するコールバック。
