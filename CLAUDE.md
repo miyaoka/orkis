@@ -83,7 +83,7 @@ orkis/
 - `pnpm dev` — renderer（Vite HMR）と desktop（Electrobun dev）を `concurrently` で同時起動。片方が終了すると他方も終了する
 - `pnpm build` — 全パッケージをビルド
 - `pnpm start` — ビルド済みアプリを起動
-- `bin/orkis` — 開発用エントリポイント。アプリ未起動なら自動で build → start し、ソケット経由で CLI コマンドを送信する。残骸ソケットは `nc -zU` で検出・削除する
+- `bin/orkis` — 開発用エントリポイント。アプリ未起動なら自動で build → start し、ソケット経由で CLI コマンドを送信する。残骸ソケットは `echo "" | nc -U` で検出・削除する（`nc -zU` は Node.js ソケットに効かない）
 
 全体チェックはルートの `pnpm typecheck:all` / `lint:all` / `test:all` を使う。各 workspace の同名スクリプトを一括実行する。
 
