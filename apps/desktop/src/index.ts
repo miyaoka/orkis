@@ -1189,8 +1189,29 @@ async function resolveRepoRoot(dir: string): Promise<string> {
   return outputResult.value.trim();
 }
 
-/** CLI からの open メッセージを受信済みか（Dock 起動フォールバック判定用） */
-let receivedOpenMessage = false;
+/** 新しいウィンドウを作成して登録する（同期処理） */
+function openWindow(dir: string, file?: string): void {
+  console.log(`[orkis] open: dir=${dir}, file=${file ?? "(none)"}`);
+  const existing = findWindowByDir(dir);
+  if (existing) {
+    const existingId = windowIds.get(existing) ?? "";
+    existing.webview.rpc?.send.orkisOpen({
+      dir,
+      file,
+      fileServerBaseUrl: `http://localhost:${fileServer.port}/${existingId}`,
+      channel,
+    });
+    return;
+  }
+  const newWin = createWindowWithRPC(dir);
+  const windowId = crypto.randomUUID();
+  windowIds.set(newWin, windowId);
+  fileServerDirs.set(windowId, dir);
+  windowDirs.set(newWin, dir);
+  windowRepoRoots.set(newWin, dir);
+  windowSwitchGen.set(newWin, 0);
+  startWatching(newWin, dir);
+}
 
 async function handleSocketMessage(message: OrkisMessage) {
   switch (message.type) {
@@ -1207,28 +1228,8 @@ async function handleSocketMessage(message: OrkisMessage) {
       break;
     }
     case "open": {
-      receivedOpenMessage = true;
       const dir = await resolveRepoRoot(message.dir);
-      console.log(`[orkis] open: dir=${dir}, file=${message.file ?? "(none)"}`);
-      const existing = findWindowByDir(dir);
-      if (existing) {
-        const existingId = windowIds.get(existing) ?? "";
-        existing.webview.rpc?.send.orkisOpen({
-          dir,
-          file: message.file,
-          fileServerBaseUrl: `http://localhost:${fileServer.port}/${existingId}`,
-          channel,
-        });
-        break;
-      }
-      const newWin = createWindowWithRPC(dir);
-      const windowId = crypto.randomUUID();
-      windowIds.set(newWin, windowId);
-      fileServerDirs.set(windowId, dir);
-      windowDirs.set(newWin, dir);
-      windowRepoRoots.set(newWin, dir);
-      windowSwitchGen.set(newWin, 0);
-      startWatching(newWin, dir);
+      openWindow(dir, message.file);
       break;
     }
   }
@@ -1355,20 +1356,10 @@ ApplicationMenu.on("application-menu-clicked", (event) => {
 
 const socketServer = setupSocketServer();
 
-// 開発用 bin/orkis: ORKIS_PROJECT_ROOT で即座にウィンドウを開く
-// .app 内 CLI 経由: ソケット経由で open メッセージが届くので待つ
-// Dock/Finder 起動: 一定時間待っても open メッセージが届かなければホームディレクトリで開く
-const CLI_OPEN_WAIT_MS = 1000;
-const initialDir = process.env.ORKIS_PROJECT_ROOT;
-if (initialDir) {
-  await handleSocketMessage({ type: "open", dir: initialDir });
-} else {
-  setTimeout(() => {
-    if (!receivedOpenMessage) {
-      enqueueMessage({ type: "open", dir: homedir() });
-    }
-  }, CLI_OPEN_WAIT_MS);
-}
+// macOS の ApplicationMenu が正しく動作するには、初回ウィンドウを同期的に作成する必要がある
+// （role メニューは active app + key window + responder chain に依存するため）
+const initialDir = process.env.ORKIS_PROJECT_ROOT ?? homedir();
+openWindow(initialDir);
 
 // --- クリーンアップ ---
 
