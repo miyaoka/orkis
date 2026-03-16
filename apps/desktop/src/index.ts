@@ -1172,18 +1172,24 @@ function findWindowByDir(dir: string): OrkisWindow | undefined {
   return undefined;
 }
 
-/** dir から git リポジトリルートを解決する。git 管理外ならそのまま返す */
+/** dir から git リポジトリルートを解決する。git 管理外や spawn 失敗時はそのまま返す */
 async function resolveRepoRoot(dir: string): Promise<string> {
-  const proc = Bun.spawn(["git", "rev-parse", "--show-toplevel"], {
-    cwd: dir,
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-  const output = await new Response(proc.stdout).text();
-  const exitCode = await proc.exited;
+  const result = tryCatch(() =>
+    Bun.spawn(["git", "rev-parse", "--show-toplevel"], {
+      cwd: dir,
+      stdout: "pipe",
+      stderr: "pipe",
+    }),
+  );
+  if (!result.ok) return dir;
+  const output = await new Response(result.value.stdout).text();
+  const exitCode = await result.value.exited;
   if (exitCode !== 0) return dir;
   return output.trim();
 }
+
+/** CLI からの open メッセージを受信済みか（Dock 起動フォールバック判定用） */
+let receivedOpenMessage = false;
 
 async function handleSocketMessage(message: OrkisMessage) {
   switch (message.type) {
@@ -1200,6 +1206,7 @@ async function handleSocketMessage(message: OrkisMessage) {
       break;
     }
     case "open": {
+      receivedOpenMessage = true;
       const dir = await resolveRepoRoot(message.dir);
       console.log(`[orkis] open: dir=${dir}, file=${message.file ?? "(none)"}`);
       const existing = findWindowByDir(dir);
@@ -1226,6 +1233,16 @@ async function handleSocketMessage(message: OrkisMessage) {
   }
 }
 
+/** メッセージを直列に処理するキュー（async の順序保証） */
+let messageQueue = Promise.resolve();
+function enqueueMessage(message: OrkisMessage) {
+  messageQueue = messageQueue.then(() =>
+    handleSocketMessage(message).catch((err) => {
+      console.error("[socket] message handling error:", err);
+    }),
+  );
+}
+
 function setupSocketServer(): net.Server {
   if (fs.existsSync(SOCKET_PATH)) {
     fs.unlinkSync(SOCKET_PATH);
@@ -1246,7 +1263,7 @@ function setupSocketServer(): net.Server {
           console.error("[socket] invalid JSON:", line);
           continue;
         }
-        void handleSocketMessage(result.value);
+        enqueueMessage(result.value);
       }
     });
   });
@@ -1346,9 +1363,8 @@ if (initialDir) {
   await handleSocketMessage({ type: "open", dir: initialDir });
 } else {
   setTimeout(() => {
-    // CLI からの open メッセージでウィンドウが開かれていなければフォールバック
-    if (windowDirs.size === 0) {
-      void handleSocketMessage({ type: "open", dir: homedir() });
+    if (!receivedOpenMessage) {
+      enqueueMessage({ type: "open", dir: homedir() });
     }
   }, CLI_OPEN_WAIT_MS);
 }
