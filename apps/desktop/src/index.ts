@@ -1172,20 +1172,21 @@ function findWindowByDir(dir: string): OrkisWindow | undefined {
   return undefined;
 }
 
-/** dir から git リポジトリルートを解決する。git 管理外や spawn 失敗時はそのまま返す */
+/** dir から git リポジトリルートを解決する。git 管理外や失敗時はそのまま返す */
 async function resolveRepoRoot(dir: string): Promise<string> {
-  const result = tryCatch(() =>
+  const spawnResult = tryCatch(() =>
     Bun.spawn(["git", "rev-parse", "--show-toplevel"], {
       cwd: dir,
       stdout: "pipe",
       stderr: "pipe",
     }),
   );
-  if (!result.ok) return dir;
-  const output = await new Response(result.value.stdout).text();
-  const exitCode = await result.value.exited;
-  if (exitCode !== 0) return dir;
-  return output.trim();
+  if (!spawnResult.ok) return dir;
+  const outputResult = await tryCatch(new Response(spawnResult.value.stdout).text());
+  if (!outputResult.ok) return dir;
+  const exitCode = await tryCatch(spawnResult.value.exited);
+  if (!exitCode.ok || exitCode.value !== 0) return dir;
+  return outputResult.value.trim();
 }
 
 /** CLI からの open メッセージを受信済みか（Dock 起動フォールバック判定用） */
