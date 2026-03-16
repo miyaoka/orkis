@@ -32,16 +32,14 @@ const emit = defineEmits<{
 }>();
 
 const containerRef = ref<HTMLElement>();
-const { request, send, onPtyData, onPtyExit } = useRpc();
+const { send } = useRpc();
 const terminalStore = useTerminalStore();
 
 let terminal: Terminal | undefined;
 let fitAddon: FitAddon | undefined;
-let ptyId: number | undefined;
-let disposed = false;
-let removeDataListener: (() => void) | undefined;
-let removeExitListener: (() => void) | undefined;
 let resizeObserver: ResizeObserver | undefined;
+let detachDisposer: (() => void) | undefined;
+let unmounted = false;
 
 /** fit() の RAF デバウンス制御 */
 let fitRafId = 0;
@@ -140,57 +138,42 @@ onMounted(async () => {
     emit("blur");
   });
 
-  const spawnedPtyId = await request.ptySpawn({
-    dir: props.dir,
-    cols: terminal.cols,
-    rows: terminal.rows,
-  });
-
-  // spawn 完了前に unmount されていたら即 kill
-  if (disposed) {
-    send.ptyKill({ id: spawnedPtyId });
-    return;
-  }
-
-  // paneRegistry に leaf がまだ存在するか確認
-  if (terminalStore.paneRegistry[props.leafId] === undefined) {
-    send.ptyKill({ id: spawnedPtyId });
-    return;
-  }
-
-  ptyId = spawnedPtyId;
-  terminalStore.registerPanePty(props.leafId, ptyId);
-
-  // PTY → terminal
-  removeDataListener = onPtyData(({ id, data }) => {
-    if (id === ptyId) {
-      terminal?.write(data);
-    }
-  });
-
-  removeExitListener = onPtyExit(({ id, exitCode: _exitCode }) => {
-    if (id === ptyId) {
-      terminal?.write("\r\n[Process exited]\r\n");
-      terminalStore.clearPanePty(props.leafId, id);
-      ptyId = undefined;
-    }
-  });
-
   // Shift+Enter で Esc+CR を送信する（Claude Code が改行として認識するシーケンス）
   terminal.attachCustomKeyEventHandler((ev) => {
     if (ev.type === "keydown" && ev.key === "Enter" && ev.shiftKey) {
-      if (ptyId !== undefined) {
-        send.ptyWrite({ id: ptyId, data: "\x1b\r" });
+      const session = terminalStore.paneRegistry[props.leafId]?.session;
+      if (session !== undefined) {
+        send.ptyWrite({ id: session.ptyId, data: "\x1b\r" });
       }
       return false;
     }
     return true;
   });
 
+  // PTY を spawn（生存中 session があれば HMR 再マウントとしてスキップ）
+  await terminalStore.spawnPty(props.leafId, terminal.cols, terminal.rows);
+
+  // spawn の await 中に unmount された場合は以降の処理をスキップ
+  if (unmounted) return;
+
+  // store の PTY セッションに接続（ring buffer replay + live attach）
+  detachDisposer = terminalStore.attachTerminal(props.leafId, (data) => {
+    terminal?.write(data);
+  });
+
   // xterm → PTY
   terminal.onData((data) => {
-    if (ptyId !== undefined) {
-      send.ptyWrite({ id: ptyId, data });
+    const session = terminalStore.paneRegistry[props.leafId]?.session;
+    if (session !== undefined) {
+      send.ptyWrite({ id: session.ptyId, data });
+    }
+  });
+
+  // xterm のリサイズを PTY に同期
+  terminal.onResize(({ cols, rows }) => {
+    const session = terminalStore.paneRegistry[props.leafId]?.session;
+    if (session !== undefined) {
+      send.ptyResize({ id: session.ptyId, cols, rows });
     }
   });
 
@@ -200,23 +183,13 @@ onMounted(async () => {
     scheduleFit();
   });
   resizeObserver.observe(container);
-
-  terminal.onResize(({ cols, rows }) => {
-    if (ptyId !== undefined) {
-      send.ptyResize({ id: ptyId, cols, rows });
-    }
-  });
 });
 
 onBeforeUnmount(() => {
-  disposed = true;
+  unmounted = true;
   if (fitRafId) cancelAnimationFrame(fitRafId);
   resizeObserver?.disconnect();
-  removeDataListener?.();
-  removeExitListener?.();
-  if (ptyId !== undefined) {
-    send.ptyKill({ id: ptyId });
-  }
+  detachDisposer?.();
   terminal?.dispose();
 });
 </script>

@@ -1,3 +1,4 @@
+import { tryCatch } from "@orkis/shared";
 import { acceptHMRUpdate, defineStore } from "pinia";
 import { ref } from "vue";
 import { useContextKeys } from "../command/useContextKeys";
@@ -16,18 +17,33 @@ interface TerminalLayoutState {
   focusedLeafId: string;
 }
 
+/** PTY セッション。store が所有し、コンポーネントの mount/unmount を跨いで維持される */
+interface PtySession {
+  ptyId: number;
+  /** 出力 ring buffer。replay 時に xterm.write() で流す */
+  chunks: string[];
+  /** 書き込み済み総チャンク数（ring buffer のインデックス計算用） */
+  totalChunks: number;
+  /** PTY 終了済みか */
+  exited: boolean;
+}
+
 interface PaneEntry {
   dir: string;
-  ptyId?: number;
+  session?: PtySession;
 }
+
+/** ring buffer の容量。xterm のデフォルト scrollback（1000行）と同等 */
+const PTY_RING_BUFFER_CAPACITY = 1000;
 
 /**
  * ターミナル分割レイアウトと PTY の状態を管理する。
  * leaf の追加・削除は store の action のみが行う（単一所有者）。
- * コンポーネントの unmount は xterm dispose 等のローカルリソース解放のみ担当する。
+ * PTY のライフサイクル（spawn/kill/data）も store が一元管理する。
+ * コンポーネントは xterm の attach/detach のみ担当する。
  */
 export const useTerminalStore = defineStore("terminal", () => {
-  const { send } = useRpc();
+  const { request, send, onPtyData, onPtyExit } = useRpc();
   const contextKeys = useContextKeys();
 
   /** 訪問済みの worktree ディレクトリ一覧（初回訪問順） */
@@ -41,6 +57,172 @@ export const useTerminalStore = defineStore("terminal", () => {
 
   /** split ドラッグ中の fit 抑制カウンター */
   const dragSuspendCount = ref(0);
+
+  // --- PTY セッション管理（非公開状態） ---
+
+  /** leafId → xterm.write コールバック。attach 中のみ存在 */
+  const terminalWriters = new Map<string, (data: string) => void>();
+
+  /** ptyId → leafId 逆引き（onPtyData/onPtyExit で高速検索用） */
+  const ptyIdToLeafId = new Map<number, string>();
+
+  /** spawn 中の leafId（二重 spawn 防止） */
+  const spawningLeafIds = new Set<string>();
+
+  // --- PTY データの一括購読 ---
+
+  /** HMR 再実行時に前回のリスナーを解除するための disposer */
+  let disposeDataListener: (() => void) | undefined;
+  let disposeExitListener: (() => void) | undefined;
+
+  /**
+   * paneRegistry から ptyIdToLeafId を再構築する。
+   * HMR 時に plain Map が空になるため、Pinia state として残っている
+   * paneRegistry の session 情報から逆引きを復元する。
+   */
+  function rebuildPtyIdMap() {
+    ptyIdToLeafId.clear();
+    for (const [leafId, entry] of Object.entries(paneRegistry.value)) {
+      if (entry.session === undefined) continue;
+      if (entry.session.exited) continue;
+      ptyIdToLeafId.set(entry.session.ptyId, leafId);
+    }
+  }
+
+  function initPtySubscription() {
+    disposeDataListener?.();
+    disposeExitListener?.();
+
+    // HMR で Map が再初期化されるため、paneRegistry から逆引きを復元
+    rebuildPtyIdMap();
+
+    disposeDataListener = onPtyData(({ id, data }) => {
+      const leafId = ptyIdToLeafId.get(id);
+      if (leafId === undefined) return;
+      const entry = paneRegistry.value[leafId];
+      if (entry?.session === undefined) return;
+
+      // ring buffer に追記
+      const session = entry.session;
+      const idx = session.totalChunks % PTY_RING_BUFFER_CAPACITY;
+      session.chunks[idx] = data;
+      session.totalChunks++;
+
+      // attach 中の terminal に即時転送
+      const writer = terminalWriters.get(leafId);
+      if (writer !== undefined) writer(data);
+    });
+
+    disposeExitListener = onPtyExit(({ id, exitCode: _exitCode }) => {
+      const leafId = ptyIdToLeafId.get(id);
+      if (leafId === undefined) return;
+      const entry = paneRegistry.value[leafId];
+      if (entry?.session === undefined) return;
+
+      const session = entry.session;
+      session.exited = true;
+
+      // ring buffer に終了メッセージを追記
+      const exitMsg = "\r\n[Process exited]\r\n";
+      const idx = session.totalChunks % PTY_RING_BUFFER_CAPACITY;
+      session.chunks[idx] = exitMsg;
+      session.totalChunks++;
+
+      const writer = terminalWriters.get(leafId);
+      if (writer !== undefined) writer(exitMsg);
+
+      ptyIdToLeafId.delete(id);
+    });
+  }
+
+  initPtySubscription();
+
+  // --- PTY ライフサイクル関数 ---
+
+  /** PTY を spawn する。生存中 session または spawn 中であれば何もしない */
+  async function spawnPty(leafId: string, cols: number, rows: number): Promise<void> {
+    const entry = paneRegistry.value[leafId];
+    if (entry === undefined) return;
+    // 生存中 session があればスキップ（HMR 再マウント時）
+    // exited session は再 spawn を許可する
+    if (entry.session !== undefined && !entry.session.exited) return;
+    // 二重 spawn 防止（await 中に再マウントされた場合）
+    if (spawningLeafIds.has(leafId)) return;
+
+    spawningLeafIds.add(leafId);
+    const result = await tryCatch(request.ptySpawn({ dir: entry.dir, cols, rows }));
+    spawningLeafIds.delete(leafId);
+
+    if (!result.ok) {
+      console.warn("[terminal] ptySpawn failed:", result.error);
+      return;
+    }
+
+    const ptyId = result.value;
+
+    // spawn 完了前に leaf が削除されていたら即 kill
+    const current = paneRegistry.value[leafId];
+    if (current === undefined) {
+      send.ptyKill({ id: ptyId });
+      return;
+    }
+
+    // 別の spawn が先に完了して生存中 session を設定していた場合は即 kill
+    if (current.session !== undefined && !current.session.exited) {
+      send.ptyKill({ id: ptyId });
+      return;
+    }
+
+    const session: PtySession = {
+      ptyId,
+      chunks: Array.from<string>({ length: PTY_RING_BUFFER_CAPACITY }),
+      totalChunks: 0,
+      exited: false,
+    };
+
+    paneRegistry.value[leafId] = { ...current, session };
+    ptyIdToLeafId.set(ptyId, leafId);
+  }
+
+  /** PTY を kill し、関連リソースをクリーンアップする */
+  function killPty(leafId: string) {
+    const entry = paneRegistry.value[leafId];
+    if (entry?.session === undefined) return;
+
+    send.ptyKill({ id: entry.session.ptyId });
+    ptyIdToLeafId.delete(entry.session.ptyId);
+    terminalWriters.delete(leafId);
+    paneRegistry.value[leafId] = { ...entry, session: undefined };
+  }
+
+  /**
+   * terminal を PTY セッションに接続する。
+   * 既存 session の ring buffer を replay し、以降のデータを即時転送する。
+   * @returns detach 用の disposer
+   */
+  function attachTerminal(leafId: string, writer: (data: string) => void): () => void {
+    const entry = paneRegistry.value[leafId];
+    if (entry?.session !== undefined) {
+      // ring buffer replay
+      const session = entry.session;
+      const stored = Math.min(session.totalChunks, PTY_RING_BUFFER_CAPACITY);
+      const startIdx = session.totalChunks - stored;
+      for (let i = startIdx; i < session.totalChunks; i++) {
+        writer(session.chunks[i % PTY_RING_BUFFER_CAPACITY]);
+      }
+    }
+
+    terminalWriters.set(leafId, writer);
+
+    // disposer は自分が登録した writer のみを削除する（HMR で新旧が入れ替わるため）
+    return () => {
+      if (terminalWriters.get(leafId) === writer) {
+        terminalWriters.delete(leafId);
+      }
+    };
+  }
+
+  // --- レイアウト管理 ---
 
   /** layoutsByDir[dir] を返す。未登録なら初期リーフで作成する */
   function ensureLayout(dir: string): TerminalLayoutState {
@@ -101,10 +283,7 @@ export const useTerminalStore = defineStore("terminal", () => {
     }
 
     // 削除確定後に PTY kill + paneRegistry 削除
-    const entry = paneRegistry.value[leafId];
-    if (entry?.ptyId !== undefined) {
-      send.ptyKill({ id: entry.ptyId });
-    }
+    killPty(leafId);
     delete paneRegistry.value[leafId];
 
     layoutsByDir.value[dir] = {
@@ -140,21 +319,6 @@ export const useTerminalStore = defineStore("terminal", () => {
     };
   }
 
-  /** PTY spawn 完了後に leaf に ptyId を紐付ける */
-  function registerPanePty(leafId: string, ptyId: number) {
-    const entry = paneRegistry.value[leafId];
-    if (entry === undefined) return;
-    paneRegistry.value[leafId] = { ...entry, ptyId };
-  }
-
-  /** PTY 終了時に ptyId をリセットする。expectedPtyId と一致する場合のみ */
-  function clearPanePty(leafId: string, expectedPtyId: number) {
-    const entry = paneRegistry.value[leafId];
-    if (entry === undefined) return;
-    if (entry.ptyId !== expectedPtyId) return;
-    paneRegistry.value[leafId] = { ...entry, ptyId: undefined };
-  }
-
   /**
    * worktree 削除時に呼ぶ。
    * 全 leaf の PTY kill → paneRegistry 掃除 → layoutsByDir 削除 → visitedDirs 削除
@@ -164,10 +328,7 @@ export const useTerminalStore = defineStore("terminal", () => {
     if (layout !== undefined) {
       const leafIds = collectLeafIds(layout.root);
       for (const leafId of leafIds) {
-        const entry = paneRegistry.value[leafId];
-        if (entry?.ptyId !== undefined) {
-          send.ptyKill({ id: entry.ptyId });
-        }
+        killPty(leafId);
         delete paneRegistry.value[leafId];
       }
       delete layoutsByDir.value[dir];
@@ -195,8 +356,9 @@ export const useTerminalStore = defineStore("terminal", () => {
     closePane,
     resizeBranch,
     focusPane,
-    registerPanePty,
-    clearPanePty,
+    spawnPty,
+    killPty,
+    attachTerminal,
     remove,
     incrementDragSuspend,
     decrementDragSuspend,

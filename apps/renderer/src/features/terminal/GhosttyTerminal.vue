@@ -8,19 +8,21 @@ import { init, Terminal, FitAddon } from "ghostty-web";
 import { onMounted, onBeforeUnmount, ref } from "vue";
 import { useRpc } from "../rpc/useRpc";
 import { TERMINAL_FONT_FAMILY, TERMINAL_FONT_SIZE, TERMINAL_THEME } from "./terminalConfig";
+import { useTerminalStore } from "./useTerminalStore";
 
 const props = defineProps<{
   dir: string;
+  leafId: string;
 }>();
 
 const containerRef = ref<HTMLElement>();
-const { request, send, onPtyData, onPtyExit } = useRpc();
+const { send } = useRpc();
+const terminalStore = useTerminalStore();
 
 let terminal: Terminal | undefined;
 let fitAddon: FitAddon | undefined;
-let ptyId: number | undefined;
-let removeDataListener: (() => void) | undefined;
-let removeExitListener: (() => void) | undefined;
+let detachDisposer: (() => void) | undefined;
+let unmounted = false;
 
 onMounted(async () => {
   const container = containerRef.value;
@@ -45,42 +47,36 @@ onMounted(async () => {
   fitAddon.observeResize();
   terminal.focus();
 
-  ptyId = await request.ptySpawn({ dir: props.dir, cols: terminal.cols, rows: terminal.rows });
+  // PTY を spawn（生存中 session があれば HMR 再マウントとしてスキップ）
+  await terminalStore.spawnPty(props.leafId, terminal.cols, terminal.rows);
 
-  // PTY → terminal
-  removeDataListener = onPtyData(({ id, data }) => {
-    if (id === ptyId) {
-      terminal?.write(data);
-    }
-  });
+  // spawn の await 中に unmount された場合は以降の処理をスキップ
+  if (unmounted) return;
 
-  removeExitListener = onPtyExit(({ id, exitCode: _exitCode }) => {
-    if (id === ptyId) {
-      terminal?.write("\r\n[Process exited]\r\n");
-      ptyId = undefined;
-    }
+  // store の PTY セッションに接続（ring buffer replay + live attach）
+  detachDisposer = terminalStore.attachTerminal(props.leafId, (data) => {
+    terminal?.write(data);
   });
 
   terminal.onResize(({ cols, rows }) => {
-    if (ptyId !== undefined) {
-      send.ptyResize({ id: ptyId, cols, rows });
+    const session = terminalStore.paneRegistry[props.leafId]?.session;
+    if (session !== undefined) {
+      send.ptyResize({ id: session.ptyId, cols, rows });
     }
   });
 
   // terminal → PTY
   terminal.onData((data) => {
-    if (ptyId !== undefined) {
-      send.ptyWrite({ id: ptyId, data });
+    const session = terminalStore.paneRegistry[props.leafId]?.session;
+    if (session !== undefined) {
+      send.ptyWrite({ id: session.ptyId, data });
     }
   });
 });
 
 onBeforeUnmount(() => {
-  removeDataListener?.();
-  removeExitListener?.();
-  if (ptyId !== undefined) {
-    send.ptyKill({ id: ptyId });
-  }
+  unmounted = true;
+  detachDisposer?.();
   terminal?.dispose();
 });
 </script>
