@@ -175,6 +175,7 @@ watch(explorerOpen, () => {
 });
 
 // ファイル選択時に Explorer を自動オープンし、ツリーを対象パスまで展開する
+// flush: "post" で v-show 反映後に reveal を呼び、scrollIntoView が正しく動作するようにする
 watch(
   () => workspaceStore.selectedPath,
   (path) => {
@@ -182,6 +183,7 @@ watch(
     explorerOpen.value = true;
     void filerPaneRef.value?.reveal(path);
   },
+  { flush: "post" },
 );
 
 watchEffect(() => {

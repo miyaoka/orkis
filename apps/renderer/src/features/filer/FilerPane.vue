@@ -27,6 +27,8 @@ const { request, onFsChange, onGitStatusChange } = useRpc();
 
 const rootEntries = ref<FileEntry[]>();
 const loading = ref(false);
+/** rootEntries 未読み込み時に保留する reveal 対象パス */
+let pendingRevealPath: string | undefined;
 
 /** readDir の結果に git 変更情報と削除ファイルをマージする */
 function mergeWithGitStatus(entries: FileEntry[], dirPath: string): FileEntry[] {
@@ -64,6 +66,13 @@ async function loadRoot() {
   } finally {
     loading.value = false;
   }
+
+  // rootEntries 読み込み完了後に保留中の reveal を実行
+  if (pendingRevealPath) {
+    const path = pendingRevealPath;
+    pendingRevealPath = undefined;
+    void reveal(path);
+  }
 }
 
 function onSelect(path: string) {
@@ -75,7 +84,11 @@ function onSelect(path: string) {
  * ルートエントリの中から先頭セグメントに一致するアイテムを探して FileTreeItem.reveal に委譲する。
  */
 async function reveal(targetPath: string): Promise<void> {
-  if (!rootEntries.value) return;
+  if (!rootEntries.value) {
+    // ルート読み込み中なら完了後に再試行する
+    pendingRevealPath = targetPath;
+    return;
+  }
 
   const firstSegment = targetPath.split("/")[0];
   const index = rootEntries.value.findIndex((e) => e.name === firstSegment);
