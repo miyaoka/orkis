@@ -159,9 +159,9 @@ onMounted(async () => {
   });
 
   // Shift+Enter で Esc+CR を送信する（Claude Code が改行として認識するシーケンス）
-  // keydown で送信し、keypress でも return false して xterm のデフォルト改行を抑止する
+  // keydown で送信、keypress で xterm のデフォルト改行を抑止、keyup は通過させる
   terminal.attachCustomKeyEventHandler((ev) => {
-    if (ev.key === "Enter" && ev.shiftKey) {
+    if (ev.key === "Enter" && ev.shiftKey && ev.type !== "keyup") {
       if (ev.type === "keydown") {
         const session = terminalStore.paneRegistry[props.leafId]?.session;
         if (session !== undefined) {
