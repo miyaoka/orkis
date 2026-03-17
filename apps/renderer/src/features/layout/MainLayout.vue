@@ -306,7 +306,7 @@ watchEffect(() => {
       ref="explorerPopover"
       popover="auto"
       class="_explorer-popover m-0 my-0 mr-0 ml-auto h-dvh max-h-none overflow-hidden border-0 border-l border-zinc-700 bg-zinc-900 p-0 [&:popover-open]:flex"
-      :style="{ width: `${explorerWidth}px` }"
+      :style="{ width: `${explorerWidth}px`, maxWidth: '100vw' }"
       @toggle="onExplorerToggle"
     >
       <!-- 左端リサイズハンドル（Explorer 全体の幅をドラッグで変更） -->
