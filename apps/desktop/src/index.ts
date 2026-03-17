@@ -1473,8 +1473,16 @@ if (initialDir) {
     }
   } else if (savedState.windows.length > 0) {
     // 前回の状態を復元（プロジェクト・ウィンドウサイズ・位置）
+    let restored = false;
     for (const ws of savedState.windows) {
-      openWindow(ws.dir, { savedFrame: ws.frame, initialActiveDir: ws.activeDir });
+      if (!fs.existsSync(ws.dir)) continue;
+      // activeDir が存在しなければ dir（repo root）にフォールバック
+      const activeDir = fs.existsSync(ws.activeDir) ? ws.activeDir : ws.dir;
+      openWindow(ws.dir, { savedFrame: ws.frame, initialActiveDir: activeDir });
+      restored = true;
+    }
+    if (!restored) {
+      openWindow(homedir());
     }
   } else {
     openWindow(homedir());
