@@ -322,6 +322,7 @@ function computeTileLayout(
   containerHeight: number,
 ): { cols: number; rows: number } {
   if (count <= 1) return { cols: 1, rows: 1 };
+  if (containerWidth <= 0 || containerHeight <= 0) return { cols: 1, rows: count };
 
   const aspect = containerWidth / containerHeight;
   // sqrt(count) をベースに、アスペクト比で cols を補正。count を超えないように clamp
