@@ -8,6 +8,7 @@ import { tryCatch } from "@orkis/shared";
 import type { LspDiagnostic, OrkisRPC, WorktreeChangeCounts } from "@orkis/rpc";
 import { createLspClient } from "./lsp";
 import type { LspClient } from "./lsp";
+import { parseOwnerRepo } from "./git";
 import { getShellEnv } from "./shellEnv";
 
 type OrkisRPCInstance = ReturnType<typeof BrowserView.defineRPC<OrkisRPC>>;
@@ -22,11 +23,8 @@ const channel = await Updater.localInfo.channel();
 async function getRepoName(dir: string): Promise<string> {
   const result = await tryCatch(Promise.resolve(Bun.$`git -C ${dir} remote get-url origin`.text()));
   if (result.ok) {
-    const url = result.value.trim();
-    const match = url.match(/[/:]([^/:]+\/[^/]+?)(?:\.git)?$/);
-    if (match) {
-      return match[1];
-    }
+    const ownerRepo = parseOwnerRepo(result.value.trim());
+    if (ownerRepo) return ownerRepo;
   }
   return path.basename(dir);
 }
