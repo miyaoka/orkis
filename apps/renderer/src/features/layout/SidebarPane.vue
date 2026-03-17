@@ -229,10 +229,11 @@ onUnmounted(() => {
         >
         <div
           v-else-if="!wt.isMain && !isActive(wt)"
-          class="pointer-events-none absolute inset-y-0 right-0 flex items-center bg-linear-to-l from-zinc-800 via-zinc-800/95 to-transparent pr-1 pl-6 opacity-0 transition-opacity group-hover/wt:opacity-100"
+          class="pointer-events-none absolute inset-y-0 right-0 flex items-center bg-linear-to-l from-zinc-800 via-zinc-800/95 to-transparent pr-1 pl-6 opacity-0 transition-opacity group-focus-within/wt:opacity-100 group-hover/wt:opacity-100"
         >
           <button
-            class="pointer-events-auto grid size-8 place-items-center rounded-md bg-white text-zinc-900 transition-colors hover:bg-red-500 hover:text-white"
+            class="pointer-events-auto grid size-8 place-items-center rounded-md bg-white text-zinc-900 transition-colors hover:bg-red-500 hover:text-white focus:outline-2 focus:outline-blue-400"
+            aria-label="worktree を解除"
             @click.stop="handleWorktreeRemove(wt)"
           >
             <span class="icon-[lucide--unlink] text-sm" />
