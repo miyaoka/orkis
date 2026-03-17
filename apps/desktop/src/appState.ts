@@ -47,19 +47,48 @@ function ensureConfigDir(): void {
   }
 }
 
-/** 保存済みの状態を読み込む */
+function isValidFrame(v: unknown): v is WindowFrame {
+  if (typeof v !== "object" || v === null) return false;
+  const f = v as Record<string, unknown>;
+  return (
+    typeof f.x === "number" &&
+    typeof f.y === "number" &&
+    typeof f.width === "number" &&
+    typeof f.height === "number"
+  );
+}
+
+function isValidWindowState(v: unknown): v is WindowState {
+  if (typeof v !== "object" || v === null) return false;
+  const w = v as Record<string, unknown>;
+  return typeof w.dir === "string" && typeof w.activeDir === "string" && isValidFrame(w.frame);
+}
+
+/** 保存済みの状態を読み込む（不正なエントリは除外する） */
 export function loadAppState(): AppState {
   const content = tryCatch(() => fs.readFileSync(STATE_FILE, "utf-8"));
   if (!content.ok) {
     currentState = { windows: [] };
     return currentState;
   }
-  const parsed = tryCatch(() => JSON.parse(content.value) as AppState);
+  const parsed = tryCatch(() => JSON.parse(content.value) as unknown);
   if (!parsed.ok) {
     currentState = { windows: [] };
     return currentState;
   }
-  currentState = parsed.value;
+  const raw = parsed.value;
+  if (
+    typeof raw !== "object" ||
+    raw === null ||
+    !Array.isArray((raw as Record<string, unknown>).windows)
+  ) {
+    currentState = { windows: [] };
+    return currentState;
+  }
+  const windows = ((raw as Record<string, unknown>).windows as unknown[]).filter(
+    isValidWindowState,
+  );
+  currentState = { windows };
   return currentState;
 }
 
