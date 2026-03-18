@@ -18,6 +18,9 @@ type OrkisRPCInstance = ReturnType<typeof BrowserView.defineRPC<OrkisRPC>>;
 type OrkisWindow = BrowserWindow<OrkisRPCInstance>;
 
 const ALLOWED_PROTOCOLS = new Set(["https:", "http:"]);
+
+/** orkis 管理の zsh 初期化ディレクトリ（ZDOTDIR 差し替え用） */
+const ORKIS_ZDOTDIR = path.resolve(import.meta.dir, "../zsh");
 const VITE_DEV_SERVER_URL = "http://localhost:5173";
 
 const channel = await Updater.localInfo.channel();
@@ -81,6 +84,16 @@ function spawnPty(win: OrkisWindow, cwd: string, cols: number, rows: number): nu
       // CLI ツール（Claude Code 等）に OSC 8 ハイパーリンクの出力を許可する
       FORCE_HYPERLINK: "1",
       LANG: shellEnv.LANG ?? "en_US.UTF-8",
+      // Claude Code hooks がどの PTY から発火したか特定するための識別子
+      ORKIS_PTY_ID: String(id),
+      // ZDOTDIR 差し替えで orkis の zsh 初期化を注入する
+      ORKIS_ORIG_ZDOTDIR: shellEnv.ZDOTDIR ?? homedir(),
+      ORKIS_ZDOTDIR,
+      ZDOTDIR: ORKIS_ZDOTDIR,
+      // claude() 関数が参照する hooks 設定ファイルパス（検証用ダミー）
+      ORKIS_CLAUDE_SETTINGS_PATH: "/tmp/orkis-claude-settings-test.json",
+      // CLI が接続するソケットパス（dev/stable でパスが異なる）
+      ORKIS_SOCKET_PATH: SOCKET_PATH,
     },
     terminal: {
       cols,
@@ -1324,13 +1337,21 @@ function handleSocketMessage(message: OrkisMessage) {
   switch (message.type) {
     case "hook": {
       console.log(`[orkis] hook: ${message.event}`, message.payload);
-      // 最初のウィンドウに送信
-      const firstWin = windowDirs.keys().next().value;
-      if (firstWin) {
-        firstWin.webview.rpc?.send.orkisHook({
-          event: message.event,
-          payload: message.payload,
-        });
+      const hookPayload = { event: message.event, payload: message.payload };
+
+      // payload.ptyId から該当ウィンドウを特定して送信
+      const ptyId = typeof message.payload.ptyId === "number" ? message.payload.ptyId : undefined;
+      if (ptyId !== undefined) {
+        const entry = ptys.get(ptyId);
+        if (entry) {
+          entry.win.webview.rpc?.send.orkisHook(hookPayload);
+          break;
+        }
+      }
+
+      // ptyId がない、または該当 PTY が見つからない場合は全ウィンドウにブロードキャスト
+      for (const win of windowDirs.keys()) {
+        win.webview.rpc?.send.orkisHook(hookPayload);
       }
       break;
     }
