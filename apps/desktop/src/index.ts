@@ -1,3 +1,4 @@
+import Electrobun from "electrobun/bun";
 import { ApplicationMenu, BrowserView, BrowserWindow, Updater, Utils } from "electrobun/bun";
 import fs from "node:fs";
 import fsp from "node:fs/promises";
@@ -10,15 +11,8 @@ import { createLspClient } from "./lsp";
 import type { LspClient } from "./lsp";
 import { parseOwnerRepo } from "./git";
 import { getShellEnv } from "./shellEnv";
-import {
-  loadAppState,
-  saveAppStateSync,
-  updateWindowState,
-  updateWindowFrame,
-  updateWindowActiveDir,
-  getDefaultFrame,
-} from "./appState";
-import type { WindowFrame } from "./appState";
+import { loadAppState, saveSnapshot, getDefaultFrame } from "./appState";
+import type { WindowFrame, WindowState } from "./appState";
 
 type OrkisRPCInstance = ReturnType<typeof BrowserView.defineRPC<OrkisRPC>>;
 type OrkisWindow = BrowserWindow<OrkisRPCInstance>;
@@ -595,6 +589,22 @@ const windowRepoRoots = new Map<OrkisWindow, string>();
 /** switchDir の世代管理。stale な非同期結果を捨てるために使う */
 const windowSwitchGen = new Map<OrkisWindow, number>();
 
+/** 個別 close で最後に閉じたウィンドウの状態を退避。before-quit 時に live が空ならこれを保存する */
+let lastClosedWindowState: WindowState | null = null;
+
+/** live ウィンドウがないときのフォールバック用フレーム。savedState・close で設定される */
+let fallbackFrame: WindowFrame | null = null;
+
+/** 新規ウィンドウに引き継ぐフレームを取得する。live ウィンドウがあればその最新値を優先 */
+function getInheritedFrame(): WindowFrame {
+  // live ウィンドウの最後のフレームを取得（resize/move 後の最新値）
+  const lastWin = [...windowRepoRoots.keys()].at(-1);
+  if (lastWin) return lastWin.getFrame();
+  // live がなければ最後に閉じたウィンドウのフレーム
+  if (fallbackFrame) return fallbackFrame;
+  return getDefaultFrame();
+}
+
 // git status デバウンス
 const gitStatusTimers = new Map<OrkisWindow, ReturnType<typeof setTimeout>>();
 const gitStatusInFlight = new Set<OrkisWindow>();
@@ -1048,8 +1058,6 @@ function createWindowWithRPC(dir: string, options?: CreateWindowOptions): OrkisW
 
           // ディレクトリを切り替え
           currentDir = targetReal;
-          updateWindowActiveDir(repoRootDir, currentDir);
-
           // ファイル監視を付け替え
           stopWatching(win);
           startWatching(win, currentDir);
@@ -1180,28 +1188,13 @@ function createWindowWithRPC(dir: string, options?: CreateWindowOptions): OrkisW
     rpc,
   });
 
-  // 初回状態を保存
-  updateWindowState(repoRootDir, currentDir, initialFrame);
-
   void updateWindowTitle();
 
-  // フレーム変更を追跡して永続化
-  win.on("resize", (event) => {
-    const { x, y, width, height } = (
-      event as { data: { x: number; y: number; width: number; height: number } }
-    ).data;
-    updateWindowFrame(repoRootDir, { x, y, width, height });
-  });
-  win.on("move", () => {
-    const frame = win.getFrame();
-    updateWindowFrame(repoRootDir, frame);
-  });
-
   win.on("close", () => {
-    // 閉じる直前のフレームを即時保存
+    // 閉じる直前の状態を退避（before-quit で live が空なら復元に使う）
     const frame = win.getFrame();
-    updateWindowState(repoRootDir, currentDir, frame);
-    saveAppStateSync();
+    lastClosedWindowState = { dir: repoRootDir, activeDir: currentDir, frame };
+    fallbackFrame = frame;
     cleanupWindow(win);
   });
 
@@ -1309,9 +1302,10 @@ function openWindow(dir: string, options?: OpenWindowOptions): void {
     return;
   }
   const activeDir = initialActiveDir ?? dir;
+  const frame = savedFrame ?? getInheritedFrame();
   const newWin = createWindowWithRPC(dir, {
     initialFile: relativeFile,
-    savedFrame,
+    savedFrame: frame,
     initialActiveDir,
   });
   const windowId = crypto.randomUUID();
@@ -1457,6 +1451,12 @@ ApplicationMenu.on("application-menu-clicked", (event) => {
 const socketServer = setupSocketServer();
 const savedState = loadAppState();
 
+// 前回セッションの最後のフレームを引き継ぎ用に設定
+const lastSavedWindow = savedState.windows.at(-1);
+if (lastSavedWindow) {
+  fallbackFrame = lastSavedWindow.frame;
+}
+
 // macOS の ApplicationMenu が正しく動作するには、初回ウィンドウを同期的に作成する必要がある
 // （role メニューは active app + key window + responder chain に依存するため）
 const initialDir = process.env.ORKIS_PROJECT_ROOT;
@@ -1498,11 +1498,28 @@ if (initialDir) {
   }
 }
 
+// --- アプリ終了時の状態保存 ---
+// before-quit が永続化の唯一のコミット点。close では live 状態のみ更新する。
+
+Electrobun.events.on("before-quit", () => {
+  // live ウィンドウから snapshot を構築
+  const snapshot: WindowState[] = [];
+  for (const [win, repoRoot] of windowRepoRoots) {
+    const activeDir = windowDirs.get(win) ?? repoRoot;
+    const frame = win.getFrame();
+    snapshot.push({ dir: repoRoot, activeDir, frame });
+  }
+  // live が空（最後の1枚を個別 close した直後）なら退避した状態を使う
+  if (snapshot.length === 0 && lastClosedWindowState) {
+    snapshot.push(lastClosedWindowState);
+  }
+  saveSnapshot(snapshot);
+});
+
 // --- クリーンアップ ---
+// forceExit(0) で到達しない可能性があるが、安全策として残す
 
 process.on("beforeExit", () => {
-  saveAppStateSync();
-
   for (const win of windowDirs.keys()) {
     cleanupWindow(win);
   }
