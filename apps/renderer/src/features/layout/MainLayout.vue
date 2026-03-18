@@ -23,6 +23,7 @@ import DiagnosticsPane from "../diagnostics/DiagnosticsPane.vue";
 import FilerPane from "../filer/FilerPane.vue";
 import { useWorkspaceStore } from "../filer/useWorkspaceStore";
 import PreviewPane from "../preview/PreviewPane.vue";
+import { useRpc } from "../rpc/useRpc";
 import { registerTerminalCommands } from "../terminal/registerTerminalCommands";
 import { computeTileLayout, TILE_GAP } from "../terminal/splitTree";
 import TerminalPane from "../terminal/TerminalPane.vue";
@@ -41,8 +42,9 @@ const currentDir = computed(() => workspaceStore.dir);
 const disposeTerminalCommands = registerTerminalCommands(currentDir, terminalContainerRef);
 onUnmounted(disposeTerminalCommands);
 
-// Explorer 開閉コマンド
+// レイアウト・ウィンドウスコープのコマンド登録
 const { register } = useCommandRegistry();
+const { send } = useRpc();
 const disposeExplorerToggle = register("explorer.toggle", () => {
   if (explorerOpen.value) {
     closeExplorer();
@@ -51,7 +53,12 @@ const disposeExplorerToggle = register("explorer.toggle", () => {
   }
   return true;
 });
+const disposeWindowClose = register("window.close", () => {
+  send.windowClose();
+  return true;
+});
 onUnmounted(disposeExplorerToggle);
+onUnmounted(disposeWindowClose);
 
 // ウィンドウの表示状態変更時に terminalFocus を同期
 // hidden 時は false にリセット、復帰時は activeElement から再判定

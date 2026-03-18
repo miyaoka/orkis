@@ -73,11 +73,6 @@ export function registerTerminalCommands(
       return true;
     }),
 
-    registry.register("window.close", () => {
-      send.windowClose();
-      return true;
-    }),
-
     registry.register("terminal.focusLeft", createFocusHandler("left")),
     registry.register("terminal.focusRight", createFocusHandler("right")),
     registry.register("terminal.focusUp", createFocusHandler("up")),
