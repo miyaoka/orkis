@@ -59,8 +59,11 @@ watch(
     activeLineNumber.value = undefined;
     const version = ++highlightVersion;
     highlight(props.content, props.filePath).then((html) => {
-      if (version !== highlightVersion || !html) return;
-      highlightedHtml.value = html;
+      if (version !== highlightVersion) return;
+      // html が undefined の場合はフォールバック表示（Shiki 未対応言語）
+      if (html) {
+        highlightedHtml.value = html;
+      }
       if (props.lineNumber !== undefined) {
         void scrollToLine(props.lineNumber);
       }
@@ -75,6 +78,9 @@ watch(
   () => {
     if (props.lineNumber !== undefined) {
       void scrollToLine(props.lineNumber);
+    } else {
+      clearActiveHighlight();
+      activeLineNumber.value = undefined;
     }
   },
 );
