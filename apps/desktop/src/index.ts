@@ -62,7 +62,7 @@ const CLAUDE_SETTINGS_PATH = path.join(tmpdir(), `orkis-${channel}-claude-settin
 /** hooks 設定ファイルを生成する。nc で直接ソケットに通知する */
 function generateClaudeSettings(): void {
   const hookCommand = (event: string) =>
-    `echo '{"type":"hook","event":"${event}","payload":{"ptyId":'"\\$ORKIS_PTY_ID"'}}' | nc -U "$ORKIS_SOCKET_PATH"`;
+    `echo '{"type":"hook","event":"${event}","payload":{"ptyId":'"$ORKIS_PTY_ID"'}}' | nc -U "$ORKIS_SOCKET_PATH"`;
 
   const settings = {
     hooks: {
