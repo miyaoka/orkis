@@ -76,6 +76,18 @@ function generateClaudeSettings(): void {
           hooks: [{ type: "command", command: hookCommand("needs-input"), async: true }],
         },
       ],
+      PostToolUse: [
+        {
+          matcher: "*",
+          hooks: [{ type: "command", command: hookCommand("tool-done"), async: true }],
+        },
+      ],
+      PostToolUseFailure: [
+        {
+          matcher: "*",
+          hooks: [{ type: "command", command: hookCommand("tool-done"), async: true }],
+        },
+      ],
     },
   };
 
@@ -1256,7 +1268,7 @@ function createWindowWithRPC(dir: string, options?: CreateWindowOptions): OrkisW
 
 interface HookMessage {
   type: "hook";
-  event: "running" | "done" | "needs-input";
+  event: "running" | "done" | "needs-input" | "tool-done";
   payload: Record<string, unknown>;
 }
 

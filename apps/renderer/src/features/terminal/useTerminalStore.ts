@@ -15,18 +15,23 @@ import { terminalConfig } from "./terminalConfig";
 
 /**
  * Claude Code の状態。
- * - working: エージェントが作業中（UserPromptSubmit）
+ * - working: エージェントが作業中（UserPromptSubmit / PostToolUse）
  * - asking: 承認待ち（PermissionRequest）— ユーザー操作が必要
  * - done: 応答完了 / ユーザー入力待ち（Stop）— 次のプロンプト待ち
  */
 type ClaudeState = "working" | "asking" | "done";
 
-/** CLI event → UI state のマッピング */
-const HOOK_EVENT_TO_STATE: Record<string, ClaudeState> = {
-  running: "working",
-  "needs-input": "asking",
-  done: "done",
-};
+/**
+ * hooks イベント種別。
+ * - running: UserPromptSubmit（プロンプト送信）
+ * - needs-input: PermissionRequest（承認ダイアログ表示）
+ * - done: Stop（応答完了）
+ * - tool-done: PostToolUse / PostToolUseFailure（ツール実行完了）
+ */
+type HookEvent = "running" | "needs-input" | "done" | "tool-done";
+
+/** PermissionRequest の debounce 時間（ms）。この間に tool-done が来たら asking にしない */
+const ASK_DEBOUNCE_MS = 150;
 
 interface TerminalLayoutState {
   root: SplitNode;
@@ -77,8 +82,59 @@ export const useTerminalStore = defineStore("terminal", () => {
   /** 全 worktree のターミナルを一覧表示するモード */
   const showAll = ref(false);
 
-  /** ptyId → Claude Code の動作状態（idle は undefined = エントリなし） */
+  /** ptyId → Claude Code の表示用状態（idle は undefined = エントリなし） */
   const claudeStateByPtyId = ref<Record<number, ClaudeState>>({});
+
+  /** ptyId → PermissionRequest の debounce タイマー */
+  const askTimers = new Map<number, ReturnType<typeof setTimeout>>();
+
+  /** pending ask タイマーをキャンセルする */
+  function cancelAskTimer(ptyId: number) {
+    const timer = askTimers.get(ptyId);
+    if (timer !== undefined) {
+      clearTimeout(timer);
+      askTimers.delete(ptyId);
+    }
+  }
+
+  /**
+   * hooks イベントを受けて Claude 状態を更新する。
+   * PermissionRequest は debounce し、一瞬で通過するケース（自動承認）を除外する。
+   * done 後の遅延 tool-done（イベント順序逆転）は無視する。
+   */
+  function handleHookEvent(ptyId: number, event: HookEvent) {
+    switch (event) {
+      case "running": {
+        cancelAskTimer(ptyId);
+        claudeStateByPtyId.value[ptyId] = "working";
+        break;
+      }
+      case "needs-input": {
+        // debounce: タイマー満了まで asking にしない
+        cancelAskTimer(ptyId);
+        askTimers.set(
+          ptyId,
+          setTimeout(() => {
+            askTimers.delete(ptyId);
+            claudeStateByPtyId.value[ptyId] = "asking";
+          }, ASK_DEBOUNCE_MS),
+        );
+        break;
+      }
+      case "tool-done": {
+        cancelAskTimer(ptyId);
+        // done 後の遅延 tool-done を無視（イベント順序逆転対策）
+        if (claudeStateByPtyId.value[ptyId] === "done") break;
+        claudeStateByPtyId.value[ptyId] = "working";
+        break;
+      }
+      case "done": {
+        cancelAskTimer(ptyId);
+        claudeStateByPtyId.value[ptyId] = "done";
+        break;
+      }
+    }
+  }
 
   // --- PTY セッション管理（非公開状態） ---
 
@@ -154,6 +210,7 @@ export const useTerminalStore = defineStore("terminal", () => {
       if (writer !== undefined) writer(exitMsg);
 
       ptyIdToLeafId.delete(id);
+      cancelAskTimer(id);
       delete claudeStateByPtyId.value[id];
     });
   }
@@ -170,10 +227,10 @@ export const useTerminalStore = defineStore("terminal", () => {
       const ptyId = typeof payload.ptyId === "number" ? payload.ptyId : undefined;
       if (ptyId === undefined) return;
 
-      const state = HOOK_EVENT_TO_STATE[event];
-      if (state === undefined) return;
+      const hookEvent = event as HookEvent;
+      if (!["running", "needs-input", "done", "tool-done"].includes(hookEvent)) return;
 
-      claudeStateByPtyId.value[ptyId] = state;
+      handleHookEvent(ptyId, hookEvent);
     });
   }
 
