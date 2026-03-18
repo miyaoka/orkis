@@ -5,8 +5,8 @@ _orkis_user_zdotdir="${ORKIS_USER_ZDOTDIR:-${ORKIS_ORIG_ZDOTDIR:-$HOME}}"
 export ZDOTDIR="$_orkis_user_zdotdir"
 [[ -f "$_orkis_user_zdotdir/.zshrc" ]] && source "$_orkis_user_zdotdir/.zshrc"
 
-# ZDOTDIR を orkis 側に戻す
-export ZDOTDIR="$ORKIS_ZDOTDIR"
+# .zshrc は non-login shell の最後の初期化ファイルなので、ZDOTDIR をユーザー側に固定する
+# （orkis 側に戻さない。claude() 関数は環境変数で動作するため ZDOTDIR に依存しない）
 
 # claude コマンドをラップして --settings を自動注入
 claude() {
