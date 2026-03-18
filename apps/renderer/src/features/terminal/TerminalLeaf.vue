@@ -67,7 +67,7 @@ function handleTerminalBlur() {
   >
     <!-- Claude Code 状態インジケーター -->
     <div
-      class="absolute top-2 right-2 z-10 flex items-center gap-2 rounded-md px-3 py-1.5 text-sm leading-none font-semibold"
+      class="pointer-events-none absolute top-2 right-2 z-10 flex items-center gap-2 rounded-md px-3 py-1.5 text-sm leading-none font-semibold"
       :class="{
         'bg-yellow-950 text-yellow-300': claudeState === 'working',
         'bg-orange-950 text-orange-300': claudeState === 'asking',

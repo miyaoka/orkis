@@ -79,7 +79,12 @@ function generateClaudeSettings(): void {
     },
   };
 
-  fs.writeFileSync(CLAUDE_SETTINGS_PATH, JSON.stringify(settings, null, 2) + "\n");
+  const writeResult = tryCatch(() =>
+    fs.writeFileSync(CLAUDE_SETTINGS_PATH, JSON.stringify(settings, null, 2) + "\n"),
+  );
+  if (!writeResult.ok) {
+    console.error("[orkis] Claude hooks 設定の書き出しに失敗:", writeResult.error.message);
+  }
 }
 
 generateClaudeSettings();
