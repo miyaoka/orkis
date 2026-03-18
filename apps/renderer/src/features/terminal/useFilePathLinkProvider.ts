@@ -1,14 +1,9 @@
 import type { IBuffer, IBufferLine, ILink, ILinkProvider, Terminal } from "@xterm/xterm";
 import { useWorkspaceStore } from "../filer/useWorkspaceStore";
+import { findRelativePaths } from "./findRelativePaths";
 
 /** パスの末尾区切り文字 */
 const PATH_TERMINATORS = /[\s()}\]>'",:;]/;
-
-/**
- * 相対パスの候補を検出する正規表現。
- * ワード文字で始まり、`/` 区切りで2セグメント以上あり、最後のセグメントにファイル拡張子を持つパターン。
- */
-const REL_PATH_REGEX = /[\w@.-]+(?:\/[\w@.-]+)*\/[\w@-]+\.[\w]+/g;
 
 /**
  * ターミナル出力中のファイルパスを検出し、クリックでファイラー/プレビューに反映する LinkProvider を作成する。
@@ -254,13 +249,7 @@ function findRelativePathLinks(
   workspaceStore: ReturnType<typeof useWorkspaceStore>,
   links: ILink[],
 ): void {
-  REL_PATH_REGEX.lastIndex = 0;
-  let match: RegExpExecArray | null;
-
-  while ((match = REL_PATH_REGEX.exec(text)) !== null) {
-    const startIdx = match.index;
-    const endIdx = startIdx + match[0]!.length;
-
+  for (const { path: relPath, startIdx, endIdx } of findRelativePaths(text)) {
     // 直前の文字が ~ / なら絶対パスの一部（findAbsolutePathLinks で処理済み）
     const preceding = startIdx > 0 ? text[startIdx - 1] : "";
     if (preceding === "~" || preceding === "/") continue;
@@ -275,7 +264,6 @@ function findRelativePathLinks(
 
     if (startCellX === -1 || endCellX === -1) continue;
 
-    const relPath = match[0]!;
     links.push({
       range: {
         start: { x: startCellX + 1, y: lineNumber },
