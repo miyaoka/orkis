@@ -592,8 +592,18 @@ const windowSwitchGen = new Map<OrkisWindow, number>();
 /** 個別 close で最後に閉じたウィンドウの状態を退避。before-quit 時に live が空ならこれを保存する */
 let lastClosedWindowState: WindowState | null = null;
 
-/** 新しいウィンドウに引き継ぐフレーム値。savedState・ウィンドウ作成・close で更新される */
-let lastKnownFrame: WindowFrame | null = null;
+/** live ウィンドウがないときのフォールバック用フレーム。savedState・close で設定される */
+let fallbackFrame: WindowFrame | null = null;
+
+/** 新規ウィンドウに引き継ぐフレームを取得する。live ウィンドウがあればその最新値を優先 */
+function getInheritedFrame(): WindowFrame {
+  // live ウィンドウの最後のフレームを取得（resize/move 後の最新値）
+  const lastWin = [...windowRepoRoots.keys()].at(-1);
+  if (lastWin) return lastWin.getFrame();
+  // live がなければ最後に閉じたウィンドウのフレーム
+  if (fallbackFrame) return fallbackFrame;
+  return getDefaultFrame();
+}
 
 // git status デバウンス
 const gitStatusTimers = new Map<OrkisWindow, ReturnType<typeof setTimeout>>();
@@ -1184,7 +1194,7 @@ function createWindowWithRPC(dir: string, options?: CreateWindowOptions): OrkisW
     // 閉じる直前の状態を退避（before-quit で live が空なら復元に使う）
     const frame = win.getFrame();
     lastClosedWindowState = { dir: repoRootDir, activeDir: currentDir, frame };
-    lastKnownFrame = frame;
+    fallbackFrame = frame;
     cleanupWindow(win);
   });
 
@@ -1292,13 +1302,12 @@ function openWindow(dir: string, options?: OpenWindowOptions): void {
     return;
   }
   const activeDir = initialActiveDir ?? dir;
-  const frame = savedFrame ?? lastKnownFrame ?? getDefaultFrame();
+  const frame = savedFrame ?? getInheritedFrame();
   const newWin = createWindowWithRPC(dir, {
     initialFile: relativeFile,
     savedFrame: frame,
     initialActiveDir,
   });
-  lastKnownFrame = frame;
   const windowId = crypto.randomUUID();
   windowIds.set(newWin, windowId);
   fileServerDirs.set(windowId, activeDir);
@@ -1445,7 +1454,7 @@ const savedState = loadAppState();
 // 前回セッションの最後のフレームを引き継ぎ用に設定
 const lastSavedWindow = savedState.windows.at(-1);
 if (lastSavedWindow) {
-  lastKnownFrame = lastSavedWindow.frame;
+  fallbackFrame = lastSavedWindow.frame;
 }
 
 // macOS の ApplicationMenu が正しく動作するには、初回ウィンドウを同期的に作成する必要がある
