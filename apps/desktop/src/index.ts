@@ -54,6 +54,36 @@ const LAUNCH_TTL_MS = 30_000;
 const GIT_STATUS_DEBOUNCE_MS = 300;
 const GIT_WATCH_POLL_MS = 500;
 
+// --- Claude Code hooks 設定 ---
+
+/** Claude Code に --settings で渡す hooks 設定ファイルのパス */
+const CLAUDE_SETTINGS_PATH = path.join(tmpdir(), `orkis-${channel}-claude-settings.json`);
+
+/** hooks 設定ファイルを生成する。nc で直接ソケットに通知する */
+function generateClaudeSettings(): void {
+  const hookCommand = (event: string) =>
+    `echo '{"type":"hook","event":"${event}","payload":{"ptyId":'"\\$ORKIS_PTY_ID"'}}' | nc -U "$ORKIS_SOCKET_PATH"`;
+
+  const settings = {
+    hooks: {
+      UserPromptSubmit: [
+        { hooks: [{ type: "command", command: hookCommand("running"), async: true }] },
+      ],
+      Stop: [{ hooks: [{ type: "command", command: hookCommand("done"), async: true }] }],
+      PermissionRequest: [
+        {
+          matcher: "*",
+          hooks: [{ type: "command", command: hookCommand("needs-input"), async: true }],
+        },
+      ],
+    },
+  };
+
+  fs.writeFileSync(CLAUDE_SETTINGS_PATH, JSON.stringify(settings, null, 2) + "\n");
+}
+
+generateClaudeSettings();
+
 // --- PTY 管理 ---
 
 interface PtyEntry {
@@ -90,8 +120,8 @@ function spawnPty(win: OrkisWindow, cwd: string, cols: number, rows: number): nu
       ORKIS_ORIG_ZDOTDIR: shellEnv.ZDOTDIR ?? homedir(),
       ORKIS_ZDOTDIR,
       ZDOTDIR: ORKIS_ZDOTDIR,
-      // claude() 関数が参照する hooks 設定ファイルパス（検証用ダミー）
-      ORKIS_CLAUDE_SETTINGS_PATH: "/tmp/orkis-claude-settings-test.json",
+      // claude() 関数が参照する hooks 設定ファイルパス
+      ORKIS_CLAUDE_SETTINGS_PATH: CLAUDE_SETTINGS_PATH,
       // CLI が接続するソケットパス（dev/stable でパスが異なる）
       ORKIS_SOCKET_PATH: SOCKET_PATH,
     },
