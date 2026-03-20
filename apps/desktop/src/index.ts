@@ -1163,14 +1163,16 @@ function createWindowWithRPC(dir: string, options?: CreateWindowOptions): OrkisW
         windowClose: () => {
           win.close();
         },
-        rendererReady: () => {
+        rendererReady: async () => {
           console.log("[orkis] rendererReady received, sending orkisOpen:", currentDir);
           const windowId = windowIds.get(win) ?? "";
+          const repoName = await getRepoName(repoRootDir);
           win.webview.rpc?.send.orkisOpen({
             dir: currentDir,
             file: initialFile,
             fileServerBaseUrl: `http://localhost:${fileServer.port}/${windowId}`,
             channel,
+            repoName,
           });
 
           // 非アクティブ worktree の監視を開始
@@ -1356,11 +1358,14 @@ function openWindow(dir: string, options?: OpenWindowOptions): void {
   const existing = findWindowByDir(dir);
   if (existing) {
     const existingId = windowIds.get(existing) ?? "";
-    existing.webview.rpc?.send.orkisOpen({
-      dir,
-      file: relativeFile,
-      fileServerBaseUrl: `http://localhost:${fileServer.port}/${existingId}`,
-      channel,
+    getRepoName(dir).then((repoName) => {
+      existing.webview.rpc?.send.orkisOpen({
+        dir,
+        file: relativeFile,
+        fileServerBaseUrl: `http://localhost:${fileServer.port}/${existingId}`,
+        channel,
+        repoName,
+      });
     });
     return;
   }

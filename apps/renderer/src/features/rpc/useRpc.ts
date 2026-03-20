@@ -9,7 +9,13 @@ const listeners = {
   gitStatusChange: [] as Array<(payload: { statuses: Record<string, string> }) => void>,
   worktreeChange: [] as Array<() => void>,
   orkisOpen: [] as Array<
-    (payload: { dir: string; file?: string; fileServerBaseUrl: string; channel: string }) => void
+    (payload: {
+      dir: string;
+      file?: string;
+      fileServerBaseUrl: string;
+      channel: string;
+      repoName: string;
+    }) => void
   >,
   orkisHook: [] as Array<(payload: { event: string; payload: Record<string, unknown> }) => void>,
   lspDiagnostics: [] as Array<(payload: FileDiagnostics) => void>,
@@ -89,6 +95,7 @@ export function useRpc() {
         file?: string;
         fileServerBaseUrl: string;
         channel: string;
+        repoName: string;
       }) => void,
     ) => subscribe("orkisOpen", fn),
     onOrkisHook: (fn: (payload: { event: string; payload: Record<string, unknown> }) => void) =>
