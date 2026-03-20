@@ -25,7 +25,7 @@ const VIEW_MODE_TITLE: Record<ViewMode, string> = {
   claude: "Claude terminals",
 };
 
-const props = defineProps<{
+defineProps<{
   worktrees: WorktreeEntry[];
   /** worktree データ未取得（初回ロード中） */
   loading: boolean;
@@ -37,7 +37,7 @@ const props = defineProps<{
   getClaudeStatuses: (dir: string) => ClaudeStatus[];
 }>();
 
-const emit = defineEmits<{
+defineEmits<{
   select: [wt: WorktreeEntry];
   openMenu: [anchorName: string, wt: WorktreeEntry];
   add: [];
