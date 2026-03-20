@@ -132,6 +132,18 @@ onMounted(async () => {
   // ファイルパスをクリックでファイラー/プレビューに反映する
   terminal.registerLinkProvider(createFilePathLinkProvider(terminal));
 
+  // OSC 7 (CWD 通知) をパースして store に保存する
+  terminal.parser.registerOscHandler(7, (data) => {
+    const urlResult = tryCatch(() => new URL(data));
+    if (!urlResult.ok) return true;
+    const url = urlResult.value;
+    if (url.protocol !== "file:") return true;
+    const decodeResult = tryCatch(() => decodeURIComponent(url.pathname));
+    if (!decodeResult.ok) return true;
+    terminalStore.setCwd(props.leafId, decodeResult.value);
+    return true;
+  });
+
   terminal.open(container);
 
   // WebGL レンダラで GPU アクセラレーション（失敗時は DOM フォールバック）
