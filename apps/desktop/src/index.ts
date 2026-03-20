@@ -12,6 +12,7 @@ import type { LspClient } from "./lsp";
 import {
   parseOwnerRepo,
   resolveProjectDir,
+  resolveWorktreeRoot,
   filterIgnored,
   getGitStatus,
   getWorktreeList,
@@ -895,10 +896,9 @@ interface HookMessage {
 
 interface OpenMessage {
   type: "open";
+  /** CLI から受け取った生のディレクトリパス（パス解決は desktop 側で行う） */
   dir: string;
   file?: string;
-  /** 起動元のディレクトリ（worktree パス等）。dir と異なる場合にアクティブディレクトリとして使用 */
-  activeDir?: string;
 }
 
 type OrkisMessage = HookMessage | OpenMessage;
@@ -911,7 +911,7 @@ function findWindowByDir(dir: string): OrkisWindow | undefined {
 }
 
 interface LaunchRequestResult {
-  requests: { dir: string; file?: string; activeDir?: string }[];
+  requests: { dir: string; file?: string }[];
   errors: string[];
 }
 
@@ -955,7 +955,7 @@ function readLaunchRequests(): LaunchRequestResult {
       errors.push(`${name}: 不正なペイロード`);
       continue;
     }
-    const req = obj as { dir: string; file?: string; activeDir?: string };
+    const req = obj as { dir: string; file?: string };
     // 処理済みにする
     tryCatch(() => fs.renameSync(filePath, `${filePath}.claimed`));
     requests.push(req);
@@ -1031,8 +1031,11 @@ function handleSocketMessage(message: OrkisMessage) {
       break;
     }
     case "open": {
-      // dir は CLI 側で resolveProjectDir 済み
-      openWindow(message.dir, { file: message.file, initialActiveDir: message.activeDir });
+      // CLI からの生パスを desktop 側でプロジェクト・worktree に解決する
+      const projectDir = resolveProjectDir(message.dir);
+      const worktreeRoot = resolveWorktreeRoot(message.dir);
+      const activeDir = worktreeRoot !== projectDir ? worktreeRoot : undefined;
+      openWindow(projectDir, { file: message.file, initialActiveDir: activeDir });
       break;
     }
   }
@@ -1161,14 +1164,20 @@ if (lastSavedWindow) {
 const initialDir = process.env.ORKIS_PROJECT_ROOT;
 if (initialDir) {
   // pnpm dev: worktree 内で実行しても main worktree のルートに解決する
-  openWindow(resolveProjectDir(initialDir));
+  const projectDir = resolveProjectDir(initialDir);
+  const worktreeRoot = resolveWorktreeRoot(initialDir);
+  const activeDir = worktreeRoot !== projectDir ? worktreeRoot : undefined;
+  openWindow(projectDir, { initialActiveDir: activeDir });
 } else {
   // CLI cold start: launch request ファイルから dir を読む
   // Dock/Finder: request がなければ前回の状態を復元
   const { requests, errors } = readLaunchRequests();
   if (requests.length > 0) {
     for (const req of requests) {
-      openWindow(req.dir, { file: req.file, initialActiveDir: req.activeDir });
+      const projectDir = resolveProjectDir(req.dir);
+      const worktreeRoot = resolveWorktreeRoot(req.dir);
+      const reqActiveDir = worktreeRoot !== projectDir ? worktreeRoot : undefined;
+      openWindow(projectDir, { file: req.file, initialActiveDir: reqActiveDir });
     }
   } else if (savedState.windows.length > 0) {
     // 前回の状態を復元（プロジェクト・ウィンドウサイズ・位置）

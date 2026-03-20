@@ -33,3 +33,23 @@ export function resolveProjectDir(dir: string): string {
   const gitCommonDir = path.resolve(dir, output);
   return path.dirname(gitCommonDir);
 }
+
+/**
+ * dir から worktree ルートを同期的に解決する（--show-toplevel）。
+ * main worktree ではそのルート、linked worktree ではその worktree のルートが返る。
+ * git 管理外の場合: dir をそのまま返す。
+ */
+export function resolveWorktreeRoot(dir: string): string {
+  const result = tryCatch(() =>
+    Bun.spawnSync(["git", "rev-parse", "--show-toplevel"], {
+      cwd: dir,
+      stdout: "pipe",
+      stderr: "pipe",
+    }),
+  );
+  if (!result.ok) return dir;
+  if (result.value.exitCode !== 0) return dir;
+  const output = result.value.stdout.toString().trim();
+  if (!output) return dir;
+  return output;
+}
