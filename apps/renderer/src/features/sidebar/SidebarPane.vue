@@ -282,7 +282,8 @@ async function fetchData() {
   // 外部で削除された worktree のターミナルをクリーンアップ
   // remove() が visitedDirs を再代入するため、スナップショットでイテレーションする
   const wtPaths = new Set(wtList.map((wt) => wt.path));
-  for (const dir of [...terminalStore.visitedDirs]) {
+  const dirsSnapshot = Array.from(terminalStore.visitedDirs);
+  for (const dir of dirsSnapshot) {
     if (!wtPaths.has(dir)) {
       terminalStore.remove(dir);
     }
