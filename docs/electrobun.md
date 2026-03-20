@@ -106,7 +106,7 @@ CLI cold start 時に、アプリ起動前に `$TMPDIR/orkis-stable-launch/{uuid
 ### ソケット通信
 
 - ソケットは「既に起動済みのアプリへの追加 open」専用
-- ソケットパスは `/tmp/orkis-stable.sock` 固定（`Updater.localInfo.channel()` は `build:stable` で `"stable"` を返す）
+- ソケットパスは `$TMPDIR/orkis-stable.sock`（`Updater.localInfo.channel()` は `build:stable` で `"stable"` を返す）
 - CLI → アプリへのメッセージ: `open`（dir, file）、`hook`（event, payload）
 - open メッセージの dir は `git rev-parse --show-toplevel` で repo root に解決される
 - 残骸ソケットの検出には `echo "" | nc -U`（macOS デフォルトの `nc -zU` では Node.js ソケットへの接続テストが失敗する）

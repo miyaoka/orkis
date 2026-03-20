@@ -15,7 +15,8 @@ APP_CONTENTS="${APP_RESOURCES}/../.."
 BUN="${APP_CONTENTS}/MacOS/bun"
 CLI="${APP_RESOURCES}/cli/index.js"
 APP_BUNDLE="${APP_CONTENTS}/.."
-SOCKET_PATH="/tmp/orkis-stable.sock"
+TMPDIR_NORMALIZED="${TMPDIR:-/tmp}"
+SOCKET_PATH="${TMPDIR_NORMALIZED%/}/orkis-stable.sock"
 
 is_app_running() {
   [[ -S "${SOCKET_PATH}" ]] || return 1
