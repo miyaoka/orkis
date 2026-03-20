@@ -9,4 +9,5 @@ export {
   attachChangeCounts,
 } from "./worktree";
 export { assertBranchName, getBranchList, deleteBranch } from "./branch";
-export { parseOwnerRepo, resolveProjectDir, resolveWorktreeRoot } from "./utils";
+export { parseOwnerRepo, resolveProjectDir, resolveWorktreeRoot, resolveOpenTarget } from "./utils";
+export type { ResolvedOpenTarget } from "./utils";

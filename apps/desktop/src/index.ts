@@ -6,13 +6,12 @@ import { homedir, tmpdir } from "node:os";
 import path from "node:path";
 import net from "node:net";
 import { tryCatch } from "@orkis/shared";
-import type { LspDiagnostic, OrkisRPC } from "@orkis/rpc";
+import type { LspDiagnostic, OrkisRPC, OpenTargetSelection } from "@orkis/rpc";
 import { createLspClient, resolveTsgoPath, resolveVueLspPaths } from "./lsp";
 import type { LspClient } from "./lsp";
 import {
   parseOwnerRepo,
-  resolveProjectDir,
-  resolveWorktreeRoot,
+  resolveOpenTarget,
   filterIgnored,
   getGitStatus,
   getWorktreeList,
@@ -565,7 +564,7 @@ function cleanupWindow(win: OrkisWindow) {
 // --- ウィンドウ作成 ---
 
 interface CreateWindowOptions {
-  initialFile?: string;
+  initialSelection?: OpenTargetSelection;
   savedFrame?: WindowFrame;
   /** 起動時に切り替える worktree ディレクトリ（dir と異なる場合） */
   initialActiveDir?: string;
@@ -573,7 +572,7 @@ interface CreateWindowOptions {
 
 function createWindowWithRPC(dir: string, options?: CreateWindowOptions): OrkisWindow {
   let win: OrkisWindow;
-  const { initialFile, savedFrame, initialActiveDir } = options ?? {};
+  const { initialSelection, savedFrame, initialActiveDir } = options ?? {};
 
   /** worktree/branch 管理用（固定） */
   const projectDir = dir;
@@ -780,7 +779,7 @@ function createWindowWithRPC(dir: string, options?: CreateWindowOptions): OrkisW
           const repoName = await getRepoName(projectDir);
           win.webview.rpc?.send.orkisOpen({
             dir: currentDir,
-            file: initialFile,
+            selection: initialSelection,
             fileServerBaseUrl: `http://localhost:${fileServer.port}/${windowId}`,
             channel,
             repoName,
@@ -896,9 +895,8 @@ interface HookMessage {
 
 interface OpenMessage {
   type: "open";
-  /** CLI から受け取った生のディレクトリパス（パス解決は desktop 側で行う） */
-  dir: string;
-  file?: string;
+  /** CLI から受け取った絶対パス（パス解決は desktop 側で行う） */
+  targetPath: string;
 }
 
 type OrkisMessage = HookMessage | OpenMessage;
@@ -911,13 +909,13 @@ function findWindowByDir(dir: string): OrkisWindow | undefined {
 }
 
 interface LaunchRequestResult {
-  requests: { dir: string; file?: string }[];
+  requests: { targetPath: string }[];
   errors: string[];
 }
 
 /** launch request ファイルを同期的に読み取り、処理済みにする */
 function readLaunchRequests(): LaunchRequestResult {
-  const requests: { dir: string; file?: string }[] = [];
+  const requests: { targetPath: string }[] = [];
   const errors: string[] = [];
   if (!fs.existsSync(LAUNCH_DIR)) return { requests, errors };
   const entries = tryCatch(() => fs.readdirSync(LAUNCH_DIR));
@@ -950,12 +948,12 @@ function readLaunchRequests(): LaunchRequestResult {
     if (
       typeof obj !== "object" ||
       obj === null ||
-      typeof (obj as Record<string, unknown>).dir !== "string"
+      typeof (obj as Record<string, unknown>).targetPath !== "string"
     ) {
       errors.push(`${name}: 不正なペイロード`);
       continue;
     }
-    const req = obj as { dir: string; file?: string };
+    const req = obj as { targetPath: string };
     // 処理済みにする
     tryCatch(() => fs.renameSync(filePath, `${filePath}.claimed`));
     requests.push(req);
@@ -963,33 +961,29 @@ function readLaunchRequests(): LaunchRequestResult {
   return { requests, errors };
 }
 
-interface OpenWindowOptions {
-  file?: string;
+interface OpenWindowRequest {
+  projectDir: string;
+  activeDir: string;
+  selection?: OpenTargetSelection;
   savedFrame?: WindowFrame;
-  /** 起動時に切り替える worktree ディレクトリ */
-  initialActiveDir?: string;
 }
 
-/** 新しいウィンドウを作成して登録する（同期処理） */
-function openWindow(dir: string, options?: OpenWindowOptions): void {
-  const { file, savedFrame, initialActiveDir } = options ?? {};
-  const activeDir = initialActiveDir ?? dir;
-  console.log(`[orkis] open: dir=${dir}, activeDir=${activeDir}, file=${file ?? "(none)"}`);
-  const existing = findWindowByDir(dir);
+/** ウィンドウを開くまたは既存ウィンドウを再利用する */
+function openWindow(req: OpenWindowRequest): void {
+  const { projectDir, activeDir, selection, savedFrame } = req;
+  console.log(
+    `[orkis] open: project=${projectDir}, active=${activeDir}, selection=${selection ? `${selection.kind}:${selection.relPath}` : "(none)"}`,
+  );
+  const existing = findWindowByDir(projectDir);
   if (existing) {
     const existingId = windowIds.get(existing) ?? "";
-    const currentDir = windowDirs.get(existing) ?? dir;
-    // file → そのファイルの worktree、initialActiveDir → 指定された worktree、なければ現在の worktree を維持
-    const targetDir = file
-      ? resolveWorktreeRoot(path.dirname(file))
-      : (initialActiveDir ?? currentDir);
-    const relativeFile = file ? path.relative(targetDir, file) : undefined;
+    const currentDir = windowDirs.get(existing) ?? projectDir;
     // 表示中の worktree と異なる場合は switchToDir で切り替えを指示
-    const switchToDir = targetDir !== currentDir ? targetDir : undefined;
-    void getRepoName(dir).then((repoName) => {
+    const switchToDir = activeDir !== currentDir ? activeDir : undefined;
+    void getRepoName(projectDir).then((repoName) => {
       existing.webview.rpc?.send.orkisOpen({
-        dir: switchToDir ? currentDir : targetDir,
-        file: relativeFile,
+        dir: currentDir,
+        selection,
         fileServerBaseUrl: `http://localhost:${fileServer.port}/${existingId}`,
         channel,
         repoName,
@@ -998,18 +992,17 @@ function openWindow(dir: string, options?: OpenWindowOptions): void {
     });
     return;
   }
-  const relativeFile = file ? path.relative(activeDir, file) : undefined;
   const frame = savedFrame ?? getInheritedFrame();
-  const newWin = createWindowWithRPC(dir, {
-    initialFile: relativeFile,
+  const newWin = createWindowWithRPC(projectDir, {
+    initialSelection: selection,
     savedFrame: frame,
-    initialActiveDir,
+    initialActiveDir: activeDir,
   });
   const windowId = crypto.randomUUID();
   windowIds.set(newWin, windowId);
   fileServerDirs.set(windowId, activeDir);
   windowDirs.set(newWin, activeDir);
-  windowProjectDirs.set(newWin, dir);
+  windowProjectDirs.set(newWin, projectDir);
   windowSwitchGen.set(newWin, 0);
   startWatching(newWin, activeDir);
 }
@@ -1037,10 +1030,7 @@ function handleSocketMessage(message: OrkisMessage) {
       break;
     }
     case "open": {
-      // CLI からの生パスを desktop 側でプロジェクト・worktree に解決する
-      const projectDir = resolveProjectDir(message.dir);
-      const worktreeRoot = resolveWorktreeRoot(message.dir);
-      openWindow(projectDir, { file: message.file, initialActiveDir: worktreeRoot });
+      openWindow(resolveOpenTarget(message.targetPath));
       break;
     }
   }
@@ -1169,34 +1159,30 @@ if (lastSavedWindow) {
 const initialDir = process.env.ORKIS_PROJECT_ROOT;
 if (initialDir) {
   // pnpm dev: worktree 内で実行しても main worktree のルートに解決する
-  const projectDir = resolveProjectDir(initialDir);
-  const worktreeRoot = resolveWorktreeRoot(initialDir);
-  openWindow(projectDir, { initialActiveDir: worktreeRoot });
+  openWindow(resolveOpenTarget(initialDir));
 } else {
   // CLI cold start: launch request ファイルから dir を読む
   // Dock/Finder: request がなければ前回の状態を復元
   const { requests, errors } = readLaunchRequests();
   if (requests.length > 0) {
     for (const req of requests) {
-      const projectDir = resolveProjectDir(req.dir);
-      const worktreeRoot = resolveWorktreeRoot(req.dir);
-      openWindow(projectDir, { file: req.file, initialActiveDir: worktreeRoot });
+      openWindow(resolveOpenTarget(req.targetPath));
     }
   } else if (savedState.windows.length > 0) {
     // 前回の状態を復元（プロジェクト・ウィンドウサイズ・位置）
     let restored = false;
     for (const ws of savedState.windows) {
       if (!fs.existsSync(ws.dir)) continue;
-      // activeDir が存在しなければ dir（repo root）にフォールバック
+      // activeDir が存在しなければ dir（project root）にフォールバック
       const activeDir = fs.existsSync(ws.activeDir) ? ws.activeDir : ws.dir;
-      openWindow(ws.dir, { savedFrame: ws.frame, initialActiveDir: activeDir });
+      openWindow({ projectDir: ws.dir, activeDir, savedFrame: ws.frame });
       restored = true;
     }
     if (!restored) {
-      openWindow(homedir());
+      openWindow({ projectDir: homedir(), activeDir: homedir() });
     }
   } else {
-    openWindow(homedir());
+    openWindow({ projectDir: homedir(), activeDir: homedir() });
   }
   if (errors.length > 0) {
     void Utils.showMessageBox({

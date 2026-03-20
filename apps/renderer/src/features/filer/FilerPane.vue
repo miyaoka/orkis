@@ -70,7 +70,10 @@ async function loadRoot() {
   // rootEntries 読み込み完了後に保留中の処理を実行
   // v-for の FileTreeItem がマウントされるのを nextTick で待つ
   await nextTick();
-  workspaceStore.consumeInitialFile();
+  const consumed = workspaceStore.consumeInitialSelection();
+  if (consumed?.kind === "directory") {
+    void reveal(consumed.relPath);
+  }
   if (pendingRevealPath) {
     const path = pendingRevealPath;
     pendingRevealPath = undefined;

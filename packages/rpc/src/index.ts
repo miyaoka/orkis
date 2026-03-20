@@ -87,6 +87,13 @@ export const todoSchema = z.object({
 export type Todo = z.infer<typeof todoSchema>;
 
 /** ファイルごとの診断結果 */
+/** CLI からのパス指定を解決した選択対象 */
+export interface OpenTargetSelection {
+  kind: "file" | "directory";
+  /** activeDir からの相対パス */
+  relPath: string;
+}
+
 export interface FileDiagnostics {
   /** プロジェクトルートからの相対パス */
   relPath: string;
@@ -203,7 +210,7 @@ export type OrkisRPC = {
       worktreeChange: void;
       orkisOpen: {
         dir: string;
-        file?: string;
+        selection?: OpenTargetSelection;
         fileServerBaseUrl: string;
         channel: string;
         repoName: string;

@@ -26,7 +26,7 @@ let cleanup: (() => void) | undefined;
 
 onMounted(() => {
   cleanup = onOrkisOpen(
-    async ({ dir, file, fileServerBaseUrl, channel, repoName, switchToDir }) => {
+    async ({ dir, selection, fileServerBaseUrl, channel, repoName, switchToDir }) => {
       if (switchToDir) {
         // 既存ウィンドウで別 worktree への切り替えが必要な場合
         const result = await tryCatch(request.switchDir({ dir: switchToDir }));
@@ -34,14 +34,14 @@ onMounted(() => {
           diagnosticsStore.clear();
           workspaceStore.setOpen(
             result.value.dir,
-            file,
+            selection,
             result.value.fileServerBaseUrl,
             channel,
             repoName,
           );
         }
       } else {
-        workspaceStore.setOpen(dir, file, fileServerBaseUrl, channel, repoName);
+        workspaceStore.setOpen(dir, selection, fileServerBaseUrl, channel, repoName);
       }
     },
   );

@@ -1,5 +1,7 @@
+import { existsSync, statSync } from "node:fs";
 import path from "node:path";
 import { tryCatch } from "@orkis/shared";
+import type { OpenTargetSelection } from "@orkis/rpc";
 
 /** remote URL から owner/repo を抽出するパターン（HTTPS / SSH / ssh:// 対応、ローカルパスは除外） */
 const REMOTE_OWNER_REPO_RE =
@@ -52,4 +54,45 @@ export function resolveWorktreeRoot(dir: string): string {
   const output = result.value.stdout.toString().trim();
   if (!output) return dir;
   return output;
+}
+
+/** resolveOpenTarget の戻り値 */
+export interface ResolvedOpenTarget {
+  projectDir: string;
+  activeDir: string;
+  selection?: OpenTargetSelection;
+}
+
+/**
+ * CLI から受け取った絶対パスを、プロジェクト・worktree・選択対象に解決する。
+ * - 既存ファイル → そのファイルの worktree をアクティブにし、ファイルを選択
+ * - 既存ディレクトリ = worktree root → その worktree をアクティブに
+ * - 既存ディレクトリ = サブディレクトリ → 属する worktree をアクティブにし、ディレクトリを選択
+ * - 非存在 → 親ディレクトリから解決し、ファイルとして扱う
+ */
+export function resolveOpenTarget(targetPath: string): ResolvedOpenTarget {
+  if (existsSync(targetPath) && statSync(targetPath).isDirectory()) {
+    const activeDir = resolveWorktreeRoot(targetPath);
+    const projectDir = resolveProjectDir(targetPath);
+    // worktree root 自体ならサブディレクトリ選択なし
+    if (activeDir === path.resolve(targetPath)) {
+      return { projectDir, activeDir };
+    }
+    // サブディレクトリ → ディレクトリを選択対象にする
+    return {
+      projectDir,
+      activeDir,
+      selection: { kind: "directory", relPath: path.relative(activeDir, targetPath) },
+    };
+  }
+
+  // ファイル（存在する場合も非存在の場合も同じ扱い）
+  const dir = existsSync(targetPath) ? path.dirname(targetPath) : path.dirname(targetPath);
+  const activeDir = resolveWorktreeRoot(dir);
+  const projectDir = resolveProjectDir(dir);
+  return {
+    projectDir,
+    activeDir,
+    selection: { kind: "file", relPath: path.relative(activeDir, targetPath) },
+  };
 }
