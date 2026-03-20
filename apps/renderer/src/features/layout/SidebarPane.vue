@@ -153,16 +153,34 @@ function onEnterSubmit(e: KeyboardEvent, handler: () => void) {
   handler();
 }
 
+// --- Todo アイコン ---
+
+/** issue 分類用の主要 emoji 一覧 */
+const TODO_ICONS: ReadonlyArray<{ emoji: string; title: string }> = [
+  { emoji: "✨", title: "feature" },
+  { emoji: "🐛", title: "bug" },
+  { emoji: "🔧", title: "fix" },
+  { emoji: "♻️", title: "refactor" },
+  { emoji: "📝", title: "docs" },
+  { emoji: "⚡", title: "perf" },
+  { emoji: "🧪", title: "test" },
+  { emoji: "🚀", title: "deploy" },
+  { emoji: "💡", title: "idea" },
+  { emoji: "🎨", title: "style" },
+];
+
 // --- Todo インライン編集 ---
 
 const editingTodoId = ref<string>();
 const editBody = ref("");
+const editIcon = ref<string>();
 const editTextareaRefs = useTemplateRef<HTMLTextAreaElement[]>("editTextarea");
 
 function startEditing(todo: Todo) {
   closeMenu();
   editingTodoId.value = todo.id;
   editBody.value = todo.body;
+  editIcon.value = todo.icon;
   nextTick(() => {
     const [el] = editTextareaRefs.value ?? [];
     el?.focus();
@@ -172,7 +190,9 @@ function startEditing(todo: Todo) {
 async function saveEdit() {
   const id = editingTodoId.value;
   if (!id) return;
-  const result = await tryCatch(request.todoUpdate({ id, body: editBody.value }));
+  const result = await tryCatch(
+    request.todoUpdate({ id, body: editBody.value, icon: editIcon.value }),
+  );
   if (!result.ok) return;
   editingTodoId.value = undefined;
   await fetchData();
@@ -182,15 +202,25 @@ function cancelEdit() {
   editingTodoId.value = undefined;
 }
 
+function toggleEditIcon(emoji: string) {
+  editIcon.value = editIcon.value === emoji ? undefined : emoji;
+}
+
+function toggleNewTodoIcon(emoji: string) {
+  newTodoIcon.value = newTodoIcon.value === emoji ? undefined : emoji;
+}
+
 // --- 新規 Todo 作成 ---
 
 const isAddingTodo = ref(false);
 const newTodoBody = ref("");
+const newTodoIcon = ref<string>();
 const newTodoTextareaRef = ref<HTMLTextAreaElement>();
 
 function startAddingTodo() {
   isAddingTodo.value = true;
   newTodoBody.value = "";
+  newTodoIcon.value = undefined;
   nextTick(() => {
     newTodoTextareaRef.value?.focus();
   });
@@ -201,7 +231,9 @@ async function saveNewTodo() {
     isAddingTodo.value = false;
     return;
   }
-  const result = await tryCatch(request.todoAdd({ body: newTodoBody.value }));
+  const result = await tryCatch(
+    request.todoAdd({ body: newTodoBody.value, icon: newTodoIcon.value }),
+  );
   if (!result.ok) return;
   isAddingTodo.value = false;
   await fetchData();
@@ -416,7 +448,11 @@ onUnmounted(() => {
           class="group/wt relative grid grid-cols-[auto_1fr_auto] gap-x-2 rounded-sm py-1.5 pl-2"
           :class="isActive(wt) ? 'bg-zinc-700/50' : 'hover:bg-zinc-800'"
         >
-          <span class="row-span-2 mt-0.5 icon-[lucide--git-branch] text-base text-zinc-400" />
+          <span v-if="wt.todo?.icon" class="row-span-2 mt-0.5 text-base">{{ wt.todo.icon }}</span>
+          <span
+            v-else
+            class="row-span-2 mt-0.5 icon-[lucide--git-branch] text-base text-zinc-400"
+          />
           <!-- メインアクション: ::after で親全体に広がるクリック領域 -->
           <button
             class="truncate text-left text-sm after:absolute after:inset-0"
@@ -487,6 +523,23 @@ onUnmounted(() => {
 
         <!-- インライン Todo 編集 -->
         <div v-if="wt.todo && editingTodoId === wt.todo.id" class="mx-2 mt-1 mb-2">
+          <div class="mb-1 flex flex-wrap gap-0.5">
+            <button
+              v-for="ic in TODO_ICONS"
+              :key="ic.emoji"
+              type="button"
+              :title="ic.title"
+              class="rounded-sm px-1 py-0.5 text-sm hover:bg-zinc-700"
+              :class="
+                editIcon === ic.emoji
+                  ? 'bg-zinc-600 ring-1 ring-blue-500'
+                  : 'opacity-60 hover:opacity-100'
+              "
+              @click="toggleEditIcon(ic.emoji)"
+            >
+              {{ ic.emoji }}
+            </button>
+          </div>
           <textarea
             ref="editTextarea"
             v-model="editBody"
@@ -532,7 +585,7 @@ onUnmounted(() => {
         <div
           class="group/td relative grid grid-cols-[auto_1fr_auto] gap-x-2 rounded-sm py-1.5 pl-2 hover:bg-zinc-800"
         >
-          <span class="mt-0.5 icon-[lucide--square] text-base text-zinc-600" />
+          <span class="mt-0.5 text-base text-zinc-600">{{ todo.icon || "☐" }}</span>
           <button
             class="truncate text-left text-sm text-zinc-400 after:absolute after:inset-0"
             @click="editingTodoId === todo.id ? cancelEdit() : startEditing(todo)"
@@ -552,6 +605,23 @@ onUnmounted(() => {
 
         <!-- インライン Todo 編集 -->
         <div v-if="editingTodoId === todo.id" class="mx-2 mt-1 mb-2">
+          <div class="mb-1 flex flex-wrap gap-0.5">
+            <button
+              v-for="ic in TODO_ICONS"
+              :key="ic.emoji"
+              type="button"
+              :title="ic.title"
+              class="rounded-sm px-1 py-0.5 text-sm hover:bg-zinc-700"
+              :class="
+                editIcon === ic.emoji
+                  ? 'bg-zinc-600 ring-1 ring-blue-500'
+                  : 'opacity-60 hover:opacity-100'
+              "
+              @click="toggleEditIcon(ic.emoji)"
+            >
+              {{ ic.emoji }}
+            </button>
+          </div>
           <textarea
             ref="editTextarea"
             v-model="editBody"
@@ -579,6 +649,23 @@ onUnmounted(() => {
 
       <!-- 新規 Todo 追加 -->
       <div v-if="isAddingTodo" class="mx-2 mt-1">
+        <div class="mb-1 flex flex-wrap gap-0.5">
+          <button
+            v-for="ic in TODO_ICONS"
+            :key="ic.emoji"
+            type="button"
+            :title="ic.title"
+            class="rounded-sm px-1 py-0.5 text-sm hover:bg-zinc-700"
+            :class="
+              newTodoIcon === ic.emoji
+                ? 'bg-zinc-600 ring-1 ring-blue-500'
+                : 'opacity-60 hover:opacity-100'
+            "
+            @click="toggleNewTodoIcon(ic.emoji)"
+          >
+            {{ ic.emoji }}
+          </button>
+        </div>
         <textarea
           ref="newTodoTextareaRef"
           v-model="newTodoBody"

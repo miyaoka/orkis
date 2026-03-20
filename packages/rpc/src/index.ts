@@ -58,6 +58,8 @@ export interface Todo {
   id: string;
   /** git commit 形式: 一行目=タイトル、残り=本文 */
   body: string;
+  /** 分類アイコン（emoji 1文字） */
+  icon?: string;
   /** 紐づいた worktree のパス（未着手なら undefined） */
   worktreeDir?: string;
   /** 作成日時（ISO 8601） */
@@ -137,12 +139,12 @@ export type OrkisRPC = {
       };
       /** Todo を追加（worktreeDir 指定で worktree に紐づけ可能） */
       todoAdd: {
-        params: { body: string; worktreeDir?: string };
+        params: { body: string; icon?: string; worktreeDir?: string };
         response: Todo;
       };
-      /** Todo の body を更新 */
+      /** Todo の body と icon を更新 */
       todoUpdate: {
-        params: { id: string; body: string };
+        params: { id: string; body: string; icon?: string };
         response: Todo;
       };
       /** Todo を削除 */

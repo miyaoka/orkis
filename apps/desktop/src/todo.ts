@@ -60,12 +60,13 @@ function isValidTodo(v: unknown): v is Todo {
     typeof t.id === "string" &&
     typeof t.body === "string" &&
     typeof t.createdAt === "string" &&
+    (t.icon === undefined || typeof t.icon === "string") &&
     (t.worktreeDir === undefined || typeof t.worktreeDir === "string")
   );
 }
 
 /** Todo を追加する */
-export function addTodo(repoRoot: string, body: string, worktreeDir?: string): Todo {
+export function addTodo(repoRoot: string, body: string, icon?: string, worktreeDir?: string): Todo {
   const todos = loadTodos(repoRoot);
   // worktreeDir が指定されている場合、既に紐づいている Todo がないか検証
   if (worktreeDir && todos.some((t) => t.worktreeDir === worktreeDir)) {
@@ -74,6 +75,7 @@ export function addTodo(repoRoot: string, body: string, worktreeDir?: string): T
   const todo: Todo = {
     id: crypto.randomUUID(),
     body,
+    icon,
     worktreeDir,
     createdAt: new Date().toISOString(),
   };
@@ -82,12 +84,13 @@ export function addTodo(repoRoot: string, body: string, worktreeDir?: string): T
   return todo;
 }
 
-/** Todo の body を更新する */
-export function updateTodo(repoRoot: string, id: string, body: string): Todo {
+/** Todo の body と icon を更新する */
+export function updateTodo(repoRoot: string, id: string, body: string, icon?: string): Todo {
   const todos = loadTodos(repoRoot);
   const todo = todos.find((t) => t.id === id);
   if (!todo) throw new Error(`Todo not found: ${id}`);
   todo.body = body;
+  todo.icon = icon;
   saveTodos(repoRoot, todos);
   return todo;
 }
