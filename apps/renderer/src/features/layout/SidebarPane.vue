@@ -500,6 +500,7 @@ onUnmounted(() => {
     <h1 class="mb-4 flex items-center text-lg font-bold" :title="workspaceStore.repoName">
       <span class="mr-2 icon-[lucide--bot] shrink-0 align-middle text-blue-400" />
       <input
+        aria-label="Project name"
         class="min-w-0 flex-1 truncate bg-transparent outline-none"
         :value="workspaceStore.repoName ?? 'orkis'"
         @input="workspaceStore.repoName = ($event.target as HTMLInputElement).value"
