@@ -368,13 +368,13 @@ async function handleWorktreeRemove(wt: WorktreeEntry) {
     return;
   }
   showConfirm(
-    `"${worktreeDisplayName(wt)}" の解除に失敗しました（未コミットの変更がある可能性があります）。強制的に解除しますか？`,
+    `Failed to remove "${worktreeDisplayName(wt)}" (may have uncommitted changes). Force remove?`,
     async () => {
       const forceResult = await tryCatch(request.gitWorktreeRemove({ path: wt.path, force: true }));
       if (forceResult.ok) {
         removeFromList(wt);
       } else {
-        showAlert(`"${worktreeDisplayName(wt)}" の強制解除に失敗しました。`);
+        showAlert(`Failed to force remove "${worktreeDisplayName(wt)}".`);
       }
     },
   );
@@ -558,13 +558,13 @@ onUnmounted(() => {
                 class="rounded-sm px-2 py-1 text-xs text-zinc-400 hover:bg-zinc-800"
                 @click="cancelEdit"
               >
-                キャンセル
+                Cancel
               </button>
               <button
                 class="rounded-sm bg-blue-600 px-2 py-1 text-xs text-white hover:bg-blue-500"
                 @click="submitEdit"
               >
-                保存
+                Save
               </button>
             </div>
           </div>
@@ -624,13 +624,13 @@ onUnmounted(() => {
                 class="rounded-sm px-2 py-1 text-xs text-zinc-400 hover:bg-zinc-800"
                 @click="cancelEdit"
               >
-                キャンセル
+                Cancel
               </button>
               <button
                 class="rounded-sm bg-blue-600 px-2 py-1 text-xs text-white hover:bg-blue-500"
                 @click="submitEdit"
               >
-                保存
+                Save
               </button>
             </div>
           </div>
@@ -713,14 +713,14 @@ onUnmounted(() => {
             @click="handleWorktreeEditTodo(menuContext.worktree)"
           >
             <span class="icon-[lucide--pencil] text-xs" />
-            Todo を編集
+            Edit todo
           </button>
           <button
             class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-red-400 hover:bg-zinc-800"
             @click="handleWorktreeRemove(menuContext.worktree)"
           >
             <span class="icon-[lucide--unlink] text-xs" />
-            wt を削除
+            Remove worktree
           </button>
         </template>
         <template v-else-if="menuContext?.type === 'todo' && menuContext.todo">
@@ -730,14 +730,14 @@ onUnmounted(() => {
             @click="handleTodoStart(menuContext.todo)"
           >
             <span class="icon-[lucide--play] text-xs" />
-            Worktree 化
+            Create worktree
           </button>
           <button
             class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-red-400 hover:bg-zinc-800"
             @click="handleTodoRemove(menuContext.todo)"
           >
             <span class="icon-[lucide--trash-2] text-xs" />
-            Todo を削除
+            Delete todo
           </button>
         </template>
         <template v-else-if="menuContext?.type === 'branch' && menuContext.branch">
@@ -747,7 +747,7 @@ onUnmounted(() => {
             @click="handleBranchLink(menuContext.branch)"
           >
             <span class="icon-[lucide--link] text-xs" />
-            Worktree 化
+            Create worktree
           </button>
         </template>
       </div>
@@ -764,13 +764,13 @@ onUnmounted(() => {
             class="rounded-sm px-3 py-1.5 text-sm text-zinc-400 hover:bg-zinc-800"
             @click="closeConfirm"
           >
-            キャンセル
+            Cancel
           </button>
           <button
             class="rounded-sm bg-red-600 px-3 py-1.5 text-sm text-white hover:bg-red-500"
             @click="executeConfirm"
           >
-            削除
+            Remove
           </button>
         </div>
       </dialog>
@@ -787,7 +787,7 @@ onUnmounted(() => {
             class="rounded-sm px-3 py-1.5 text-sm text-zinc-400 hover:bg-zinc-800"
             @click="alertRef?.close()"
           >
-            閉じる
+            Close
           </button>
         </div>
       </dialog>

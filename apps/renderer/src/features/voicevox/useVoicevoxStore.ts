@@ -192,7 +192,7 @@ export const useVoicevoxStore = defineStore("voicevox", () => {
     const launchResult = await tryCatch(request.voicevoxLaunch());
     if (!launchResult.ok || !launchResult.value) {
       activating.value = false;
-      return "VOICEVOX がインストールされていません。\nhttps://voicevox.hiroshiba.jp/ からダウンロードしてください。";
+      return "VOICEVOX is not installed.\nDownload from https://voicevox.hiroshiba.jp/";
     }
 
     // Engine の起動を待つ
@@ -203,7 +203,7 @@ export const useVoicevoxStore = defineStore("voicevox", () => {
     }
 
     activating.value = false;
-    return "VOICEVOX Engine の起動がタイムアウトしました。VOICEVOX を手動で起動してください。";
+    return "VOICEVOX Engine startup timed out. Please start VOICEVOX manually.";
   }
 
   /** VOICEVOX を無効化する */
