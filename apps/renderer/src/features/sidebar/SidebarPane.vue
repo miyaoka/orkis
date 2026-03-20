@@ -280,8 +280,9 @@ async function fetchData() {
   pendingTodos.value = todoList.filter((t) => !t.worktreeDir);
 
   // 外部で削除された worktree のターミナルをクリーンアップ
+  // remove() が visitedDirs を再代入するため、スナップショットでイテレーションする
   const wtPaths = new Set(wtList.map((wt) => wt.path));
-  for (const dir of terminalStore.visitedDirs) {
+  for (const dir of [...terminalStore.visitedDirs]) {
     if (!wtPaths.has(dir)) {
       terminalStore.remove(dir);
     }
