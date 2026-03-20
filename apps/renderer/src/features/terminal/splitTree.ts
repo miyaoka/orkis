@@ -434,7 +434,7 @@ function tileGridTemplate(
   containerHeight: number,
 ): GridTemplate {
   if (leafIds.length === 0) {
-    return { areas: '". "', columns: "1fr", rows: "1fr" };
+    return { areas: '"."', columns: "1fr", rows: "1fr" };
   }
   if (leafIds.length === 1) {
     const name = leafIdToAreaName(leafIds[0]);

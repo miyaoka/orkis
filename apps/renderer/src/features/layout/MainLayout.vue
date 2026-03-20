@@ -161,7 +161,7 @@ const visibleLeafIds = computed(() => {
 const EMPTY_GRID: Record<string, string> = {
   gridTemplateColumns: "1fr",
   gridTemplateRows: "1fr",
-  gridTemplateAreas: '". "',
+  gridTemplateAreas: '"."',
 };
 
 /** terminalContainer の grid スタイル */
