@@ -1358,7 +1358,7 @@ function openWindow(dir: string, options?: OpenWindowOptions): void {
   const existing = findWindowByDir(dir);
   if (existing) {
     const existingId = windowIds.get(existing) ?? "";
-    getRepoName(dir).then((repoName) => {
+    void getRepoName(dir).then((repoName) => {
       existing.webview.rpc?.send.orkisOpen({
         dir,
         file: relativeFile,
