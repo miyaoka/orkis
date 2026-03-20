@@ -977,17 +977,16 @@ function openWindow(dir: string, options?: OpenWindowOptions): void {
   console.log(`[orkis] open: dir=${dir}, activeDir=${activeDir}, file=${file ?? "(none)"}`);
   const existing = findWindowByDir(dir);
   if (existing) {
-    // 既存ウィンドウの選択状態を維持する（worktree 切り替えはサイドバー操作で行う）
-    const currentDir = windowDirs.get(existing) ?? dir;
     const existingId = windowIds.get(existing) ?? "";
-    // file が currentDir 配下にある場合のみ相対パス化して送る（別 worktree のファイルは無視）
-    const relativeFile =
-      file && path.resolve(file).startsWith(path.resolve(currentDir) + path.sep)
-        ? path.relative(currentDir, file)
-        : undefined;
+    // file が指定されている場合はそのファイルの worktree に切り替える
+    // file がない場合は現在の選択状態を維持する
+    const targetDir = file
+      ? resolveWorktreeRoot(path.dirname(file))
+      : (windowDirs.get(existing) ?? dir);
+    const relativeFile = file ? path.relative(targetDir, file) : undefined;
     void getRepoName(dir).then((repoName) => {
       existing.webview.rpc?.send.orkisOpen({
-        dir: currentDir,
+        dir: targetDir,
         file: relativeFile,
         fileServerBaseUrl: `http://localhost:${fileServer.port}/${existingId}`,
         channel,
