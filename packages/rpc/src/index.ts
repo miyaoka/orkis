@@ -140,7 +140,13 @@ export type OrkisRPC = {
       gitStatusChange: { statuses: Record<string, string> };
       /** 非アクティブ worktree でファイル変更が検知された通知 */
       worktreeChange: void;
-      orkisOpen: { dir: string; file?: string; fileServerBaseUrl: string; channel: string };
+      orkisOpen: {
+        dir: string;
+        file?: string;
+        fileServerBaseUrl: string;
+        channel: string;
+        repoName: string;
+      };
       orkisHook: { event: string; payload: Record<string, unknown> };
       /** LSP 診断結果の更新（ファイル単位） */
       lspDiagnostics: FileDiagnostics;

@@ -22,8 +22,8 @@ const { send, onOrkisOpen } = useRpc();
 let cleanup: (() => void) | undefined;
 
 onMounted(() => {
-  cleanup = onOrkisOpen(({ dir, file, fileServerBaseUrl, channel }) => {
-    workspaceStore.setOpen(dir, file, fileServerBaseUrl, channel);
+  cleanup = onOrkisOpen(({ dir, file, fileServerBaseUrl, channel, repoName }) => {
+    workspaceStore.setOpen(dir, file, fileServerBaseUrl, channel, repoName);
   });
   send.rendererReady();
 });

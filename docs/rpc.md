@@ -46,16 +46,16 @@ flowchart LR
 
 ### desktop → renderer
 
-| Message           | Payload                                      | 用途                                       |
-| ----------------- | -------------------------------------------- | ------------------------------------------ |
-| `ptyData`         | `{ id, data }`                               | PTY 出力                                   |
-| `ptyExit`         | `{ id, exitCode }`                           | PTY 終了                                   |
-| `fsChange`        | `{ relDir }`                                 | ファイル変更通知                           |
-| `gitStatusChange` | `{ statuses }`                               | git status 変化                            |
-| `worktreeChange`  | `void`                                       | 非アクティブ worktree でのファイル変更通知 |
-| `orkisOpen`       | `{ dir, file?, fileServerBaseUrl, channel }` | ウィンドウ open                            |
-| `orkisHook`       | `{ event, payload }`                         | Claude Code Hook イベント                  |
-| `lspDiagnostics`  | `FileDiagnostics`                            | LSP 型診断結果                             |
+| Message           | Payload                                                | 用途                                       |
+| ----------------- | ------------------------------------------------------ | ------------------------------------------ |
+| `ptyData`         | `{ id, data }`                                         | PTY 出力                                   |
+| `ptyExit`         | `{ id, exitCode }`                                     | PTY 終了                                   |
+| `fsChange`        | `{ relDir }`                                           | ファイル変更通知                           |
+| `gitStatusChange` | `{ statuses }`                                         | git status 変化                            |
+| `worktreeChange`  | `void`                                                 | 非アクティブ worktree でのファイル変更通知 |
+| `orkisOpen`       | `{ dir, file?, fileServerBaseUrl, channel, repoName }` | ウィンドウ open                            |
+| `orkisHook`       | `{ event, payload }`                                   | Claude Code Hook イベント                  |
+| `lspDiagnostics`  | `FileDiagnostics`                                      | LSP 型診断結果                             |
 
 ### renderer → desktop
 

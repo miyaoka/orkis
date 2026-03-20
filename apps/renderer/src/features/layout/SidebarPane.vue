@@ -176,9 +176,9 @@ onUnmounted(() => {
 
 <template>
   <div class="flex size-full flex-col p-4">
-    <h1 class="mb-4 text-lg font-bold">
+    <h1 class="mb-4 truncate text-lg font-bold" :title="workspaceStore.repoName">
       <span class="mr-2 icon-[lucide--bot] align-middle text-blue-400" />
-      orkis
+      {{ workspaceStore.repoName ?? "orkis" }}
     </h1>
 
     <div class="flex flex-col">

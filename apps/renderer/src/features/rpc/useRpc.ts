@@ -1,18 +1,19 @@
-import type { FileDiagnostics, OrkisRPC } from "@orkis/rpc";
+import type { OrkisRPC } from "@orkis/rpc";
 import Electrobun, { Electroview } from "electrobun/view";
+
+/** RPC スキーマから webview 向けメッセージのペイロード型を導出 */
+type Msg = OrkisRPC["webview"]["messages"];
 
 // bun → webview メッセージのコールバックリスト（動的リスナー用）
 const listeners = {
-  ptyData: [] as Array<(payload: { id: number; data: string }) => void>,
-  ptyExit: [] as Array<(payload: { id: number; exitCode: number }) => void>,
-  fsChange: [] as Array<(payload: { relDir: string }) => void>,
-  gitStatusChange: [] as Array<(payload: { statuses: Record<string, string> }) => void>,
+  ptyData: [] as Array<(payload: Msg["ptyData"]) => void>,
+  ptyExit: [] as Array<(payload: Msg["ptyExit"]) => void>,
+  fsChange: [] as Array<(payload: Msg["fsChange"]) => void>,
+  gitStatusChange: [] as Array<(payload: Msg["gitStatusChange"]) => void>,
   worktreeChange: [] as Array<() => void>,
-  orkisOpen: [] as Array<
-    (payload: { dir: string; file?: string; fileServerBaseUrl: string; channel: string }) => void
-  >,
-  orkisHook: [] as Array<(payload: { event: string; payload: Record<string, unknown> }) => void>,
-  lspDiagnostics: [] as Array<(payload: FileDiagnostics) => void>,
+  orkisOpen: [] as Array<(payload: Msg["orkisOpen"]) => void>,
+  orkisHook: [] as Array<(payload: Msg["orkisHook"]) => void>,
+  lspDiagnostics: [] as Array<(payload: Msg["lspDiagnostics"]) => void>,
 };
 
 const rpc = Electroview.defineRPC<OrkisRPC>({
@@ -76,23 +77,15 @@ export function useRpc() {
     send: electrobun.rpc!.send,
 
     // bun → webview メッセージの購読
-    onPtyData: (fn: (payload: { id: number; data: string }) => void) => subscribe("ptyData", fn),
-    onPtyExit: (fn: (payload: { id: number; exitCode: number }) => void) =>
-      subscribe("ptyExit", fn),
-    onFsChange: (fn: (payload: { relDir: string }) => void) => subscribe("fsChange", fn),
-    onGitStatusChange: (fn: (payload: { statuses: Record<string, string> }) => void) =>
+    onPtyData: (fn: (payload: Msg["ptyData"]) => void) => subscribe("ptyData", fn),
+    onPtyExit: (fn: (payload: Msg["ptyExit"]) => void) => subscribe("ptyExit", fn),
+    onFsChange: (fn: (payload: Msg["fsChange"]) => void) => subscribe("fsChange", fn),
+    onGitStatusChange: (fn: (payload: Msg["gitStatusChange"]) => void) =>
       subscribe("gitStatusChange", fn),
     onWorktreeChange: (fn: () => void) => subscribe("worktreeChange", fn),
-    onOrkisOpen: (
-      fn: (payload: {
-        dir: string;
-        file?: string;
-        fileServerBaseUrl: string;
-        channel: string;
-      }) => void,
-    ) => subscribe("orkisOpen", fn),
-    onOrkisHook: (fn: (payload: { event: string; payload: Record<string, unknown> }) => void) =>
-      subscribe("orkisHook", fn),
-    onLspDiagnostics: (fn: (payload: FileDiagnostics) => void) => subscribe("lspDiagnostics", fn),
+    onOrkisOpen: (fn: (payload: Msg["orkisOpen"]) => void) => subscribe("orkisOpen", fn),
+    onOrkisHook: (fn: (payload: Msg["orkisHook"]) => void) => subscribe("orkisHook", fn),
+    onLspDiagnostics: (fn: (payload: Msg["lspDiagnostics"]) => void) =>
+      subscribe("lspDiagnostics", fn),
   };
 }

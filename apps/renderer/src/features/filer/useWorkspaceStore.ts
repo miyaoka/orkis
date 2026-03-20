@@ -7,6 +7,7 @@ export const useWorkspaceStore = defineStore("workspace", () => {
   const dir = ref<string>();
   const fileServerBaseUrl = ref<string>();
   const channel = ref<string>();
+  const repoName = ref<string>();
 
   /** ファイラーで選択中のファイルパス（相対パス） */
   const selectedPath = ref<string>();
@@ -34,6 +35,7 @@ export const useWorkspaceStore = defineStore("workspace", () => {
     newFile?: string,
     newFileServerBaseUrl?: string,
     newChannel?: string,
+    newRepoName?: string,
   ) {
     dir.value = newDir;
     if (newFileServerBaseUrl) {
@@ -41,6 +43,9 @@ export const useWorkspaceStore = defineStore("workspace", () => {
     }
     if (newChannel) {
       channel.value = newChannel;
+    }
+    if (newRepoName) {
+      repoName.value = newRepoName;
     }
     if (newFile) {
       // ツリー未初期化時は loadRoot 後に consumeInitialFile で反映
@@ -72,6 +77,7 @@ export const useWorkspaceStore = defineStore("workspace", () => {
     dir,
     fileServerBaseUrl,
     channel,
+    repoName,
     selectedPath,
     selectedLineNumber,
     selectedGitChange,
