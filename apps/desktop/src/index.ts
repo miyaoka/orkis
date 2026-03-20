@@ -766,6 +766,29 @@ function createWindowWithRPC(dir: string, options?: CreateWindowOptions): OrkisW
           }
           return true;
         },
+        voicevoxCheckEngine: async () => {
+          const result = await tryCatch(fetch("http://127.0.0.1:50021/version"));
+          return result.ok && result.value.ok;
+        },
+        voicevoxSpeak: async ({ text, speedScale, volumeScale, speakerId }) => {
+          const VOICEVOX_API = "http://127.0.0.1:50021";
+          const queryRes = await fetch(
+            `${VOICEVOX_API}/audio_query?text=${encodeURIComponent(text)}&speaker=${speakerId}`,
+            { method: "POST" },
+          );
+          if (!queryRes.ok) return undefined;
+          const query = await queryRes.json();
+          query.speedScale = speedScale;
+          query.volumeScale = volumeScale;
+          const audioRes = await fetch(`${VOICEVOX_API}/synthesis?speaker=${speakerId}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(query),
+          });
+          if (!audioRes.ok) return undefined;
+          const buf = await audioRes.arrayBuffer();
+          return Buffer.from(buf).toString("base64");
+        },
         switchDir: async ({ dir: targetDir }) => {
           // バリデーション: worktree list に含まれるパスのみ許可
           const worktrees = await getWorktreeList(projectDir);
