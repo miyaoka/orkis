@@ -13,9 +13,9 @@ import type { Todo } from "@orkis/rpc";
 const PROJECTS_DIR = path.join(homedir(), ".config", "orkis", "projects");
 const TODOS_FILE = "todos.json";
 
-/** リポジトリパスをディレクトリ名にエンコードする（/ → -） */
+/** リポジトリパスをディレクトリ名にエンコードする */
 function encodeRepoPath(repoRoot: string): string {
-  return repoRoot.replaceAll("/", "-");
+  return encodeURIComponent(repoRoot);
 }
 
 /** プロジェクト固有のデータディレクトリパスを返す */
@@ -44,15 +44,10 @@ export function loadTodos(repoRoot: string): Todo[] {
   return parsed.value.filter(isValidTodo);
 }
 
-/** Todo 一覧を保存する */
+/** Todo 一覧を保存する（失敗時は例外を投げる） */
 function saveTodos(repoRoot: string, todos: Todo[]): void {
   ensureProjectDir(repoRoot);
-  const result = tryCatch(() =>
-    fs.writeFileSync(getTodosPath(repoRoot), JSON.stringify(todos, null, 2)),
-  );
-  if (!result.ok) {
-    console.error(`[todo] save failed: ${result.error.message}`);
-  }
+  fs.writeFileSync(getTodosPath(repoRoot), JSON.stringify(todos, null, 2));
 }
 
 function isValidTodo(v: unknown): v is Todo {
@@ -69,6 +64,10 @@ function isValidTodo(v: unknown): v is Todo {
 /** Todo を追加する */
 export function addTodo(repoRoot: string, body: string, worktreeDir?: string): Todo {
   const todos = loadTodos(repoRoot);
+  // worktreeDir が指定されている場合、既に紐づいている Todo がないか検証
+  if (worktreeDir && todos.some((t) => t.worktreeDir === worktreeDir)) {
+    throw new Error(`worktree already has a linked Todo: ${worktreeDir}`);
+  }
   const todo: Todo = {
     id: crypto.randomUUID(),
     body,
@@ -106,8 +105,13 @@ export function findTodoByWorktreeDir(repoRoot: string, worktreeDir: string): To
 /** worktree に Todo を紐づける */
 export function linkTodoToWorktree(repoRoot: string, id: string, worktreeDir: string): Todo {
   const todos = loadTodos(repoRoot);
+  // 同じ worktreeDir に既に紐づいている Todo がないか検証
+  if (todos.some((t) => t.worktreeDir === worktreeDir)) {
+    throw new Error(`worktree already has a linked Todo: ${worktreeDir}`);
+  }
   const todo = todos.find((t) => t.id === id);
   if (!todo) throw new Error(`Todo not found: ${id}`);
+  if (todo.worktreeDir) throw new Error(`Todo already linked to a worktree: ${todo.worktreeDir}`);
   todo.worktreeDir = worktreeDir;
   saveTodos(repoRoot, todos);
   return todo;

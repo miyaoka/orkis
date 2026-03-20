@@ -166,7 +166,8 @@ function startEditing(todo: Todo) {
 async function saveEdit() {
   const id = editingTodoId.value;
   if (!id) return;
-  await tryCatch(request.todoUpdate({ id, body: editBody.value }));
+  const result = await tryCatch(request.todoUpdate({ id, body: editBody.value }));
+  if (!result.ok) return;
   editingTodoId.value = undefined;
   await fetchData();
 }

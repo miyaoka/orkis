@@ -660,9 +660,6 @@ function createWindowWithRPC(dir: string, options?: CreateWindowOptions): OrkisW
             const todo = todoByDir.get(entry.path);
             if (todo) entry.todo = todo;
           }
-          // 存在しない worktree を参照する Todo をクリーンアップ
-          const validPaths = entries.map((e) => e.path);
-          cleanupStaleTodos(repoRootDir, validPaths);
           return entries;
         },
         gitBranchList: () => getBranchList(repoRootDir),
@@ -786,6 +783,15 @@ function createWindowWithRPC(dir: string, options?: CreateWindowOptions): OrkisW
             channel,
             repoName,
           });
+
+          // 起動時に消失した worktree の Todo をクリーンアップ
+          void (async () => {
+            const wtList = await getWorktreeList(repoRootDir);
+            cleanupStaleTodos(
+              repoRootDir,
+              wtList.map((wt) => wt.path),
+            );
+          })();
 
           // 非アクティブ worktree の監視を開始
           void syncWorktreeWatchers(win, repoRootDir, currentDir);
