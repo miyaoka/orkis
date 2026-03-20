@@ -559,6 +559,24 @@ function flattenHandles(
     cy += h + gap;
   }
 
+  /** 指定トラック範囲のコンテンツ幅合計（gap 除く） */
+  function colContentPx(from: number, to: number): number {
+    let sum = 0;
+    for (let i = from; i < to; i++) {
+      sum += totalColFr > 0 ? (colFr[i] / totalColFr) * availW : 0;
+    }
+    return sum;
+  }
+
+  /** 指定トラック範囲のコンテンツ高さ合計（gap 除く） */
+  function rowContentPx(from: number, to: number): number {
+    let sum = 0;
+    for (let i = from; i < to; i++) {
+      sum += totalRowFr > 0 ? (rowFr[i] / totalRowFr) * availH : 0;
+    }
+    return sum;
+  }
+
   // --- ツリー走査でハンドル生成 ---
   const handles: HandlePosition[] = [];
 
@@ -570,6 +588,8 @@ function flattenHandles(
     if (direction === "horizontal") {
       const splitNx = roundForGrid(nx + nw * ratio);
       const splitCol = xs.indexOf(splitNx);
+      const startCol = xs.indexOf(roundForGrid(nx));
+      const endCol = xs.indexOf(roundForGrid(nx + nw));
       const startRow = ys.indexOf(roundForGrid(ny));
       const endRow = ys.indexOf(roundForGrid(ny + nh));
 
@@ -579,7 +599,7 @@ function flattenHandles(
         ratio,
         firstNode: first,
         secondNode: second,
-        availablePx: availW,
+        availablePx: colContentPx(startCol, endCol),
         rect: {
           top: rowStart[startRow],
           left: colEnd[splitCol - 1],
@@ -595,6 +615,8 @@ function flattenHandles(
       const splitRow = ys.indexOf(splitNy);
       const startCol = xs.indexOf(roundForGrid(nx));
       const endCol = xs.indexOf(roundForGrid(nx + nw));
+      const startRow = ys.indexOf(roundForGrid(ny));
+      const endRow = ys.indexOf(roundForGrid(ny + nh));
 
       handles.push({
         branchId: node.id,
@@ -602,7 +624,7 @@ function flattenHandles(
         ratio,
         firstNode: first,
         secondNode: second,
-        availablePx: availH,
+        availablePx: rowContentPx(startRow, endRow),
         rect: {
           top: rowEnd[splitRow - 1],
           left: colStart[startCol],

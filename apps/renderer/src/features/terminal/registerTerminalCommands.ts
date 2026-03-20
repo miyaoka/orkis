@@ -52,7 +52,7 @@ export function registerTerminalCommands(
   /** 空間ナビゲーションのコマンド handler を生成する */
   function createFocusHandler(direction: Direction) {
     return (): boolean => {
-      const active = getActiveLayout();
+      const active = getFocusedLayout();
       if (active === undefined) return false;
 
       const container = terminalContainerRef.value;
