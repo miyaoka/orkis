@@ -72,7 +72,7 @@ async function getViewUrl(): Promise<string> {
 }
 
 const viewUrl = await getViewUrl();
-const SOCKET_PATH = `/tmp/orkis-${channel}.sock`;
+const SOCKET_PATH = path.join(tmpdir(), `orkis-${channel}.sock`);
 const LAUNCH_DIR = path.join(tmpdir(), `orkis-${channel}-launch`);
 const LAUNCH_TTL_MS = 30_000;
 const GIT_STATUS_DEBOUNCE_MS = 300;
