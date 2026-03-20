@@ -161,6 +161,8 @@ function onEnterSubmit(e: KeyboardEvent, handler: () => void) {
 const editingTodoId = ref<string>();
 const editBody = ref("");
 const editIcon = ref<string>();
+/** 保存済みの body（アイコンのみ保存時に使用） */
+const savedBody = ref("");
 const editTextareaRefs = useTemplateRef<HTMLTextAreaElement[]>("editTextarea");
 
 function startEditing(todo: Todo) {
@@ -168,21 +170,31 @@ function startEditing(todo: Todo) {
   editingTodoId.value = todo.id;
   editBody.value = todo.body;
   editIcon.value = todo.icon;
+  savedBody.value = todo.body;
   nextTick(() => {
     const [el] = editTextareaRefs.value ?? [];
     el?.focus();
   });
 }
 
-async function saveEdit() {
+async function saveEdit(body: string): Promise<boolean> {
   const id = editingTodoId.value;
-  if (!id) return;
-  const result = await tryCatch(
-    request.todoUpdate({ id, body: editBody.value, icon: editIcon.value }),
-  );
-  if (!result.ok) return;
-  editingTodoId.value = undefined;
+  if (!id) return false;
+  const result = await tryCatch(request.todoUpdate({ id, body, icon: editIcon.value }));
+  if (!result.ok) return false;
   await fetchData();
+  return true;
+}
+
+/** アイコン変更時: 編集前の body とマージして保存 */
+function saveEditIcon() {
+  saveEdit(savedBody.value);
+}
+
+/** 保存ボタン / Enter: 編集中の body で保存してパネルを閉じる */
+async function submitEdit() {
+  if (!(await saveEdit(editBody.value))) return;
+  editingTodoId.value = undefined;
 }
 
 function cancelEdit() {
@@ -502,13 +514,13 @@ onUnmounted(() => {
 
         <!-- インライン Todo 編集 -->
         <div v-if="wt.todo && editingTodoId === wt.todo.id" class="mx-2 mt-1 mb-2">
-          <TodoIconPicker v-model="editIcon" />
+          <TodoIconPicker v-model="editIcon" @update:model-value="saveEditIcon" />
           <textarea
             ref="editTextarea"
             v-model="editBody"
             class="w-full resize-none rounded-sm border border-zinc-600 bg-zinc-800 p-2 text-sm text-zinc-200 focus:border-blue-500 focus:outline-none"
             rows="4"
-            @keydown.enter="onEnterSubmit($event, saveEdit)"
+            @keydown.enter="onEnterSubmit($event, submitEdit)"
             @keydown.escape="cancelEdit"
           />
           <div class="mt-1 flex justify-end gap-1">
@@ -520,7 +532,7 @@ onUnmounted(() => {
             </button>
             <button
               class="rounded-sm bg-blue-600 px-2 py-1 text-xs text-white hover:bg-blue-500"
-              @click="saveEdit"
+              @click="submitEdit"
             >
               保存
             </button>
@@ -568,13 +580,13 @@ onUnmounted(() => {
 
         <!-- インライン Todo 編集 -->
         <div v-if="editingTodoId === todo.id" class="mx-2 mt-1 mb-2">
-          <TodoIconPicker v-model="editIcon" />
+          <TodoIconPicker v-model="editIcon" @update:model-value="saveEditIcon" />
           <textarea
             ref="editTextarea"
             v-model="editBody"
             class="w-full resize-none rounded-sm border border-zinc-600 bg-zinc-800 p-2 text-sm text-zinc-200 focus:border-blue-500 focus:outline-none"
             rows="4"
-            @keydown.enter="onEnterSubmit($event, saveEdit)"
+            @keydown.enter="onEnterSubmit($event, submitEdit)"
             @keydown.escape="cancelEdit"
           />
           <div class="mt-1 flex justify-end gap-1">
@@ -586,7 +598,7 @@ onUnmounted(() => {
             </button>
             <button
               class="rounded-sm bg-blue-600 px-2 py-1 text-xs text-white hover:bg-blue-500"
-              @click="saveEdit"
+              @click="submitEdit"
             >
               保存
             </button>
