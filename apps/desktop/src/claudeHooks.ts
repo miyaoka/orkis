@@ -8,26 +8,24 @@ export function generateClaudeSettings(settingsPath: string): void {
 
   const settings = {
     hooks: {
-      UserPromptSubmit: [
-        { hooks: [{ type: "command", command: hookCommand("running"), async: true }] },
-      ],
-      Stop: [{ hooks: [{ type: "command", command: hookCommand("done"), async: true }] }],
+      UserPromptSubmit: [{ hooks: [{ type: "command", command: hookCommand("running") }] }],
+      Stop: [{ hooks: [{ type: "command", command: hookCommand("done") }] }],
       PermissionRequest: [
         {
           matcher: "*",
-          hooks: [{ type: "command", command: hookCommand("needs-input"), async: true }],
+          hooks: [{ type: "command", command: hookCommand("needs-input") }],
         },
       ],
       PostToolUse: [
         {
           matcher: "*",
-          hooks: [{ type: "command", command: hookCommand("tool-done"), async: true }],
+          hooks: [{ type: "command", command: hookCommand("tool-done") }],
         },
       ],
       PostToolUseFailure: [
         {
           matcher: "*",
-          hooks: [{ type: "command", command: hookCommand("tool-done"), async: true }],
+          hooks: [{ type: "command", command: hookCommand("tool-done") }],
         },
       ],
     },
