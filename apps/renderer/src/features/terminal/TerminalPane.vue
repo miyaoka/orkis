@@ -36,11 +36,11 @@ function hashString(str: string): number {
   return hash >>> 0;
 }
 
-/** ハッシュ値からパステル HSL 色を生成。hueOffset で類似色をずらす */
+/** ハッシュ値からパステル HSL 色を生成。hueOffset で類似色をずらす。各成分は異なるビット領域から取得 */
 function hashToColor(hash: number, hueOffset = 0): string {
   const hue = ((hash % 360) + hueOffset) % 360;
-  const saturation = 20 + (hash % 15); // 20-34%
-  const lightness = 60 + (hash % 25); // 60-84%
+  const saturation = 20 + ((hash >>> 12) % 15); // 20-34%
+  const lightness = 60 + ((hash >>> 24) % 25); // 60-84%
   return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
 }
 
