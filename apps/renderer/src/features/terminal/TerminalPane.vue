@@ -17,18 +17,50 @@
 <script setup lang="ts">
 import { useElementSize } from "@vueuse/core";
 import { computed, ref, shallowRef, watchEffect } from "vue";
+import { useWorkspaceStore } from "../filer/useWorkspaceStore";
 import SplitResizeHandle from "./SplitResizeHandle.vue";
 import type { FlatElement, FlatHandle, PixelRect } from "./splitTree";
 import { collectLeafIds, flattenTree } from "./splitTree";
 import TerminalLeaf from "./TerminalLeaf.vue";
 import { useTerminalStore } from "./useTerminalStore";
 
+/**
+ * 文字列から簡易ハッシュ値を生成する（djb2）。
+ * 色生成用なので暗号学的な強度は不要。
+ */
+function hashString(str: string): number {
+  let hash = 5381;
+  for (let i = 0; i < str.length; i++) {
+    hash = (hash * 33) ^ str.charCodeAt(i);
+  }
+  return hash >>> 0;
+}
+
+/** ハッシュ値からパステル HSL 色を生成。hueOffset で類似色をずらす。各成分は異なるビット領域から取得 */
+function hashToColor(hash: number, hueOffset = 0): string {
+  const hue = ((hash % 360) + hueOffset) % 360;
+  const saturation = 20 + ((hash >>> 12) % 15); // 20-34%
+  const lightness = 60 + ((hash >>> 24) % 25); // 60-84%
+  return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+}
+
 const props = defineProps<{
   dir: string;
 }>();
 
 const terminalStore = useTerminalStore();
+const workspaceStore = useWorkspaceStore();
 const layout = computed(() => terminalStore.ensureLayout(props.dir));
+
+const HUE_OFFSET = 30;
+
+const paneBackground = computed(() => {
+  const name = workspaceStore.repoName ?? "orkis";
+  const hash = hashString(name);
+  const color1 = hashToColor(hash);
+  const color2 = hashToColor(hash, HUE_OFFSET);
+  return `linear-gradient(0deg, ${color1} 0%, ${color2} 100%)`;
+});
 
 // leaf の存在はツリー構造で決まる（split/close でのみ変化）
 const leafIds = computed(() => collectLeafIds(layout.value.root));
@@ -72,28 +104,30 @@ function rectStyle(rect: PixelRect | undefined) {
 </script>
 
 <template>
-  <div ref="containerRef" class="relative size-full overflow-hidden">
-    <template v-if="hasMeasuredOnce">
-      <TerminalLeaf
-        v-for="id in leafIds"
-        :key="id"
-        :dir="dir"
-        :leaf-id="id"
-        :style="rectStyle(rectByLeafId.get(id))"
-      />
-    </template>
+  <div class="size-full overflow-hidden p-2.5" :style="{ background: paneBackground }">
+    <div ref="containerRef" class="relative size-full">
+      <template v-if="hasMeasuredOnce">
+        <TerminalLeaf
+          v-for="id in leafIds"
+          :key="id"
+          :dir="dir"
+          :leaf-id="id"
+          :style="rectStyle(rectByLeafId.get(id))"
+        />
+      </template>
 
-    <SplitResizeHandle
-      v-for="handle in flatHandles"
-      :key="handle.branchId"
-      :dir="dir"
-      :branch-id="handle.branchId"
-      :axis="handle.axis"
-      :ratio="handle.ratio"
-      :first-node="handle.firstNode"
-      :second-node="handle.secondNode"
-      :available-px="handle.availablePx"
-      :style="rectStyle(handle.rect)"
-    />
+      <SplitResizeHandle
+        v-for="handle in flatHandles"
+        :key="handle.branchId"
+        :dir="dir"
+        :branch-id="handle.branchId"
+        :axis="handle.axis"
+        :ratio="handle.ratio"
+        :first-node="handle.firstNode"
+        :second-node="handle.secondNode"
+        :available-px="handle.availablePx"
+        :style="rectStyle(handle.rect)"
+      />
+    </div>
   </div>
 </template>
