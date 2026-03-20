@@ -1,4 +1,5 @@
 import type { RPCSchema } from "electrobun/bun";
+import { z } from "zod";
 
 export interface FileEntry {
   name: string;
@@ -52,17 +53,38 @@ export interface WorktreeEntry {
   todo?: Todo;
 }
 
+/** Todo 分類アイコンの許可リスト（SSOT） */
+export const TODO_ICONS = [
+  { emoji: "✨", title: "feature" },
+  { emoji: "🐛", title: "bug" },
+  { emoji: "🔧", title: "fix" },
+  { emoji: "♻️", title: "refactor" },
+  { emoji: "📝", title: "docs" },
+  { emoji: "⚡", title: "perf" },
+  { emoji: "🧪", title: "test" },
+  { emoji: "🚀", title: "deploy" },
+  { emoji: "💡", title: "idea" },
+  { emoji: "🎨", title: "style" },
+] as const;
+
+/** TODO_ICONS から導出した許可 emoji の集合 */
+const todoIconSet: ReadonlySet<string> = new Set(TODO_ICONS.map((ic) => ic.emoji));
+
+/** Todo の zod スキーマ */
+export const todoSchema = z.object({
+  id: z.string(),
+  body: z.string(),
+  icon: z
+    .string()
+    .refine((s) => todoIconSet.has(s))
+    .optional()
+    .catch(undefined),
+  worktreeDir: z.string().optional(),
+  createdAt: z.string(),
+});
+
 /** Todo アイテム */
-export interface Todo {
-  /** 一意な ID */
-  id: string;
-  /** git commit 形式: 一行目=タイトル、残り=本文 */
-  body: string;
-  /** 紐づいた worktree のパス（未着手なら undefined） */
-  worktreeDir?: string;
-  /** 作成日時（ISO 8601） */
-  createdAt: string;
-}
+export type Todo = z.infer<typeof todoSchema>;
 
 /** ファイルごとの診断結果 */
 export interface FileDiagnostics {
@@ -137,12 +159,12 @@ export type OrkisRPC = {
       };
       /** Todo を追加（worktreeDir 指定で worktree に紐づけ可能） */
       todoAdd: {
-        params: { body: string; worktreeDir?: string };
+        params: { body: string; icon?: string; worktreeDir?: string };
         response: Todo;
       };
-      /** Todo の body を更新 */
+      /** Todo の body と icon を更新 */
       todoUpdate: {
-        params: { id: string; body: string };
+        params: { id: string; body: string; icon?: string };
         response: Todo;
       };
       /** Todo を削除 */

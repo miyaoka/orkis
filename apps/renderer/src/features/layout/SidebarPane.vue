@@ -23,6 +23,7 @@ import { useDiagnosticsStore } from "../diagnostics/useDiagnosticsStore";
 import { useWorkspaceStore } from "../filer/useWorkspaceStore";
 import { useRpc } from "../rpc/useRpc";
 import { useTerminalStore } from "../terminal/useTerminalStore";
+import TodoIconPicker from "./TodoIconPicker.vue";
 
 const workspaceStore = useWorkspaceStore();
 const diagnosticsStore = useDiagnosticsStore();
@@ -153,16 +154,20 @@ function onEnterSubmit(e: KeyboardEvent, handler: () => void) {
   handler();
 }
 
+// --- Todo アイコン ---
+
 // --- Todo インライン編集 ---
 
 const editingTodoId = ref<string>();
 const editBody = ref("");
+const editIcon = ref<string>();
 const editTextareaRefs = useTemplateRef<HTMLTextAreaElement[]>("editTextarea");
 
 function startEditing(todo: Todo) {
   closeMenu();
   editingTodoId.value = todo.id;
   editBody.value = todo.body;
+  editIcon.value = todo.icon;
   nextTick(() => {
     const [el] = editTextareaRefs.value ?? [];
     el?.focus();
@@ -172,7 +177,9 @@ function startEditing(todo: Todo) {
 async function saveEdit() {
   const id = editingTodoId.value;
   if (!id) return;
-  const result = await tryCatch(request.todoUpdate({ id, body: editBody.value }));
+  const result = await tryCatch(
+    request.todoUpdate({ id, body: editBody.value, icon: editIcon.value }),
+  );
   if (!result.ok) return;
   editingTodoId.value = undefined;
   await fetchData();
@@ -186,11 +193,13 @@ function cancelEdit() {
 
 const isAddingTodo = ref(false);
 const newTodoBody = ref("");
+const newTodoIcon = ref<string>();
 const newTodoTextareaRef = ref<HTMLTextAreaElement>();
 
 function startAddingTodo() {
   isAddingTodo.value = true;
   newTodoBody.value = "";
+  newTodoIcon.value = undefined;
   nextTick(() => {
     newTodoTextareaRef.value?.focus();
   });
@@ -201,7 +210,9 @@ async function saveNewTodo() {
     isAddingTodo.value = false;
     return;
   }
-  const result = await tryCatch(request.todoAdd({ body: newTodoBody.value }));
+  const result = await tryCatch(
+    request.todoAdd({ body: newTodoBody.value, icon: newTodoIcon.value }),
+  );
   if (!result.ok) return;
   isAddingTodo.value = false;
   await fetchData();
@@ -403,7 +414,7 @@ onUnmounted(() => {
           type="button"
           class="grid size-6 place-items-center rounded-sm text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300"
           :class="terminalStore.showAll && 'bg-zinc-700 text-zinc-200'"
-          title="全 worktree のターミナルを一覧表示"
+          title="Show all worktree terminals"
           @click="terminalStore.showAll = !terminalStore.showAll"
         >
           <span class="icon-[lucide--layout-grid] text-sm" />
@@ -416,7 +427,11 @@ onUnmounted(() => {
           class="group/wt relative grid grid-cols-[auto_1fr_auto] gap-x-2 rounded-sm py-1.5 pl-2"
           :class="isActive(wt) ? 'bg-zinc-700/50' : 'hover:bg-zinc-800'"
         >
-          <span class="row-span-2 mt-0.5 icon-[lucide--git-branch] text-base text-zinc-400" />
+          <span v-if="wt.todo?.icon" class="row-span-2 mt-0.5 text-base">{{ wt.todo.icon }}</span>
+          <span
+            v-else
+            class="row-span-2 mt-0.5 icon-[lucide--git-branch] text-base text-zinc-400"
+          />
           <!-- メインアクション: ::after で親全体に広がるクリック領域 -->
           <button
             class="truncate text-left text-sm after:absolute after:inset-0"
@@ -433,7 +448,7 @@ onUnmounted(() => {
           </button>
           <!-- ⋮ メニューボタン: z-10 で擬似要素の上に出す -->
           <button
-            aria-label="メニュー"
+            aria-label="Menu"
             class="relative z-10 row-span-2 grid size-6 place-items-center self-center rounded-sm text-zinc-600 opacity-0 transition-opacity group-focus-within/wt:opacity-100 group-hover/wt:opacity-100 hover:text-zinc-300"
             :style="{ anchorName: `--wt-menu-${i}` }"
             @click="openMenu(`--wt-menu-${i}`, { type: 'worktree', worktree: wt, todo: wt.todo })"
@@ -487,6 +502,7 @@ onUnmounted(() => {
 
         <!-- インライン Todo 編集 -->
         <div v-if="wt.todo && editingTodoId === wt.todo.id" class="mx-2 mt-1 mb-2">
+          <TodoIconPicker v-model="editIcon" />
           <textarea
             ref="editTextarea"
             v-model="editBody"
@@ -532,7 +548,7 @@ onUnmounted(() => {
         <div
           class="group/td relative grid grid-cols-[auto_1fr_auto] gap-x-2 rounded-sm py-1.5 pl-2 hover:bg-zinc-800"
         >
-          <span class="mt-0.5 icon-[lucide--square] text-base text-zinc-600" />
+          <span class="mt-0.5 text-base text-zinc-600">{{ todo.icon || "☐" }}</span>
           <button
             class="truncate text-left text-sm text-zinc-400 after:absolute after:inset-0"
             @click="editingTodoId === todo.id ? cancelEdit() : startEditing(todo)"
@@ -541,7 +557,7 @@ onUnmounted(() => {
           </button>
           <!-- ⋮ メニューボタン -->
           <button
-            aria-label="メニュー"
+            aria-label="Menu"
             class="relative z-10 grid size-6 place-items-center self-center rounded-sm text-zinc-600 opacity-0 transition-opacity group-focus-within/td:opacity-100 group-hover/td:opacity-100 hover:text-zinc-300"
             :style="{ anchorName: `--todo-menu-${i}` }"
             @click="openMenu(`--todo-menu-${i}`, { type: 'todo', todo })"
@@ -552,6 +568,7 @@ onUnmounted(() => {
 
         <!-- インライン Todo 編集 -->
         <div v-if="editingTodoId === todo.id" class="mx-2 mt-1 mb-2">
+          <TodoIconPicker v-model="editIcon" />
           <textarea
             ref="editTextarea"
             v-model="editBody"
@@ -579,12 +596,13 @@ onUnmounted(() => {
 
       <!-- 新規 Todo 追加 -->
       <div v-if="isAddingTodo" class="mx-2 mt-1">
+        <TodoIconPicker v-model="newTodoIcon" />
         <textarea
           ref="newTodoTextareaRef"
           v-model="newTodoBody"
           class="w-full resize-none rounded-sm border border-zinc-600 bg-zinc-800 p-2 text-sm text-zinc-200 focus:border-blue-500 focus:outline-none"
           rows="4"
-          placeholder="一行目がタイトルになります"
+          placeholder="First line becomes the title"
           @keydown.enter="onEnterSubmit($event, saveNewTodo)"
           @keydown.escape="cancelNewTodo"
         />
@@ -626,7 +644,7 @@ onUnmounted(() => {
         <span class="icon-[lucide--git-branch] text-base" />
         <span class="truncate">{{ branch }}</span>
         <button
-          aria-label="メニュー"
+          aria-label="Menu"
           class="grid size-6 place-items-center self-center rounded-sm text-zinc-600 opacity-0 transition-opacity group-focus-within/br:opacity-100 group-hover/br:opacity-100 hover:text-zinc-300"
           :style="{ anchorName: `--br-menu-${i}` }"
           @click.stop="openMenu(`--br-menu-${i}`, { type: 'branch', branch })"

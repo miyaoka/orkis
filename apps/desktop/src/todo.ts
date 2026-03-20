@@ -8,6 +8,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { homedir } from "node:os";
 import { tryCatch } from "@orkis/shared";
+import { todoSchema } from "@orkis/rpc";
 import type { Todo } from "@orkis/rpc";
 
 const PROJECTS_DIR = path.join(homedir(), ".config", "orkis", "projects");
@@ -44,7 +45,10 @@ export function loadTodos(repoRoot: string): Todo[] {
   }
   const parsed = JSON.parse(content.value) as unknown;
   if (!Array.isArray(parsed)) throw new Error("todos.json is not an array");
-  return parsed.filter(isValidTodo);
+  return parsed.flatMap((v) => {
+    const todo = parseTodo(v);
+    return todo ? [todo] : [];
+  });
 }
 
 /** Todo 一覧を保存する（失敗時は例外を投げる） */
@@ -53,19 +57,20 @@ function saveTodos(repoRoot: string, todos: Todo[]): void {
   fs.writeFileSync(getTodosPath(repoRoot), JSON.stringify(todos, null, 2));
 }
 
-function isValidTodo(v: unknown): v is Todo {
-  if (typeof v !== "object" || v === null) return false;
-  const t = v as Record<string, unknown>;
-  return (
-    typeof t.id === "string" &&
-    typeof t.body === "string" &&
-    typeof t.createdAt === "string" &&
-    (t.worktreeDir === undefined || typeof t.worktreeDir === "string")
-  );
+/** zod スキーマで Todo をパースする（不正な値は除外） */
+function parseTodo(v: unknown): Todo | undefined {
+  const result = todoSchema.safeParse(v);
+  return result.success ? result.data : undefined;
+}
+
+/** 許可リストにない icon を undefined に正規化する */
+function sanitizeIcon(icon: string | undefined): Todo["icon"] {
+  const result = todoSchema.shape.icon.safeParse(icon);
+  return result.success ? result.data : undefined;
 }
 
 /** Todo を追加する */
-export function addTodo(repoRoot: string, body: string, worktreeDir?: string): Todo {
+export function addTodo(repoRoot: string, body: string, icon?: string, worktreeDir?: string): Todo {
   const todos = loadTodos(repoRoot);
   // worktreeDir が指定されている場合、既に紐づいている Todo がないか検証
   if (worktreeDir && todos.some((t) => t.worktreeDir === worktreeDir)) {
@@ -74,6 +79,7 @@ export function addTodo(repoRoot: string, body: string, worktreeDir?: string): T
   const todo: Todo = {
     id: crypto.randomUUID(),
     body,
+    icon: sanitizeIcon(icon),
     worktreeDir,
     createdAt: new Date().toISOString(),
   };
@@ -82,12 +88,13 @@ export function addTodo(repoRoot: string, body: string, worktreeDir?: string): T
   return todo;
 }
 
-/** Todo の body を更新する */
-export function updateTodo(repoRoot: string, id: string, body: string): Todo {
+/** Todo の body と icon を更新する */
+export function updateTodo(repoRoot: string, id: string, body: string, icon?: string): Todo {
   const todos = loadTodos(repoRoot);
   const todo = todos.find((t) => t.id === id);
   if (!todo) throw new Error(`Todo not found: ${id}`);
   todo.body = body;
+  todo.icon = sanitizeIcon(icon);
   saveTodos(repoRoot, todos);
   return todo;
 }

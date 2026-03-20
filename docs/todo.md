@@ -8,6 +8,7 @@ worktree の前段として作業計画を管理する。Todo と worktree を 1
 interface Todo {
   id: string; // UUID (crypto.randomUUID)
   body: string; // git commit 形式: 一行目=タイトル、残り=本文
+  icon?: string; // 分類アイコン（emoji 1文字）
   worktreeDir?: string; // 紐づいた worktree のパス（未着手なら undefined）
   createdAt: string; // ISO 8601
 }
@@ -15,6 +16,7 @@ interface Todo {
 
 - `body` は git commit メッセージと同じ構造。一行目をタイトルとして表示に使う
 - `body` が空の場合は「(無題)」と表示する
+- `icon` は Todo の分類を示す emoji。WORKTREES セクションでは git-branch アイコンの代わりに表示する
 
 ## 保存
 
@@ -101,12 +103,13 @@ BRANCHES
 
 ### Todo 編集
 
-`[⋮]` → "Todo を編集" でサイドバー内にインライン展開する。
+`[⋮]` → "Todo を編集" でサイドバー内にインライン展開する。textarea の上に emoji ピッカーを表示し、分類アイコンを選択できる。トグル式で再クリックすると解除される。
 
 ```text
 WORKTREES
   🏠 main
   ▼ feature-aの実装    [×]
+  ✨🐛🔧♻️📝⚡🧪🚀💡🎨
   ┌─────────────────┐
   │feature-aの実装   │
   │                  │
@@ -122,11 +125,11 @@ WORKTREES
 ### 新規追加
 
 ```text
-todoList:   { repoRoot } → Todo[]
-todoAdd:    { repoRoot, body } → Todo
-todoUpdate: { repoRoot, id, body } → Todo
-todoRemove: { repoRoot, id } → void
-todoStart:  { repoRoot, id } → { todo: Todo, worktree: WorktreeEntry }
+todoList:   undefined → Todo[]
+todoAdd:    { body, icon?, worktreeDir? } → Todo
+todoUpdate: { id, body, icon? } → Todo
+todoRemove: { id } → void
+todoStart:  { id } → { todo: Todo, worktree: WorktreeEntry }
 ```
 
 ### 既存変更

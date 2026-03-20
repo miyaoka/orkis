@@ -685,8 +685,8 @@ function createWindowWithRPC(dir: string, options?: CreateWindowOptions): OrkisW
         },
         gitBranchDelete: ({ branch }) => deleteBranch(repoRootDir, branch),
         todoList: () => loadTodos(repoRootDir),
-        todoAdd: ({ body, worktreeDir }) => addTodo(repoRootDir, body, worktreeDir),
-        todoUpdate: ({ id, body }) => updateTodo(repoRootDir, id, body),
+        todoAdd: ({ body, icon, worktreeDir }) => addTodo(repoRootDir, body, icon, worktreeDir),
+        todoUpdate: ({ id, body, icon }) => updateTodo(repoRootDir, id, body, icon),
         todoRemove: ({ id }) => removeTodo(repoRootDir, id),
         todoStart: async ({ id }) => {
           const entry = await addWorktree(repoRootDir);
