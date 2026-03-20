@@ -177,12 +177,13 @@ function startEditing(todo: Todo) {
   });
 }
 
-async function saveEdit(body: string) {
+async function saveEdit(body: string): Promise<boolean> {
   const id = editingTodoId.value;
-  if (!id) return;
+  if (!id) return false;
   const result = await tryCatch(request.todoUpdate({ id, body, icon: editIcon.value }));
-  if (!result.ok) return;
+  if (!result.ok) return false;
   await fetchData();
+  return true;
 }
 
 /** アイコン変更時: 編集前の body とマージして保存 */
@@ -192,7 +193,7 @@ function saveEditIcon() {
 
 /** 保存ボタン / Enter: 編集中の body で保存してパネルを閉じる */
 async function submitEdit() {
-  await saveEdit(editBody.value);
+  if (!(await saveEdit(editBody.value))) return;
   editingTodoId.value = undefined;
 }
 
