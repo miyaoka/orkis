@@ -4,7 +4,7 @@
 
 ## レイヤー構成
 
-```
+```text
 ┌─────────────────────────────────────────────┐
 │  renderer (Vue)                             │
 │  apps/renderer/                             │
@@ -31,7 +31,7 @@ Electrobun は dev / build どちらでも `.app` バンドルを生成して実
 
 ### `.app` 内の配置（`electrobun.config.ts` の `build.copy`）
 
-```
+```text
 orkis.app/Contents/
 ├── MacOS/bun          # Electrobun が提供する Bun ランタイム
 └── Resources/app/
@@ -131,7 +131,7 @@ desktop が PTY を spawn する時に以下の環境変数を注入する（`in
 
 PTY 起動時に `ZDOTDIR` を orkis の `apps/desktop/zsh/` に差し替え、orkis の初期化ファイルがユーザーの初期化ファイルを透過的に `source` する。
 
-```
+```text
 zsh 起動
   → orkis/.zshenv   → ユーザーの .zshenv を source → ZDOTDIR を orkis に戻す
   → orkis/.zprofile → ユーザーの .zprofile を source
@@ -169,7 +169,7 @@ desktop 起動時に `generateClaudeSettings()` が hooks 設定 JSON を `$TMPD
 
 ### フロントへの到達経路
 
-```
+```text
 Claude Code (hook 発火)
   → hook コマンド実行（nc or orkis CLI）
   → Unix ドメインソケット（HookMessage）
