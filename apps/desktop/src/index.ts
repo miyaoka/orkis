@@ -6,18 +6,33 @@ import { homedir, tmpdir } from "node:os";
 import path from "node:path";
 import net from "node:net";
 import { tryCatch } from "@orkis/shared";
-import type { LspDiagnostic, OrkisRPC, WorktreeChangeCounts } from "@orkis/rpc";
-import { createLspClient } from "./lsp";
+import type { LspDiagnostic, OrkisRPC } from "@orkis/rpc";
+import { createLspClient, resolveTsgoPath, resolveVueLspPaths } from "./lsp";
 import type { LspClient } from "./lsp";
-import { parseOwnerRepo } from "./git";
+import {
+  parseOwnerRepo,
+  filterIgnored,
+  getGitStatus,
+  getWorktreeList,
+  addWorktree,
+  removeWorktree,
+  attachChangeCounts,
+  getBranchList,
+  deleteBranch,
+} from "./git";
+import {
+  isAllowedProtocol,
+  readFileContent,
+  resolveSecurePath,
+  assertInsideRoot,
+} from "./security";
+import { generateClaudeSettings } from "./claudeHooks";
 import { getShellEnv } from "./shellEnv";
 import { loadAppState, saveSnapshot, getDefaultFrame } from "./appState";
 import type { WindowFrame, WindowState } from "./appState";
 
 type OrkisRPCInstance = ReturnType<typeof BrowserView.defineRPC<OrkisRPC>>;
 type OrkisWindow = BrowserWindow<OrkisRPCInstance>;
-
-const ALLOWED_PROTOCOLS = new Set(["https:", "http:"]);
 
 /** orkis 管理の zsh 初期化ディレクトリ（ZDOTDIR 差し替え用） */
 const ORKIS_ZDOTDIR = path.resolve(import.meta.dir, "../zsh");
@@ -59,47 +74,7 @@ const GIT_WATCH_POLL_MS = 500;
 /** Claude Code に --settings で渡す hooks 設定ファイルのパス */
 const CLAUDE_SETTINGS_PATH = path.join(tmpdir(), `orkis-${channel}-claude-settings.json`);
 
-/** hooks 設定ファイルを生成する。nc で直接ソケットに通知する */
-function generateClaudeSettings(): void {
-  const hookCommand = (event: string) =>
-    `echo '{"type":"hook","event":"${event}","payload":{"ptyId":'"$ORKIS_PTY_ID"'}}' | nc -U "$ORKIS_SOCKET_PATH"`;
-
-  const settings = {
-    hooks: {
-      UserPromptSubmit: [
-        { hooks: [{ type: "command", command: hookCommand("running"), async: true }] },
-      ],
-      Stop: [{ hooks: [{ type: "command", command: hookCommand("done"), async: true }] }],
-      PermissionRequest: [
-        {
-          matcher: "*",
-          hooks: [{ type: "command", command: hookCommand("needs-input"), async: true }],
-        },
-      ],
-      PostToolUse: [
-        {
-          matcher: "*",
-          hooks: [{ type: "command", command: hookCommand("tool-done"), async: true }],
-        },
-      ],
-      PostToolUseFailure: [
-        {
-          matcher: "*",
-          hooks: [{ type: "command", command: hookCommand("tool-done"), async: true }],
-        },
-      ],
-    },
-  };
-
-  const writeResult = tryCatch(() =>
-    fs.writeFileSync(CLAUDE_SETTINGS_PATH, JSON.stringify(settings, null, 2) + "\n"),
-  );
-  if (!writeResult.ok) {
-    console.error("[orkis] Claude hooks 設定の書き出しに失敗:", writeResult.error.message);
-  }
-}
-
-generateClaudeSettings();
+generateClaudeSettings(CLAUDE_SETTINGS_PATH);
 
 // --- PTY 管理 ---
 
@@ -165,275 +140,6 @@ function spawnPty(win: OrkisWindow, cwd: string, cols: number, rows: number): nu
 
   ptys.set(id, { proc, win, worktreeDir: cwd, decoder });
   return id;
-}
-
-// --- セキュリティ ---
-
-function isAllowedProtocol(raw: string): boolean {
-  const result = tryCatch(() => new URL(raw));
-  if (!result.ok) return false;
-  return ALLOWED_PROTOCOLS.has(result.value.protocol);
-}
-
-/** ファイル内容を読み取る（バイナリ判定・サイズ制限付き） */
-async function readFileContent(
-  absolutePath: string,
-): Promise<{ content: string; isBinary: boolean }> {
-  const file = Bun.file(absolutePath);
-  const MAX_FILE_SIZE = 1024 * 1024; // 1MB
-  if (file.size > MAX_FILE_SIZE) {
-    return { content: "", isBinary: true };
-  }
-  // NUL バイトの有無でバイナリ判定（git と同じ方式）
-  const bytes = new Uint8Array(await file.arrayBuffer());
-  if (bytes.includes(0x00)) {
-    return { content: "", isBinary: true };
-  }
-  const content = new TextDecoder().decode(bytes);
-  return { content, isBinary: false };
-}
-
-async function resolveSecurePath(root: string, relPath: string): Promise<string> {
-  const resolved = path.resolve(root, relPath);
-  const real = await fsp.realpath(resolved);
-  const realRoot = await fsp.realpath(root);
-  const relative = path.relative(realRoot, real);
-  if (relative.startsWith("..") || path.isAbsolute(relative)) {
-    throw new Error("Access denied: path is outside workspace root");
-  }
-  return real;
-}
-
-/** ファイルが存在しなくてもパストラバーサルだけを防ぐチェック（git 操作用） */
-function assertInsideRoot(root: string, relPath: string): void {
-  const resolved = path.resolve(root, relPath);
-  const relative = path.relative(root, resolved);
-  if (relative.startsWith("..") || path.isAbsolute(relative)) {
-    throw new Error("Access denied: path is outside workspace root");
-  }
-}
-
-// --- git ---
-
-async function filterIgnored(entries: string[], cwd: string): Promise<Set<string>> {
-  if (entries.length === 0) return new Set();
-  const result = await tryCatch(
-    new Response(Bun.spawn(["git", "check-ignore", ...entries], { cwd }).stdout).text(),
-  );
-  if (!result.ok) return new Set();
-  const text = result.value;
-  return new Set(text.split("\n").filter(Boolean));
-}
-
-async function getGitStatus(cwd: string): Promise<Record<string, string>> {
-  const result = await tryCatch(
-    new Response(Bun.spawn(["git", "status", "--porcelain=v1", "-z"], { cwd }).stdout).text(),
-  );
-  if (!result.ok) return {};
-  const stdout = result.value;
-  const statuses: Record<string, string> = {};
-  const parts = stdout.split("\0");
-  let i = 0;
-  while (i < parts.length) {
-    const entry = parts[i];
-    if (!entry) {
-      i++;
-      continue;
-    }
-    const status = entry.slice(0, 2);
-    const filePath = entry.slice(3);
-    if (status[0] === "R" || status[0] === "C") {
-      i++;
-      const newPath = parts[i];
-      if (newPath !== undefined) {
-        statuses[newPath] = status;
-      }
-    } else {
-      statuses[filePath] = status;
-    }
-    i++;
-  }
-  return statuses;
-}
-
-/** git status の2文字コードから変更種別ごとのファイル数を算出 */
-function countChanges(statuses: Record<string, string>): WorktreeChangeCounts {
-  let modified = 0;
-  let added = 0;
-  let deleted = 0;
-  let untracked = 0;
-
-  for (const status of Object.values(statuses)) {
-    if (status === "??") {
-      untracked++;
-      continue;
-    }
-    // worktree 側 (Y) を優先、なければ index 側 (X) を使う
-    const code = status[1] !== " " ? status[1] : status[0];
-    switch (code) {
-      case "A":
-        added++;
-        break;
-      case "D":
-        deleted++;
-        break;
-      default:
-        // M, R, C, T, U 等はすべて modified 扱い
-        modified++;
-        break;
-    }
-  }
-
-  return { modified, added, deleted, untracked };
-}
-
-const WORKTREE_DIR = ".orkis/worktrees";
-
-function generateWorktreeId(): string {
-  const now = new Date();
-  const timestamp = [
-    now.getFullYear(),
-    String(now.getMonth() + 1).padStart(2, "0"),
-    String(now.getDate()).padStart(2, "0"),
-    "_",
-    String(now.getHours()).padStart(2, "0"),
-    String(now.getMinutes()).padStart(2, "0"),
-    String(now.getSeconds()).padStart(2, "0"),
-  ].join("");
-  return `wt-${timestamp}`;
-}
-
-async function getBranchList(cwd: string): Promise<string[]> {
-  const result = await tryCatch(
-    new Response(Bun.spawn(["git", "branch", "--format=%(refname:short)"], { cwd }).stdout).text(),
-  );
-  if (!result.ok) return [];
-  return result.value.trim().split("\n").filter(Boolean);
-}
-
-async function addWorktree(
-  cwd: string,
-  branch?: string,
-): Promise<import("@orkis/rpc").WorktreeEntry> {
-  const id = generateWorktreeId();
-  const wtPath = path.join(cwd, WORKTREE_DIR, id);
-
-  if (branch) {
-    assertBranchName(branch);
-  }
-
-  await fsp.mkdir(path.join(cwd, WORKTREE_DIR), { recursive: true });
-
-  // branch 指定あり → 既存ブランチをチェックアウト、なし → 新規ブランチ作成
-  const args = branch
-    ? ["git", "worktree", "add", wtPath, branch]
-    : ["git", "worktree", "add", "-b", id, wtPath];
-
-  const proc = Bun.spawn(args, { cwd, stderr: "pipe" });
-  await proc.exited;
-  if (proc.exitCode !== 0) {
-    const stderr = await new Response(proc.stderr).text();
-    throw new Error(`git worktree add failed: ${stderr.trim() || `exit code ${proc.exitCode}`}`);
-  }
-
-  // 作成した worktree の情報を取得
-  const headResult = await tryCatch(
-    new Response(Bun.spawn(["git", "rev-parse", "--short", "HEAD"], { cwd: wtPath }).stdout).text(),
-  );
-  const head = headResult.ok ? headResult.value.trim() : "";
-
-  return { path: wtPath, head, branch: branch ?? id, isMain: false };
-}
-
-/** wtPath が WORKTREE_DIR 配下であることを検証する */
-function assertWorktreePath(cwd: string, wtPath: string): void {
-  const allowed = path.resolve(cwd, WORKTREE_DIR);
-  const resolved = path.resolve(wtPath);
-  if (!resolved.startsWith(allowed + path.sep) && resolved !== allowed) {
-    throw new Error("Access denied: path is outside worktree directory");
-  }
-}
-
-async function removeWorktree(cwd: string, wtPath: string, force?: boolean): Promise<void> {
-  assertWorktreePath(cwd, wtPath);
-
-  const args = ["git", "worktree", "remove"];
-  if (force) args.push("--force");
-  args.push(wtPath);
-
-  const proc = Bun.spawn(args, { cwd, stderr: "pipe" });
-  await proc.exited;
-  if (proc.exitCode !== 0) {
-    const stderr = await new Response(proc.stderr).text();
-    throw new Error(`git worktree remove failed: ${stderr.trim() || `exit code ${proc.exitCode}`}`);
-  }
-}
-
-/** ブランチ名にシェルメタ文字が含まれていないことを検証する */
-function assertBranchName(branch: string): void {
-  if (!/^[\w./-]+$/.test(branch) || branch.startsWith("-")) {
-    throw new Error("Invalid branch name");
-  }
-}
-
-async function deleteBranch(cwd: string, branch: string): Promise<void> {
-  assertBranchName(branch);
-
-  const proc = Bun.spawn(["git", "branch", "-D", "--", branch], { cwd, stderr: "pipe" });
-  await proc.exited;
-  if (proc.exitCode !== 0) {
-    const stderr = await new Response(proc.stderr).text();
-    throw new Error(`git branch delete failed: ${stderr.trim() || `exit code ${proc.exitCode}`}`);
-  }
-}
-
-async function getWorktreeList(cwd: string): Promise<import("@orkis/rpc").WorktreeEntry[]> {
-  const result = await tryCatch(
-    new Response(Bun.spawn(["git", "worktree", "list", "--porcelain"], { cwd }).stdout).text(),
-  );
-  if (!result.ok) return [];
-
-  const entries: import("@orkis/rpc").WorktreeEntry[] = [];
-  const blocks = result.value.trim().split("\n\n");
-  let isFirst = true;
-
-  for (const block of blocks) {
-    const lines = block.split("\n");
-    let wtPath = "";
-    let head = "";
-    let branch: string | undefined;
-
-    for (const line of lines) {
-      if (line.startsWith("worktree ")) {
-        wtPath = line.slice("worktree ".length);
-      } else if (line.startsWith("HEAD ")) {
-        head = line.slice("HEAD ".length, "HEAD ".length + 7);
-      } else if (line.startsWith("branch ")) {
-        // refs/heads/main → main
-        branch = line.slice("branch ".length).replace("refs/heads/", "");
-      }
-    }
-
-    if (wtPath) {
-      entries.push({ path: wtPath, head, branch, isMain: isFirst });
-    }
-    isFirst = false;
-  }
-
-  return entries;
-}
-
-/** 各 worktree の git status を並列取得して changeCounts を付与する */
-async function attachChangeCounts(
-  entries: import("@orkis/rpc").WorktreeEntry[],
-): Promise<import("@orkis/rpc").WorktreeEntry[]> {
-  await Promise.all(
-    entries.map(async (entry) => {
-      const statuses = await getGitStatus(entry.path);
-      entry.changeCounts = countChanges(statuses);
-    }),
-  );
-  return entries;
 }
 
 // --- ファイルサーバー ---
@@ -504,140 +210,6 @@ console.log(`[file-server] listening on http://localhost:${fileServer.port}`);
 
 /** ウィンドウごとに複数の LSP クライアント（tsgo + vue）を管理 */
 const windowLspClients = new Map<OrkisWindow, LspClient[]>();
-
-/** プロジェクトの node_modules から tsgo ネイティブバイナリを探す */
-async function resolveTsgoPath(projectDir: string): Promise<string | undefined> {
-  const packageName = `@typescript/native-preview-${process.platform}-${process.arch}`;
-
-  // 直接パス（npm / yarn hoisted）
-  const directPath = path.join(projectDir, "node_modules", packageName, "lib", "tsgo");
-  if (fs.existsSync(directPath)) return directPath;
-
-  // pnpm .pnpm 配下
-  const pnpmBase = path.join(projectDir, "node_modules", ".pnpm");
-  const prefix = `@typescript+native-preview-${process.platform}-${process.arch}@`;
-  const entriesResult = await tryCatch(fsp.readdir(pnpmBase));
-  if (entriesResult.ok) {
-    for (const entry of entriesResult.value) {
-      if (entry.startsWith(prefix)) {
-        const candidate = path.join(pnpmBase, entry, "node_modules", packageName, "lib", "tsgo");
-        if (fs.existsSync(candidate)) return candidate;
-      }
-    }
-  }
-
-  return undefined;
-}
-
-/**
- * vue-language-server のエントリポイントと tsdk パスを探す。
- * pnpm モノレポでは .pnpm はルートの node_modules にのみ存在する。
- */
-interface VueLspPaths {
-  serverPath: string;
-  tsdkPath: string;
-  /** @vue/typescript-plugin の親 node_modules ディレクトリ（tsserver --pluginProbeLocations 用） */
-  pluginProbeLocation: string;
-}
-
-function resolveVueLspPaths(projectRoot: string, packageDir: string): VueLspPaths | undefined {
-  const prefix = "@vue+language-server@";
-
-  // pnpm: ルートの node_modules/.pnpm から探す
-  const pnpmBase = path.join(projectRoot, "node_modules", ".pnpm");
-  console.log(`[lsp:vue/resolve] pnpmBase: ${pnpmBase}`);
-
-  let serverPath: string | undefined;
-
-  const entriesResult = tryCatch(() => fs.readdirSync(pnpmBase));
-  if (entriesResult.ok) {
-    const matchingEntries = entriesResult.value.filter((e) => e.startsWith(prefix));
-    console.log(`[lsp:vue/resolve] matching entries: ${matchingEntries.join(", ") || "(none)"}`);
-
-    for (const entry of matchingEntries) {
-      const candidate = path.join(
-        pnpmBase,
-        entry,
-        "node_modules",
-        "@vue",
-        "language-server",
-        "bin",
-        "vue-language-server.js",
-      );
-      if (fs.existsSync(candidate)) {
-        serverPath = candidate;
-        break;
-      }
-    }
-  }
-
-  // パッケージの node_modules から直接探す（hoisted の場合）
-  if (!serverPath) {
-    const directPath = path.join(
-      packageDir,
-      "node_modules",
-      "@vue",
-      "language-server",
-      "bin",
-      "vue-language-server.js",
-    );
-    console.log(`[lsp:vue/resolve] direct: ${directPath}, exists: ${fs.existsSync(directPath)}`);
-    if (fs.existsSync(directPath)) {
-      serverPath = directPath;
-    }
-  }
-
-  if (!serverPath) {
-    console.log("[lsp:vue/resolve] server not found");
-    return undefined;
-  }
-  console.log(`[lsp:vue/resolve] serverPath: ${serverPath}`);
-
-  // tsdk パス（typescript/lib ディレクトリ）— パッケージの node_modules から探す
-  const tsdkPath = path.join(packageDir, "node_modules", "typescript", "lib");
-  const tsdkExists = fs.existsSync(path.join(tsdkPath, "typescript.js"));
-  console.log(`[lsp:vue/resolve] tsdk: ${tsdkPath}, exists: ${tsdkExists}`);
-  if (!tsdkExists) return undefined;
-
-  // @vue/typescript-plugin のパスを探す（tsserver --pluginProbeLocations 用）
-  const pluginPrefix = "@vue+typescript-plugin@";
-  let pluginProbeLocation: string | undefined;
-
-  if (entriesResult.ok) {
-    for (const entry of entriesResult.value) {
-      if (entry.startsWith(pluginPrefix)) {
-        const candidate = path.join(pnpmBase, entry, "node_modules");
-        const pluginIndex = path.join(candidate, "@vue", "typescript-plugin", "index.js");
-        if (fs.existsSync(pluginIndex)) {
-          pluginProbeLocation = candidate;
-          break;
-        }
-      }
-    }
-  }
-
-  // hoisted の場合
-  if (!pluginProbeLocation) {
-    const directPlugin = path.join(
-      packageDir,
-      "node_modules",
-      "@vue",
-      "typescript-plugin",
-      "index.js",
-    );
-    if (fs.existsSync(directPlugin)) {
-      pluginProbeLocation = path.join(packageDir, "node_modules");
-    }
-  }
-
-  if (!pluginProbeLocation) {
-    console.log("[lsp:vue/resolve] @vue/typescript-plugin not found");
-    return undefined;
-  }
-  console.log(`[lsp:vue/resolve] pluginProbeLocation: ${pluginProbeLocation}`);
-
-  return { serverPath, tsdkPath, pluginProbeLocation };
-}
 
 // --- ウィンドウ管理 ---
 
