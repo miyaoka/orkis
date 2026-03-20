@@ -31,6 +31,7 @@ import { tryCatch } from "@orkis/shared";
 import { useEventListener, useIntervalFn } from "@vueuse/core";
 import { computed, nextTick, onMounted, onUnmounted, ref, useTemplateRef, watch } from "vue";
 import { useCommandRegistry } from "../command/useCommandRegistry";
+import { useContextKeys } from "../command/useContextKeys";
 import { useDiagnosticsStore } from "../diagnostics/useDiagnosticsStore";
 import { useWorkspaceStore } from "../filer/useWorkspaceStore";
 import { useRpc } from "../rpc/useRpc";
@@ -111,11 +112,15 @@ const selectableWorktrees = nonMainWorktrees;
 /** Ctrl キー押下中か（番号バッジの表示制御用） */
 const ctrlPressed = ref(false);
 
+const contextKeys = useContextKeys();
+
 /**
- * input/textarea/contenteditable にフォーカスがある場合は
- * keybinding が発火しないため、バッジも表示しない
+ * keybinding が editable 要素を除外する条件と一致させる。
+ * terminalFocus 時は xterm 内部の textarea を除外しない
+ * （keybinding 側も同じ条件でスキップするため）
  */
-function isEditableElementFocused(): boolean {
+function shouldSuppressBadge(): boolean {
+  if (contextKeys.get("terminalFocus")) return false;
   const target = document.activeElement;
   if (!(target instanceof HTMLElement)) return false;
   const tagName = target.tagName;
@@ -123,7 +128,7 @@ function isEditableElementFocused(): boolean {
 }
 
 useEventListener(document, "keydown", (e: KeyboardEvent) => {
-  if (e.key === "Control" && !isEditableElementFocused()) ctrlPressed.value = true;
+  if (e.key === "Control" && !shouldSuppressBadge()) ctrlPressed.value = true;
 });
 useEventListener(document, "keyup", (e: KeyboardEvent) => {
   if (e.key === "Control") ctrlPressed.value = false;
@@ -131,6 +136,10 @@ useEventListener(document, "keyup", (e: KeyboardEvent) => {
 // ウィンドウからフォーカスが外れた場合にリセット
 useEventListener(window, "blur", () => {
   ctrlPressed.value = false;
+});
+// Ctrl 押下中に editable 要素にフォーカスが移った場合にリセット
+useEventListener(document, "focusin", () => {
+  if (ctrlPressed.value && shouldSuppressBadge()) ctrlPressed.value = false;
 });
 
 // workspace.selectWorktree コマンド: args=1~9 のインデックスで worktree を選択
