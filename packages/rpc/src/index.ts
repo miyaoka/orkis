@@ -11,6 +11,10 @@ export interface FileReadResult {
   content: string;
   /** バイナリ等で読み取れなかった場合 true */
   isBinary: boolean;
+  /** パスが存在しない場合 true */
+  notFound?: boolean;
+  /** パスがディレクトリの場合 true */
+  isDirectory?: boolean;
 }
 
 /** LSP 診断情報（textDocument/publishDiagnostics の簡略版） */
