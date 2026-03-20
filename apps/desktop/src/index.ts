@@ -1040,8 +1040,7 @@ function handleSocketMessage(message: OrkisMessage) {
       // CLI からの生パスを desktop 側でプロジェクト・worktree に解決する
       const projectDir = resolveProjectDir(message.dir);
       const worktreeRoot = resolveWorktreeRoot(message.dir);
-      const activeDir = worktreeRoot !== projectDir ? worktreeRoot : undefined;
-      openWindow(projectDir, { file: message.file, initialActiveDir: activeDir });
+      openWindow(projectDir, { file: message.file, initialActiveDir: worktreeRoot });
       break;
     }
   }
@@ -1172,8 +1171,7 @@ if (initialDir) {
   // pnpm dev: worktree 内で実行しても main worktree のルートに解決する
   const projectDir = resolveProjectDir(initialDir);
   const worktreeRoot = resolveWorktreeRoot(initialDir);
-  const activeDir = worktreeRoot !== projectDir ? worktreeRoot : undefined;
-  openWindow(projectDir, { initialActiveDir: activeDir });
+  openWindow(projectDir, { initialActiveDir: worktreeRoot });
 } else {
   // CLI cold start: launch request ファイルから dir を読む
   // Dock/Finder: request がなければ前回の状態を復元
@@ -1182,8 +1180,7 @@ if (initialDir) {
     for (const req of requests) {
       const projectDir = resolveProjectDir(req.dir);
       const worktreeRoot = resolveWorktreeRoot(req.dir);
-      const reqActiveDir = worktreeRoot !== projectDir ? worktreeRoot : undefined;
-      openWindow(projectDir, { file: req.file, initialActiveDir: reqActiveDir });
+      openWindow(projectDir, { file: req.file, initialActiveDir: worktreeRoot });
     }
   } else if (savedState.windows.length > 0) {
     // 前回の状態を復元（プロジェクト・ウィンドウサイズ・位置）
