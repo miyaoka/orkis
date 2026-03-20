@@ -111,8 +111,19 @@ const selectableWorktrees = nonMainWorktrees;
 /** Ctrl キー押下中か（番号バッジの表示制御用） */
 const ctrlPressed = ref(false);
 
+/**
+ * input/textarea/contenteditable にフォーカスがある場合は
+ * keybinding が発火しないため、バッジも表示しない
+ */
+function isEditableElementFocused(): boolean {
+  const target = document.activeElement;
+  if (!(target instanceof HTMLElement)) return false;
+  const tagName = target.tagName;
+  return tagName === "INPUT" || tagName === "TEXTAREA" || target.isContentEditable;
+}
+
 useEventListener(document, "keydown", (e: KeyboardEvent) => {
-  if (e.key === "Control") ctrlPressed.value = true;
+  if (e.key === "Control" && !isEditableElementFocused()) ctrlPressed.value = true;
 });
 useEventListener(document, "keyup", (e: KeyboardEvent) => {
   if (e.key === "Control") ctrlPressed.value = false;
