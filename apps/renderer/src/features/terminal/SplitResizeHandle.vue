@@ -55,13 +55,5 @@ const { isDragging } = useSplitResize(handleRef, {
     ref="handle"
     class="z-10 flex items-center justify-center"
     :class="axis === 'horizontal' ? 'cursor-col-resize' : 'cursor-row-resize'"
-  >
-    <div
-      class="pointer-events-none transition-colors duration-150"
-      :class="[
-        axis === 'horizontal' ? 'h-full w-px' : 'h-px w-full',
-        isDragging || isHovered ? 'bg-blue-500' : 'bg-zinc-700',
-      ]"
-    />
-  </div>
+  ></div>
 </template>

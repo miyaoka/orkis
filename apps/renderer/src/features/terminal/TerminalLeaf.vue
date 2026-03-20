@@ -91,10 +91,14 @@ function handleTerminalBlur() {
 </script>
 
 <template>
-  <div class="size-full pt-2.5" :data-leaf-id="leafId">
+  <div class="size-full" :data-leaf-id="leafId">
     <div
-      class="relative size-full rounded-lg border p-1"
-      :class="isFocused ? 'border-green-300/50' : 'border-zinc-700'"
+      class="relative size-full rounded-lg p-1 outline"
+      :class="
+        isFocused
+          ? 'bg-zinc-900 outline-2 -outline-offset-4 outline-green-300/70'
+          : 'bg-zinc-900 -outline-offset-2 outline-zinc-700'
+      "
     >
       <!-- CWD（左上、ボーダー線上） -->
       <div
@@ -123,15 +127,20 @@ function handleTerminalBlur() {
         />
         <span>{{ claudeStateLabel }}</span>
       </div>
-      <XtermTerminal
-        ref="xtermRef"
-        class="size-full overflow-hidden"
-        :dir="dir"
-        :leaf-id="leafId"
-        :fit-suspended="effectiveFitSuspended"
-        @focus="handleTerminalFocus"
-        @blur="handleTerminalBlur"
-      />
+      <div
+        class="size-full overflow-hidden p-2 transition-opacity"
+        :class="isFocused ? 'opacity-100' : 'opacity-50'"
+      >
+        <XtermTerminal
+          ref="xtermRef"
+          class="size-full"
+          :dir="dir"
+          :leaf-id="leafId"
+          :fit-suspended="effectiveFitSuspended"
+          @focus="handleTerminalFocus"
+          @blur="handleTerminalBlur"
+        />
+      </div>
     </div>
   </div>
 </template>
