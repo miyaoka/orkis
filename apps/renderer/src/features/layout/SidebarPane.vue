@@ -411,17 +411,15 @@ onUnmounted(() => {
       </div>
 
       <div v-for="(wt, i) in nonMainWorktrees" :key="wt.path">
+        <!-- 擬似要素パターン: button の ::after で親全体をクリック可能にし、⋮ は z-index で上に出す -->
         <div
-          role="button"
-          tabindex="0"
           class="group/wt relative grid grid-cols-[auto_1fr_auto] gap-x-2 rounded-sm py-1.5 pl-2"
           :class="isActive(wt) ? 'bg-zinc-700/50' : 'hover:bg-zinc-800'"
-          @click="handleWorktreeSelect(wt)"
-          @keydown.enter="handleWorktreeSelect(wt)"
         >
           <span class="row-span-2 mt-0.5 icon-[lucide--git-branch] text-base text-zinc-400" />
-          <span
-            class="truncate text-sm"
+          <!-- メインアクション: ::after で親全体に広がるクリック領域 -->
+          <button
+            class="truncate text-left text-sm after:absolute after:inset-0"
             :class="
               isActive(wt)
                 ? 'font-medium text-blue-300'
@@ -429,17 +427,16 @@ onUnmounted(() => {
                   ? 'text-zinc-200'
                   : 'text-zinc-500'
             "
+            @click="handleWorktreeSelect(wt)"
           >
             {{ worktreeDisplayName(wt) }}
-          </span>
-          <!-- ⋮ メニューボタン -->
+          </button>
+          <!-- ⋮ メニューボタン: z-10 で擬似要素の上に出す -->
           <button
             aria-label="メニュー"
-            class="row-span-2 grid size-6 place-items-center self-center rounded-sm text-zinc-600 opacity-0 transition-opacity group-focus-within/wt:opacity-100 group-hover/wt:opacity-100 hover:text-zinc-300"
+            class="relative z-10 row-span-2 grid size-6 place-items-center self-center rounded-sm text-zinc-600 opacity-0 transition-opacity group-focus-within/wt:opacity-100 group-hover/wt:opacity-100 hover:text-zinc-300"
             :style="{ anchorName: `--wt-menu-${i}` }"
-            @click.stop="
-              openMenu(`--wt-menu-${i}`, { type: 'worktree', worktree: wt, todo: wt.todo })
-            "
+            @click="openMenu(`--wt-menu-${i}`, { type: 'worktree', worktree: wt, todo: wt.todo })"
           >
             <span class="icon-[lucide--ellipsis-vertical] text-sm" />
           </button>
@@ -533,22 +530,21 @@ onUnmounted(() => {
 
       <div v-for="(todo, i) in pendingTodos" :key="todo.id">
         <div
-          role="button"
-          tabindex="0"
-          class="group/td grid grid-cols-[auto_1fr_auto] gap-x-2 rounded-sm py-1.5 pl-2 hover:bg-zinc-800"
-          @click="editingTodoId === todo.id ? cancelEdit() : startEditing(todo)"
-          @keydown.enter="editingTodoId === todo.id ? cancelEdit() : startEditing(todo)"
+          class="group/td relative grid grid-cols-[auto_1fr_auto] gap-x-2 rounded-sm py-1.5 pl-2 hover:bg-zinc-800"
         >
           <span class="mt-0.5 icon-[lucide--square] text-base text-zinc-600" />
-          <span class="truncate text-sm text-zinc-400">
+          <button
+            class="truncate text-left text-sm text-zinc-400 after:absolute after:inset-0"
+            @click="editingTodoId === todo.id ? cancelEdit() : startEditing(todo)"
+          >
             {{ todoTitle(todo.body) || "(未入力)" }}
-          </span>
+          </button>
           <!-- ⋮ メニューボタン -->
           <button
             aria-label="メニュー"
-            class="grid size-6 place-items-center self-center rounded-sm text-zinc-600 opacity-0 transition-opacity group-focus-within/td:opacity-100 group-hover/td:opacity-100 hover:text-zinc-300"
+            class="relative z-10 grid size-6 place-items-center self-center rounded-sm text-zinc-600 opacity-0 transition-opacity group-focus-within/td:opacity-100 group-hover/td:opacity-100 hover:text-zinc-300"
             :style="{ anchorName: `--todo-menu-${i}` }"
-            @click.stop="openMenu(`--todo-menu-${i}`, { type: 'todo', todo })"
+            @click="openMenu(`--todo-menu-${i}`, { type: 'todo', todo })"
           >
             <span class="icon-[lucide--ellipsis-vertical] text-sm" />
           </button>
