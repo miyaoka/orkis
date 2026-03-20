@@ -1,0 +1,124 @@
+import fsp from "node:fs/promises";
+import path from "node:path";
+import { tryCatch } from "@orkis/shared";
+import type { WorktreeEntry } from "@orkis/rpc";
+import { getGitStatus, countChanges } from "./status";
+import { assertBranchName } from "./branch";
+
+export const WORKTREE_DIR = ".orkis/worktrees";
+
+export function generateWorktreeId(): string {
+  const now = new Date();
+  const timestamp = [
+    now.getFullYear(),
+    String(now.getMonth() + 1).padStart(2, "0"),
+    String(now.getDate()).padStart(2, "0"),
+    "_",
+    String(now.getHours()).padStart(2, "0"),
+    String(now.getMinutes()).padStart(2, "0"),
+    String(now.getSeconds()).padStart(2, "0"),
+  ].join("");
+  return `wt-${timestamp}`;
+}
+
+export async function addWorktree(cwd: string, branch?: string): Promise<WorktreeEntry> {
+  const id = generateWorktreeId();
+  const wtPath = path.join(cwd, WORKTREE_DIR, id);
+
+  if (branch) {
+    assertBranchName(branch);
+  }
+
+  await fsp.mkdir(path.join(cwd, WORKTREE_DIR), { recursive: true });
+
+  // branch 指定あり → 既存ブランチをチェックアウト、なし → 新規ブランチ作成
+  const args = branch
+    ? ["git", "worktree", "add", wtPath, branch]
+    : ["git", "worktree", "add", "-b", id, wtPath];
+
+  const proc = Bun.spawn(args, { cwd, stderr: "pipe" });
+  await proc.exited;
+  if (proc.exitCode !== 0) {
+    const stderr = await new Response(proc.stderr).text();
+    throw new Error(`git worktree add failed: ${stderr.trim() || `exit code ${proc.exitCode}`}`);
+  }
+
+  // 作成した worktree の情報を取得
+  const headResult = await tryCatch(
+    new Response(Bun.spawn(["git", "rev-parse", "--short", "HEAD"], { cwd: wtPath }).stdout).text(),
+  );
+  const head = headResult.ok ? headResult.value.trim() : "";
+
+  return { path: wtPath, head, branch: branch ?? id, isMain: false };
+}
+
+/** wtPath が WORKTREE_DIR 配下であることを検証する */
+export function assertWorktreePath(cwd: string, wtPath: string): void {
+  const allowed = path.resolve(cwd, WORKTREE_DIR);
+  const resolved = path.resolve(wtPath);
+  if (!resolved.startsWith(allowed + path.sep) && resolved !== allowed) {
+    throw new Error("Access denied: path is outside worktree directory");
+  }
+}
+
+export async function removeWorktree(cwd: string, wtPath: string, force?: boolean): Promise<void> {
+  assertWorktreePath(cwd, wtPath);
+
+  const args = ["git", "worktree", "remove"];
+  if (force) args.push("--force");
+  args.push(wtPath);
+
+  const proc = Bun.spawn(args, { cwd, stderr: "pipe" });
+  await proc.exited;
+  if (proc.exitCode !== 0) {
+    const stderr = await new Response(proc.stderr).text();
+    throw new Error(`git worktree remove failed: ${stderr.trim() || `exit code ${proc.exitCode}`}`);
+  }
+}
+
+export async function getWorktreeList(cwd: string): Promise<WorktreeEntry[]> {
+  const result = await tryCatch(
+    new Response(Bun.spawn(["git", "worktree", "list", "--porcelain"], { cwd }).stdout).text(),
+  );
+  if (!result.ok) return [];
+
+  const entries: WorktreeEntry[] = [];
+  const blocks = result.value.trim().split("\n\n");
+  let isFirst = true;
+
+  for (const block of blocks) {
+    const lines = block.split("\n");
+    let wtPath = "";
+    let head = "";
+    let branch: string | undefined;
+
+    for (const line of lines) {
+      if (line.startsWith("worktree ")) {
+        wtPath = line.slice("worktree ".length);
+      } else if (line.startsWith("HEAD ")) {
+        head = line.slice("HEAD ".length, "HEAD ".length + 7);
+      } else if (line.startsWith("branch ")) {
+        // refs/heads/main → main
+        branch = line.slice("branch ".length).replace("refs/heads/", "");
+      }
+    }
+
+    if (wtPath) {
+      entries.push({ path: wtPath, head, branch, isMain: isFirst });
+    }
+    isFirst = false;
+  }
+
+  return entries;
+}
+
+/** 各 worktree の git status を並列取得して changeCounts を付与する */
+export async function attachChangeCounts(entries: WorktreeEntry[]): Promise<WorktreeEntry[]> {
+  await Promise.all(
+    entries.map(async (entry) => {
+      const statuses = await getGitStatus(entry.path);
+      entry.changeCounts = countChanges(statuses);
+    }),
+  );
+  return entries;
+}

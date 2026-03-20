@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { parseOwnerRepo } from "./git";
+import { parseOwnerRepo } from "./utils";
 
 describe("parseOwnerRepo", () => {
   test("HTTPS URL から owner/repo を抽出する", () => {
