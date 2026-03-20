@@ -201,9 +201,10 @@ function resizeBranch(root: SplitNode, branchId: string, ratio: number): SplitNo
 type Axis = "horizontal" | "vertical";
 
 /**
- * ノードの最小サイズ（px）を再帰算出する。
+ * ノードの最小コンテンツサイズ（px）を再帰算出する。
+ * CSS Grid の gap はコンテンツ幅に含まれないため、ハンドル幅は加算しない。
  * - leaf: 該当 axis の最小サイズ定数
- * - branch（同方向）: first + handle + second
+ * - branch（同方向）: first + second
  * - branch（直交方向）: max(first, second)
  */
 function getMinSize(node: SplitNode, axis: Axis): number {
@@ -215,7 +216,7 @@ function getMinSize(node: SplitNode, axis: Axis): number {
   const secondMin = getMinSize(node.second, axis);
 
   if (node.direction === axis) {
-    return firstMin + SPLIT_HANDLE_SIZE + secondMin;
+    return firstMin + secondMin;
   }
 
   return Math.max(firstMin, secondMin);

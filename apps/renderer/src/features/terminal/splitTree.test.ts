@@ -379,7 +379,7 @@ describe("getMinSize", () => {
     expect(getMinSize(leaf, "vertical")).toBe(LEAF_MIN_HEIGHT);
   });
 
-  test("同方向 branch: first + handle + second", () => {
+  test("同方向 branch: first + second（gap はコンテンツ幅に含まない）", () => {
     const leaf1 = createLeaf();
     const leaf2 = createLeaf();
     const branch: SplitBranch = {
@@ -391,9 +391,7 @@ describe("getMinSize", () => {
       second: leaf2,
     };
 
-    expect(getMinSize(branch, "horizontal")).toBe(
-      LEAF_MIN_WIDTH + SPLIT_HANDLE_SIZE + LEAF_MIN_WIDTH,
-    );
+    expect(getMinSize(branch, "horizontal")).toBe(LEAF_MIN_WIDTH + LEAF_MIN_WIDTH);
   });
 
   test("直交方向 branch: max(first, second)", () => {
@@ -432,10 +430,8 @@ describe("getMinSize", () => {
       second: leaf3,
     };
 
-    // inner(120 + 8 + 120) + 8 + leaf3(120) = 376
-    expect(getMinSize(root, "horizontal")).toBe(
-      LEAF_MIN_WIDTH + SPLIT_HANDLE_SIZE + LEAF_MIN_WIDTH + SPLIT_HANDLE_SIZE + LEAF_MIN_WIDTH,
-    );
+    // inner(120 + 120) + leaf3(120) = 360
+    expect(getMinSize(root, "horizontal")).toBe(LEAF_MIN_WIDTH + LEAF_MIN_WIDTH + LEAF_MIN_WIDTH);
   });
 });
 
