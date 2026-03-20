@@ -75,6 +75,10 @@ const isBinary = ref(false);
 const isOriginalBinary = ref(false);
 const loading = ref(false);
 const error = ref<string>();
+/** 選択パスがディレクトリの場合 true */
+const isDirectory = ref(false);
+/** 選択パスが存在しない場合 true */
+const isNotFound = ref(false);
 const activeMode = ref<PreviewMode>("current");
 
 /** Preview チェックボックス（SVG / Markdown / 画像で使用） */
@@ -132,6 +136,8 @@ let fetchVersion = 0;
 async function fetchContent(path: string, gitChange: GitChangeKind | undefined) {
   loading.value = true;
   error.value = undefined;
+  isDirectory.value = false;
+  isNotFound.value = false;
 
   const version = ++fetchVersion;
   fetchVersionRef.value = version;
@@ -155,6 +161,9 @@ async function fetchContent(path: string, gitChange: GitChangeKind | undefined) 
 
     // 別の読み込みが開始された場合は結果を破棄
     if (version !== fetchVersion) return;
+
+    isDirectory.value = currentResult?.isDirectory ?? false;
+    isNotFound.value = currentResult?.notFound ?? false;
 
     if (currentResult) {
       currentContent.value = currentResult.content;
@@ -191,6 +200,8 @@ watch(
       originalContent.value = undefined;
       isBinary.value = false;
       isOriginalBinary.value = false;
+      isDirectory.value = false;
+      isNotFound.value = false;
       error.value = undefined;
       return;
     }
@@ -345,6 +356,10 @@ const headerIconUrl = computed(() => {
       <!-- コンテンツ -->
       <div class="flex-1 overflow-auto">
         <div v-if="loading" class="p-4 text-sm text-zinc-500">Loading...</div>
+
+        <div v-else-if="isDirectory" class="p-4 text-sm text-zinc-500">Directory</div>
+
+        <div v-else-if="isNotFound" class="p-4 text-sm text-zinc-500">File not found</div>
 
         <div v-else-if="error" class="p-4 text-sm text-red-400">{{ error }}</div>
 

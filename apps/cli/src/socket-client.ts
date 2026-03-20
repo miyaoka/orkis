@@ -12,8 +12,7 @@ interface HookMessage {
 
 interface OpenMessage {
   type: "open";
-  dir: string;
-  file?: string;
+  targetPath: string;
 }
 
 type OrkisMessage = HookMessage | OpenMessage;

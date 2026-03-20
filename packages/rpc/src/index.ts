@@ -11,6 +11,10 @@ export interface FileReadResult {
   content: string;
   /** バイナリ等で読み取れなかった場合 true */
   isBinary: boolean;
+  /** パスが存在しない場合 true */
+  notFound?: boolean;
+  /** パスがディレクトリの場合 true */
+  isDirectory?: boolean;
 }
 
 /** LSP 診断情報（textDocument/publishDiagnostics の簡略版） */
@@ -87,6 +91,13 @@ export const todoSchema = z.object({
 export type Todo = z.infer<typeof todoSchema>;
 
 /** ファイルごとの診断結果 */
+/** CLI からのパス指定を解決した選択対象 */
+export interface OpenTargetSelection {
+  kind: "file" | "directory";
+  /** activeDir からの相対パス */
+  relPath: string;
+}
+
 export interface FileDiagnostics {
   /** プロジェクトルートからの相対パス */
   relPath: string;
@@ -203,10 +214,12 @@ export type OrkisRPC = {
       worktreeChange: void;
       orkisOpen: {
         dir: string;
-        file?: string;
+        selection?: OpenTargetSelection;
         fileServerBaseUrl: string;
         channel: string;
         repoName: string;
+        /** 既存ウィンドウ再利用時に切り替える worktree ディレクトリ。renderer 側で switchDir を呼ぶ */
+        switchToDir?: string;
       };
       orkisHook: { event: string; payload: Record<string, unknown> };
       /** LSP 診断結果の更新（ファイル単位） */

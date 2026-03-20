@@ -43,8 +43,8 @@
 
 - `~/.config/orkis/projects.json` に登録済みプロジェクトディレクトリを永続化する
 - `orkis <dir>` でディレクトリを開くと自動的にリストに登録される
-- CLI はパスをそのまま送信し、デスクトップ側で `git rev-parse --show-toplevel` によりリポジトリルートに解決する
-- git リポジトリでないディレクトリが指定された場合の扱いは未定
+- CLI は絶対パス（`targetPath`）をそのまま送信し、desktop 側で `resolveOpenTarget` によりプロジェクト・worktree・選択対象を一括解決する
+- git リポジトリの場合は main worktree のルート、非 git ディレクトリの場合は指定パスがプロジェクトディレクトリになる
 
 ### ストレージ方式の検討
 

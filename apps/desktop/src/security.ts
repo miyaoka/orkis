@@ -1,6 +1,8 @@
+import fs from "node:fs";
 import fsp from "node:fs/promises";
 import path from "node:path";
 import { tryCatch } from "@orkis/shared";
+import type { FileReadResult } from "@orkis/rpc";
 
 const ALLOWED_PROTOCOLS = new Set(["https:", "http:"]);
 
@@ -11,10 +13,17 @@ export function isAllowedProtocol(raw: string): boolean {
 }
 
 /** ファイル内容を読み取る（バイナリ判定・サイズ制限付き） */
-export async function readFileContent(
-  absolutePath: string,
-): Promise<{ content: string; isBinary: boolean }> {
+export async function readFileContent(absolutePath: string): Promise<FileReadResult> {
   const file = Bun.file(absolutePath);
+  const exists = await file.exists();
+  if (!exists) {
+    // 非存在: ディレクトリかパスが存在しないか判定
+    const stat = tryCatch(() => fs.statSync(absolutePath));
+    if (stat.ok && stat.value.isDirectory()) {
+      return { content: "", isBinary: false, isDirectory: true };
+    }
+    return { content: "", isBinary: false, notFound: true };
+  }
   const MAX_FILE_SIZE = 1024 * 1024; // 1MB
   if (file.size > MAX_FILE_SIZE) {
     return { content: "", isBinary: true };

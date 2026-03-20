@@ -1,3 +1,4 @@
+import type { OpenTargetSelection } from "@orkis/rpc";
 import { acceptHMRUpdate, defineStore } from "pinia";
 import { computed, ref } from "vue";
 import { normalizePath, resolveFileGitChange } from "./filer-utils";
@@ -9,14 +10,14 @@ export const useWorkspaceStore = defineStore("workspace", () => {
   const channel = ref<string>();
   const repoName = ref<string>();
 
-  /** ファイラーで選択中のファイルパス（相対パス） */
+  /** ファイラーで選択中のパス（相対パス） */
   const selectedPath = ref<string>();
 
   /** リンクから指定された行番号（1-based）。スクロール・ハイライトに使用 */
   const selectedLineNumber = ref<number>();
 
-  /** ツリー初期化後に選択するファイル（setOpen で保持、consumeInitialFile で消費） */
-  const initialFile = ref<string>();
+  /** ツリー初期化後に適用する選択対象（setOpen で保持、consumeInitialSelection で消費） */
+  const initialSelection = ref<OpenTargetSelection>();
 
   /** 同一パスでも reveal を発火させるためのバージョンカウンタ */
   const revealVersion = ref(0);
@@ -32,11 +33,12 @@ export const useWorkspaceStore = defineStore("workspace", () => {
   /** RPC orkisOpen イベントで呼ばれる */
   function setOpen(
     newDir: string,
-    newFile?: string,
+    selection?: OpenTargetSelection,
     newFileServerBaseUrl?: string,
     newChannel?: string,
     newRepoName?: string,
   ) {
+    const dirChanged = dir.value !== newDir;
     dir.value = newDir;
     if (newFileServerBaseUrl) {
       fileServerBaseUrl.value = newFileServerBaseUrl;
@@ -47,19 +49,25 @@ export const useWorkspaceStore = defineStore("workspace", () => {
     if (newRepoName) {
       repoName.value = newRepoName;
     }
-    if (newFile) {
-      // ツリー未初期化時は loadRoot 後に consumeInitialFile で反映
-      initialFile.value = newFile;
-      selectPath(newFile);
+    if (selection) {
+      if (dirChanged) {
+        // dir が変わる場合は loadRoot 後に consumeInitialSelection で適用
+        initialSelection.value = selection;
+      }
+      selectPath(selection.relPath);
     }
   }
 
-  /** ファイラーのツリー初期化後に呼ぶ。initialFile があれば selectedPath にセットする */
-  function consumeInitialFile() {
-    if (initialFile.value) {
-      selectPath(initialFile.value);
-      initialFile.value = undefined;
+  /** ファイラーのツリー初期化後に呼ぶ。initialSelection があれば消費して返す */
+  function consumeInitialSelection(): OpenTargetSelection | undefined {
+    const sel = initialSelection.value;
+    if (sel) {
+      initialSelection.value = undefined;
+      if (sel.kind === "file") {
+        selectPath(sel.relPath);
+      }
     }
+    return sel;
   }
 
   function selectPath(path: string, lineNumber?: number) {
@@ -85,7 +93,7 @@ export const useWorkspaceStore = defineStore("workspace", () => {
     setOpen,
     selectPath,
     clearSelectedPath,
-    consumeInitialFile,
+    consumeInitialSelection,
   };
 });
 

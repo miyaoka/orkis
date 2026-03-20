@@ -6,11 +6,12 @@ import { homedir, tmpdir } from "node:os";
 import path from "node:path";
 import net from "node:net";
 import { tryCatch } from "@orkis/shared";
-import type { LspDiagnostic, OrkisRPC } from "@orkis/rpc";
+import type { LspDiagnostic, OrkisRPC, OpenTargetSelection } from "@orkis/rpc";
 import { createLspClient, resolveTsgoPath, resolveVueLspPaths } from "./lsp";
 import type { LspClient } from "./lsp";
 import {
   parseOwnerRepo,
+  resolveOpenTarget,
   filterIgnored,
   getGitStatus,
   getWorktreeList,
@@ -225,8 +226,8 @@ const windowLspClients = new Map<OrkisWindow, LspClient[]>();
 /** ウィンドウ → UUID */
 const windowIds = new Map<OrkisWindow, string>();
 const windowDirs = new Map<OrkisWindow, string>();
-/** CLI からの open 時に window を再利用するための repo root → window マッピング */
-const windowRepoRoots = new Map<OrkisWindow, string>();
+/** プロジェクトディレクトリ → window マッピング（同一プロジェクトのウィンドウ再利用に使用） */
+const windowProjectDirs = new Map<OrkisWindow, string>();
 /** switchDir の世代管理。stale な非同期結果を捨てるために使う */
 const windowSwitchGen = new Map<OrkisWindow, number>();
 
@@ -239,7 +240,7 @@ let fallbackFrame: WindowFrame | null = null;
 /** 新規ウィンドウに引き継ぐフレームを取得する。live ウィンドウがあればその最新値を優先 */
 function getInheritedFrame(): WindowFrame {
   // live ウィンドウの最後のフレームを取得（resize/move 後の最新値）
-  const lastWin = [...windowRepoRoots.keys()].at(-1);
+  const lastWin = [...windowProjectDirs.keys()].at(-1);
   if (lastWin) return lastWin.getFrame();
   // live がなければ最後に閉じたウィンドウのフレーム
   if (fallbackFrame) return fallbackFrame;
@@ -456,11 +457,11 @@ function scheduleWorktreeChangeNotify(win: OrkisWindow) {
  * アクティブ worktree は既存の startWatching が担当するため除外する。
  * 世代管理により、並行呼び出し時は最新の呼び出しのみが反映される。
  */
-async function syncWorktreeWatchers(win: OrkisWindow, repoRoot: string, activeDir: string) {
+async function syncWorktreeWatchers(win: OrkisWindow, projectDir: string, activeDir: string) {
   const gen = (wtSyncGen.get(win) ?? 0) + 1;
   wtSyncGen.set(win, gen);
 
-  const entries = await getWorktreeList(repoRoot);
+  const entries = await getWorktreeList(projectDir);
 
   // 世代が変わっていたら後続の呼び出しに任せる
   if (wtSyncGen.get(win) !== gen) return;
@@ -541,7 +542,7 @@ function cleanupWindow(win: OrkisWindow) {
   if (windowId) fileServerDirs.delete(windowId);
   windowIds.delete(win);
   windowDirs.delete(win);
-  windowRepoRoots.delete(win);
+  windowProjectDirs.delete(win);
   windowSwitchGen.delete(win);
   // このウィンドウが所有する PTY をすべて kill
   for (const [id, entry] of ptys) {
@@ -563,7 +564,7 @@ function cleanupWindow(win: OrkisWindow) {
 // --- ウィンドウ作成 ---
 
 interface CreateWindowOptions {
-  initialFile?: string;
+  initialSelection?: OpenTargetSelection;
   savedFrame?: WindowFrame;
   /** 起動時に切り替える worktree ディレクトリ（dir と異なる場合） */
   initialActiveDir?: string;
@@ -571,16 +572,16 @@ interface CreateWindowOptions {
 
 function createWindowWithRPC(dir: string, options?: CreateWindowOptions): OrkisWindow {
   let win: OrkisWindow;
-  const { initialFile, savedFrame, initialActiveDir } = options ?? {};
+  const { initialSelection, savedFrame, initialActiveDir } = options ?? {};
 
   /** worktree/branch 管理用（固定） */
-  const repoRootDir = dir;
+  const projectDir = dir;
   /** ファイル操作用（switchDir で切り替え可能） */
   let currentDir = initialActiveDir ?? dir;
   const initialFrame = savedFrame ?? getDefaultFrame();
 
   async function updateWindowTitle(): Promise<void> {
-    const repoName = await getRepoName(repoRootDir);
+    const repoName = await getRepoName(projectDir);
     win.setTitle(`orkis - ${repoName}`);
   }
 
@@ -650,9 +651,9 @@ function createWindowWithRPC(dir: string, options?: CreateWindowOptions): OrkisW
         },
         gitStatus: () => getGitStatus(currentDir),
         gitWorktreeList: async () => {
-          const entries = await attachChangeCounts(await getWorktreeList(repoRootDir));
+          const entries = await attachChangeCounts(await getWorktreeList(projectDir));
           // 各 worktree に紐づく Todo を付与
-          const todos = loadTodos(repoRootDir);
+          const todos = loadTodos(projectDir);
           const todoByDir = new Map(
             todos.filter((t) => t.worktreeDir).map((t) => [t.worktreeDir, t]),
           );
@@ -662,18 +663,18 @@ function createWindowWithRPC(dir: string, options?: CreateWindowOptions): OrkisW
           }
           return entries;
         },
-        gitBranchList: () => getBranchList(repoRootDir),
+        gitBranchList: () => getBranchList(projectDir),
         gitWorktreeAdd: async ({ branch }) => {
-          const entry = await addWorktree(repoRootDir, branch);
-          void syncWorktreeWatchers(win, repoRootDir, currentDir);
+          const entry = await addWorktree(projectDir, branch);
+          void syncWorktreeWatchers(win, projectDir, currentDir);
           return entry;
         },
         gitWorktreeRemove: async ({ path: wtPath, force }) => {
           const wtReal = await fsp.realpath(wtPath);
-          await removeWorktree(repoRootDir, wtPath, force);
+          await removeWorktree(projectDir, wtPath, force);
           // 紐づく Todo も削除
-          const todo = findTodoByWorktreeDir(repoRootDir, wtPath);
-          if (todo) removeTodo(repoRootDir, todo.id);
+          const todo = findTodoByWorktreeDir(projectDir, wtPath);
+          if (todo) removeTodo(projectDir, todo.id);
           // 削除成功後に worktree の PTY を kill する
           for (const [id, entry] of ptys) {
             if (entry.win === win && entry.worktreeDir === wtReal) {
@@ -681,25 +682,25 @@ function createWindowWithRPC(dir: string, options?: CreateWindowOptions): OrkisW
               ptys.delete(id);
             }
           }
-          void syncWorktreeWatchers(win, repoRootDir, currentDir);
+          void syncWorktreeWatchers(win, projectDir, currentDir);
         },
-        gitBranchDelete: ({ branch }) => deleteBranch(repoRootDir, branch),
-        todoList: () => loadTodos(repoRootDir),
-        todoAdd: ({ body, icon, worktreeDir }) => addTodo(repoRootDir, body, icon, worktreeDir),
-        todoUpdate: ({ id, body, icon }) => updateTodo(repoRootDir, id, body, icon),
-        todoRemove: ({ id }) => removeTodo(repoRootDir, id),
+        gitBranchDelete: ({ branch }) => deleteBranch(projectDir, branch),
+        todoList: () => loadTodos(projectDir),
+        todoAdd: ({ body, icon, worktreeDir }) => addTodo(projectDir, body, icon, worktreeDir),
+        todoUpdate: ({ id, body, icon }) => updateTodo(projectDir, id, body, icon),
+        todoRemove: ({ id }) => removeTodo(projectDir, id),
         todoStart: async ({ id }) => {
-          const entry = await addWorktree(repoRootDir);
-          linkTodoToWorktree(repoRootDir, id, entry.path);
-          const todo = loadTodos(repoRootDir).find((t) => t.id === id);
+          const entry = await addWorktree(projectDir);
+          linkTodoToWorktree(projectDir, id, entry.path);
+          const todo = loadTodos(projectDir).find((t) => t.id === id);
           if (!todo) throw new Error(`Todo not found after linking: ${id}`);
           entry.todo = todo;
-          void syncWorktreeWatchers(win, repoRootDir, currentDir);
+          void syncWorktreeWatchers(win, projectDir, currentDir);
           return { todo, worktree: entry };
         },
         switchDir: async ({ dir: targetDir }) => {
           // バリデーション: worktree list に含まれるパスのみ許可
-          const worktrees = await getWorktreeList(repoRootDir);
+          const worktrees = await getWorktreeList(projectDir);
           const targetReal = await fsp.realpath(targetDir);
           const validEntry = await (async () => {
             for (const wt of worktrees) {
@@ -740,7 +741,7 @@ function createWindowWithRPC(dir: string, options?: CreateWindowOptions): OrkisW
           scheduleGitStatusUpdate(win, currentDir);
 
           // 非アクティブ worktree の監視を再同期（アクティブが変わったため）
-          void syncWorktreeWatchers(win, repoRootDir, currentDir);
+          void syncWorktreeWatchers(win, projectDir, currentDir);
 
           return {
             dir: currentDir,
@@ -775,10 +776,10 @@ function createWindowWithRPC(dir: string, options?: CreateWindowOptions): OrkisW
         rendererReady: async () => {
           console.log("[orkis] rendererReady received, sending orkisOpen:", currentDir);
           const windowId = windowIds.get(win) ?? "";
-          const repoName = await getRepoName(repoRootDir);
+          const repoName = await getRepoName(projectDir);
           win.webview.rpc?.send.orkisOpen({
             dir: currentDir,
-            file: initialFile,
+            selection: initialSelection,
             fileServerBaseUrl: `http://localhost:${fileServer.port}/${windowId}`,
             channel,
             repoName,
@@ -786,15 +787,15 @@ function createWindowWithRPC(dir: string, options?: CreateWindowOptions): OrkisW
 
           // 起動時に消失した worktree の Todo をクリーンアップ
           void (async () => {
-            const wtList = await getWorktreeList(repoRootDir);
+            const wtList = await getWorktreeList(projectDir);
             cleanupStaleTodos(
-              repoRootDir,
+              projectDir,
               wtList.map((wt) => wt.path),
             );
           })();
 
           // 非アクティブ worktree の監視を開始
-          void syncWorktreeWatchers(win, repoRootDir, currentDir);
+          void syncWorktreeWatchers(win, projectDir, currentDir);
 
           // webview 準備完了後に LSP を起動
           void (async () => {
@@ -814,11 +815,11 @@ function createWindowWithRPC(dir: string, options?: CreateWindowOptions): OrkisW
             };
 
             // tsgo（TS/JS 用）
-            const tsgoPath = await resolveTsgoPath(repoRootDir);
+            const tsgoPath = await resolveTsgoPath(projectDir);
             if (tsgoPath) {
               clients.push(
                 createLspClient({
-                  rootDir: repoRootDir,
+                  rootDir: projectDir,
                   server: { kind: "tsgo", binaryPath: tsgoPath },
                   onDiagnostics: (relPath, diags) => diagCallback("tsgo", relPath, diags),
                   onError: (msg) => console.error(`[lsp:tsgo] ${msg}`),
@@ -827,9 +828,9 @@ function createWindowWithRPC(dir: string, options?: CreateWindowOptions): OrkisW
             }
 
             // Vue Language Server（Vue SFC 用、apps/renderer をルートにする）
-            const rendererDir = path.join(repoRootDir, "apps", "renderer");
+            const rendererDir = path.join(projectDir, "apps", "renderer");
             console.log(`[lsp:vue] rendererDir: ${rendererDir}`);
-            const vuePaths = resolveVueLspPaths(repoRootDir, rendererDir);
+            const vuePaths = resolveVueLspPaths(projectDir, rendererDir);
             console.log(`[lsp:vue] resolved paths:`, vuePaths ?? "not found");
             if (vuePaths) {
               console.log(`[lsp:vue] server: ${vuePaths.serverPath}, tsdk: ${vuePaths.tsdkPath}`);
@@ -876,7 +877,7 @@ function createWindowWithRPC(dir: string, options?: CreateWindowOptions): OrkisW
   win.on("close", () => {
     // 閉じる直前の状態を退避（before-quit で live が空なら復元に使う）
     const frame = win.getFrame();
-    lastClosedWindowState = { dir: repoRootDir, activeDir: currentDir, frame };
+    lastClosedWindowState = { dir: projectDir, activeDir: currentDir, frame };
     fallbackFrame = frame;
     cleanupWindow(win);
   });
@@ -894,27 +895,27 @@ interface HookMessage {
 
 interface OpenMessage {
   type: "open";
-  dir: string;
-  file?: string;
+  /** CLI から受け取った絶対パス（パス解決は desktop 側で行う） */
+  targetPath: string;
 }
 
 type OrkisMessage = HookMessage | OpenMessage;
 
 function findWindowByDir(dir: string): OrkisWindow | undefined {
-  for (const [win, repoRoot] of windowRepoRoots) {
-    if (repoRoot === dir) return win;
+  for (const [win, projDir] of windowProjectDirs) {
+    if (projDir === dir) return win;
   }
   return undefined;
 }
 
 interface LaunchRequestResult {
-  requests: { dir: string; file?: string }[];
+  requests: { targetPath: string }[];
   errors: string[];
 }
 
 /** launch request ファイルを同期的に読み取り、処理済みにする */
 function readLaunchRequests(): LaunchRequestResult {
-  const requests: { dir: string; file?: string }[] = [];
+  const requests: { targetPath: string }[] = [];
   const errors: string[] = [];
   if (!fs.existsSync(LAUNCH_DIR)) return { requests, errors };
   const entries = tryCatch(() => fs.readdirSync(LAUNCH_DIR));
@@ -947,12 +948,12 @@ function readLaunchRequests(): LaunchRequestResult {
     if (
       typeof obj !== "object" ||
       obj === null ||
-      typeof (obj as Record<string, unknown>).dir !== "string"
+      typeof (obj as Record<string, unknown>).targetPath !== "string"
     ) {
       errors.push(`${name}: 不正なペイロード`);
       continue;
     }
-    const req = obj as { dir: string; file?: string };
+    const req = obj as { targetPath: string };
     // 処理済みにする
     tryCatch(() => fs.renameSync(filePath, `${filePath}.claimed`));
     requests.push(req);
@@ -960,45 +961,48 @@ function readLaunchRequests(): LaunchRequestResult {
   return { requests, errors };
 }
 
-interface OpenWindowOptions {
-  file?: string;
+interface OpenWindowRequest {
+  projectDir: string;
+  activeDir: string;
+  selection?: OpenTargetSelection;
   savedFrame?: WindowFrame;
-  /** 起動時に切り替える worktree ディレクトリ */
-  initialActiveDir?: string;
 }
 
-/** 新しいウィンドウを作成して登録する（同期処理） */
-function openWindow(dir: string, options?: OpenWindowOptions): void {
-  const { file, savedFrame, initialActiveDir } = options ?? {};
-  // file を dir からの相対パスに変換（レンダラーは相対パスで管理するため）
-  const relativeFile = file ? path.relative(dir, file) : undefined;
-  console.log(`[orkis] open: dir=${dir}, file=${relativeFile ?? "(none)"}`);
-  const existing = findWindowByDir(dir);
+/** ウィンドウを開くまたは既存ウィンドウを再利用する */
+function openWindow(req: OpenWindowRequest): void {
+  const { projectDir, activeDir, selection, savedFrame } = req;
+  console.log(
+    `[orkis] open: project=${projectDir}, active=${activeDir}, selection=${selection ? `${selection.kind}:${selection.relPath}` : "(none)"}`,
+  );
+  const existing = findWindowByDir(projectDir);
   if (existing) {
     const existingId = windowIds.get(existing) ?? "";
-    void getRepoName(dir).then((repoName) => {
+    const currentDir = windowDirs.get(existing) ?? projectDir;
+    // 表示中の worktree と異なる場合は switchToDir で切り替えを指示
+    const switchToDir = activeDir !== currentDir ? activeDir : undefined;
+    void getRepoName(projectDir).then((repoName) => {
       existing.webview.rpc?.send.orkisOpen({
-        dir,
-        file: relativeFile,
+        dir: currentDir,
+        selection,
         fileServerBaseUrl: `http://localhost:${fileServer.port}/${existingId}`,
         channel,
         repoName,
+        switchToDir,
       });
     });
     return;
   }
-  const activeDir = initialActiveDir ?? dir;
   const frame = savedFrame ?? getInheritedFrame();
-  const newWin = createWindowWithRPC(dir, {
-    initialFile: relativeFile,
+  const newWin = createWindowWithRPC(projectDir, {
+    initialSelection: selection,
     savedFrame: frame,
-    initialActiveDir,
+    initialActiveDir: activeDir,
   });
   const windowId = crypto.randomUUID();
   windowIds.set(newWin, windowId);
   fileServerDirs.set(windowId, activeDir);
   windowDirs.set(newWin, activeDir);
-  windowRepoRoots.set(newWin, dir);
+  windowProjectDirs.set(newWin, projectDir);
   windowSwitchGen.set(newWin, 0);
   startWatching(newWin, activeDir);
 }
@@ -1026,8 +1030,7 @@ function handleSocketMessage(message: OrkisMessage) {
       break;
     }
     case "open": {
-      // dir は CLI 側で resolveRepoRoot 済み
-      openWindow(message.dir, { file: message.file });
+      openWindow(resolveOpenTarget(message.targetPath));
       break;
     }
   }
@@ -1155,31 +1158,31 @@ if (lastSavedWindow) {
 // （role メニューは active app + key window + responder chain に依存するため）
 const initialDir = process.env.ORKIS_PROJECT_ROOT;
 if (initialDir) {
-  // pnpm dev: 環境変数で正しい dir が渡される
-  openWindow(initialDir);
+  // pnpm dev: worktree 内で実行しても main worktree のルートに解決する
+  openWindow(resolveOpenTarget(initialDir));
 } else {
   // CLI cold start: launch request ファイルから dir を読む
   // Dock/Finder: request がなければ前回の状態を復元
   const { requests, errors } = readLaunchRequests();
   if (requests.length > 0) {
     for (const req of requests) {
-      openWindow(req.dir, { file: req.file });
+      openWindow(resolveOpenTarget(req.targetPath));
     }
   } else if (savedState.windows.length > 0) {
     // 前回の状態を復元（プロジェクト・ウィンドウサイズ・位置）
     let restored = false;
     for (const ws of savedState.windows) {
       if (!fs.existsSync(ws.dir)) continue;
-      // activeDir が存在しなければ dir（repo root）にフォールバック
+      // activeDir が存在しなければ dir（project root）にフォールバック
       const activeDir = fs.existsSync(ws.activeDir) ? ws.activeDir : ws.dir;
-      openWindow(ws.dir, { savedFrame: ws.frame, initialActiveDir: activeDir });
+      openWindow({ projectDir: ws.dir, activeDir, savedFrame: ws.frame });
       restored = true;
     }
     if (!restored) {
-      openWindow(homedir());
+      openWindow({ projectDir: homedir(), activeDir: homedir() });
     }
   } else {
-    openWindow(homedir());
+    openWindow({ projectDir: homedir(), activeDir: homedir() });
   }
   if (errors.length > 0) {
     void Utils.showMessageBox({
@@ -1198,10 +1201,10 @@ if (initialDir) {
 Electrobun.events.on("before-quit", () => {
   // live ウィンドウから snapshot を構築
   const snapshot: WindowState[] = [];
-  for (const [win, repoRoot] of windowRepoRoots) {
-    const activeDir = windowDirs.get(win) ?? repoRoot;
+  for (const [win, projDir] of windowProjectDirs) {
+    const activeDir = windowDirs.get(win) ?? projDir;
     const frame = win.getFrame();
-    snapshot.push({ dir: repoRoot, activeDir, frame });
+    snapshot.push({ dir: projDir, activeDir, frame });
   }
   // live が空（最後の1枚を個別 close した直後）なら退避した状態を使う
   if (snapshot.length === 0 && lastClosedWindowState) {
