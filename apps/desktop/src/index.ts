@@ -978,19 +978,20 @@ function openWindow(dir: string, options?: OpenWindowOptions): void {
   const existing = findWindowByDir(dir);
   if (existing) {
     const existingId = windowIds.get(existing) ?? "";
-    // file が指定されている場合はそのファイルの worktree に切り替える
-    // file がない場合は現在の選択状態を維持する
-    const targetDir = file
-      ? resolveWorktreeRoot(path.dirname(file))
-      : (windowDirs.get(existing) ?? dir);
+    const currentDir = windowDirs.get(existing) ?? dir;
+    // file が指定されている場合はそのファイルの worktree を解決
+    const targetDir = file ? resolveWorktreeRoot(path.dirname(file)) : currentDir;
     const relativeFile = file ? path.relative(targetDir, file) : undefined;
+    // 表示中の worktree と異なる場合は switchToDir で切り替えを指示
+    const switchToDir = targetDir !== currentDir ? targetDir : undefined;
     void getRepoName(dir).then((repoName) => {
       existing.webview.rpc?.send.orkisOpen({
-        dir: targetDir,
+        dir: switchToDir ? currentDir : targetDir,
         file: relativeFile,
         fileServerBaseUrl: `http://localhost:${fileServer.port}/${existingId}`,
         channel,
         repoName,
+        switchToDir,
       });
     });
     return;

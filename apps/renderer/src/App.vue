@@ -8,8 +8,10 @@
 </doc>
 
 <script setup lang="ts">
+import { tryCatch } from "@orkis/shared";
 import { onMounted, onUnmounted } from "vue";
 import { useKeyBindings } from "./features/command/useKeyBindings";
+import { useDiagnosticsStore } from "./features/diagnostics/useDiagnosticsStore";
 import { useWorkspaceStore } from "./features/filer/useWorkspaceStore";
 import MainLayout from "./features/layout/MainLayout.vue";
 import { useRpc } from "./features/rpc/useRpc";
@@ -17,14 +19,32 @@ import { useRpc } from "./features/rpc/useRpc";
 useKeyBindings();
 
 const workspaceStore = useWorkspaceStore();
-const { send, onOrkisOpen } = useRpc();
+const diagnosticsStore = useDiagnosticsStore();
+const { request, send, onOrkisOpen } = useRpc();
 
 let cleanup: (() => void) | undefined;
 
 onMounted(() => {
-  cleanup = onOrkisOpen(({ dir, file, fileServerBaseUrl, channel, repoName }) => {
-    workspaceStore.setOpen(dir, file, fileServerBaseUrl, channel, repoName);
-  });
+  cleanup = onOrkisOpen(
+    async ({ dir, file, fileServerBaseUrl, channel, repoName, switchToDir }) => {
+      if (switchToDir) {
+        // 既存ウィンドウで別 worktree への切り替えが必要な場合
+        const result = await tryCatch(request.switchDir({ dir: switchToDir }));
+        if (result.ok) {
+          diagnosticsStore.clear();
+          workspaceStore.setOpen(
+            result.value.dir,
+            file,
+            result.value.fileServerBaseUrl,
+            channel,
+            repoName,
+          );
+        }
+      } else {
+        workspaceStore.setOpen(dir, file, fileServerBaseUrl, channel, repoName);
+      }
+    },
+  );
   send.rendererReady();
 });
 

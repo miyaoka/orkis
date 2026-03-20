@@ -207,6 +207,8 @@ export type OrkisRPC = {
         fileServerBaseUrl: string;
         channel: string;
         repoName: string;
+        /** 既存ウィンドウ再利用時に切り替える worktree ディレクトリ。renderer 側で switchDir を呼ぶ */
+        switchToDir?: string;
       };
       orkisHook: { event: string; payload: Record<string, unknown> };
       /** LSP 診断結果の更新（ファイル単位） */
