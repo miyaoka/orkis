@@ -278,6 +278,13 @@ async function fetchData() {
   const wtBranches = new Set(wtList.map((wt) => wt.branch).filter(Boolean));
   freeBranches.value = branchList.filter((b) => !wtBranches.has(b));
   pendingTodos.value = todoList.filter((t) => !t.worktreeDir);
+
+  // 外部で削除された worktree のターミナルをクリーンアップ
+  const wtPaths = new Set(wtList.map((wt) => wt.path));
+  const staleDirs = terminalStore.visitedDirs.filter((dir) => !wtPaths.has(dir));
+  for (const dir of staleDirs) {
+    terminalStore.remove(dir);
+  }
 }
 
 // --- worktree 操作 ---
