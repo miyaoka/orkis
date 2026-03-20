@@ -594,6 +594,9 @@ function flattenHandles(
       const startRow = ys.indexOf(roundForGrid(ny));
       const endRow = ys.indexOf(roundForGrid(ny + nh));
 
+      // splitCol が startCol と一致する場合はハンドルを配置できない（ratio が極端に小さい）
+      if (splitCol <= startCol) return;
+
       handles.push({
         branchId: node.id,
         axis: direction,
@@ -618,6 +621,8 @@ function flattenHandles(
       const endCol = xs.indexOf(roundForGrid(nx + nw));
       const startRow = ys.indexOf(roundForGrid(ny));
       const endRow = ys.indexOf(roundForGrid(ny + nh));
+
+      if (splitRow <= startRow) return;
 
       handles.push({
         branchId: node.id,

@@ -61,6 +61,8 @@ defineSlots<{
           class="grid size-6 place-items-center rounded-sm text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300"
           :class="viewMode === mode && 'bg-zinc-700 text-zinc-200'"
           :title="VIEW_MODE_TITLE[mode]"
+          :aria-label="VIEW_MODE_TITLE[mode]"
+          :aria-pressed="viewMode === mode"
           @click="$emit('setViewMode', mode)"
         >
           <span class="text-sm" :class="VIEW_MODE_ICON[mode]" />
