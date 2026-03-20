@@ -66,7 +66,7 @@ Vue Language Server
 
 LSP クライアントは worktree 切り替え時に再起動する。
 
-- `repoRootDir`（clone 元、固定）と `currentDir`（切り替え可能な worktree パス）を分離
+- `projectDir`（clone 元、固定）と `currentDir`（切り替え可能な worktree パス）を分離
 - `windowLspClients`（`Map<win, LspClient[]>`）でウィンドウごとに LSP クライアントを管理
 - worktree 切り替え時に既存 LSP クライアントを shutdown し、新しい worktree で再起動
 - `resolveGitDir()` で `git rev-parse --git-dir` を使い、linked worktree の `.git` ファイルから実際の git ディレクトリを解決

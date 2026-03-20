@@ -976,11 +976,14 @@ function openWindow(dir: string, options?: OpenWindowOptions): void {
   console.log(`[orkis] open: dir=${dir}, file=${relativeFile ?? "(none)"}`);
   const existing = findWindowByDir(dir);
   if (existing) {
+    // 既存ウィンドウの currentDir を維持し、renderer 側の状態を壊さない
+    const existingDir = windowDirs.get(existing) ?? dir;
     const existingId = windowIds.get(existing) ?? "";
+    const existingRelativeFile = file ? path.relative(existingDir, file) : undefined;
     void getRepoName(dir).then((repoName) => {
       existing.webview.rpc?.send.orkisOpen({
-        dir,
-        file: relativeFile,
+        dir: existingDir,
+        file: existingRelativeFile,
         fileServerBaseUrl: `http://localhost:${fileServer.port}/${existingId}`,
         channel,
         repoName,
