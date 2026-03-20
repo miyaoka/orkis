@@ -48,6 +48,20 @@ export interface WorktreeEntry {
   isMain: boolean;
   /** git status の変更ファイル数サマリー */
   changeCounts?: WorktreeChangeCounts;
+  /** 紐づく Todo */
+  todo?: Todo;
+}
+
+/** Todo アイテム */
+export interface Todo {
+  /** 一意な ID */
+  id: string;
+  /** git commit 形式: 一行目=タイトル、残り=本文 */
+  body: string;
+  /** 紐づいた worktree のパス（未着手なら undefined） */
+  worktreeDir?: string;
+  /** 作成日時（ISO 8601） */
+  createdAt: string;
 }
 
 /** ファイルごとの診断結果 */
@@ -115,6 +129,31 @@ export type OrkisRPC = {
       gitBranchDelete: {
         params: { branch: string };
         response: void;
+      };
+      /** Todo 一覧を取得 */
+      todoList: {
+        params: undefined;
+        response: Todo[];
+      };
+      /** Todo を追加（worktreeDir 指定で worktree に紐づけ可能） */
+      todoAdd: {
+        params: { body: string; worktreeDir?: string };
+        response: Todo;
+      };
+      /** Todo の body を更新 */
+      todoUpdate: {
+        params: { id: string; body: string };
+        response: Todo;
+      };
+      /** Todo を削除 */
+      todoRemove: {
+        params: { id: string };
+        response: void;
+      };
+      /** Todo から worktree を作成して紐づける */
+      todoStart: {
+        params: { id: string };
+        response: { todo: Todo; worktree: WorktreeEntry };
       };
       /** 表示対象ディレクトリを切り替える（worktree 選択） */
       switchDir: {

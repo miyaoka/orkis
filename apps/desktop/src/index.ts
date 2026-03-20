@@ -30,6 +30,15 @@ import { generateClaudeSettings } from "./claudeHooks";
 import { getShellEnv } from "./shellEnv";
 import { loadAppState, saveSnapshot, getDefaultFrame } from "./appState";
 import type { WindowFrame, WindowState } from "./appState";
+import {
+  loadTodos,
+  addTodo,
+  updateTodo,
+  removeTodo,
+  findTodoByWorktreeDir,
+  linkTodoToWorktree,
+  cleanupStaleTodos,
+} from "./todo";
 
 type OrkisRPCInstance = ReturnType<typeof BrowserView.defineRPC<OrkisRPC>>;
 type OrkisWindow = BrowserWindow<OrkisRPCInstance>;
@@ -640,7 +649,22 @@ function createWindowWithRPC(dir: string, options?: CreateWindowOptions): OrkisW
           return result.value;
         },
         gitStatus: () => getGitStatus(currentDir),
-        gitWorktreeList: async () => attachChangeCounts(await getWorktreeList(repoRootDir)),
+        gitWorktreeList: async () => {
+          const entries = await attachChangeCounts(await getWorktreeList(repoRootDir));
+          // 各 worktree に紐づく Todo を付与
+          const todos = loadTodos(repoRootDir);
+          const todoByDir = new Map(
+            todos.filter((t) => t.worktreeDir).map((t) => [t.worktreeDir, t]),
+          );
+          for (const entry of entries) {
+            const todo = todoByDir.get(entry.path);
+            if (todo) entry.todo = todo;
+          }
+          // 存在しない worktree を参照する Todo をクリーンアップ
+          const validPaths = entries.map((e) => e.path);
+          cleanupStaleTodos(repoRootDir, validPaths);
+          return entries;
+        },
         gitBranchList: () => getBranchList(repoRootDir),
         gitWorktreeAdd: async ({ branch }) => {
           const entry = await addWorktree(repoRootDir, branch);
@@ -650,6 +674,9 @@ function createWindowWithRPC(dir: string, options?: CreateWindowOptions): OrkisW
         gitWorktreeRemove: async ({ path: wtPath, force }) => {
           const wtReal = await fsp.realpath(wtPath);
           await removeWorktree(repoRootDir, wtPath, force);
+          // 紐づく Todo も削除
+          const todo = findTodoByWorktreeDir(repoRootDir, wtPath);
+          if (todo) removeTodo(repoRootDir, todo.id);
           // 削除成功後に worktree の PTY を kill する
           for (const [id, entry] of ptys) {
             if (entry.win === win && entry.worktreeDir === wtReal) {
@@ -660,6 +687,19 @@ function createWindowWithRPC(dir: string, options?: CreateWindowOptions): OrkisW
           void syncWorktreeWatchers(win, repoRootDir, currentDir);
         },
         gitBranchDelete: ({ branch }) => deleteBranch(repoRootDir, branch),
+        todoList: () => loadTodos(repoRootDir),
+        todoAdd: ({ body, worktreeDir }) => addTodo(repoRootDir, body, worktreeDir),
+        todoUpdate: ({ id, body }) => updateTodo(repoRootDir, id, body),
+        todoRemove: ({ id }) => removeTodo(repoRootDir, id),
+        todoStart: async ({ id }) => {
+          const entry = await addWorktree(repoRootDir);
+          linkTodoToWorktree(repoRootDir, id, entry.path);
+          const todo = loadTodos(repoRootDir).find((t) => t.id === id);
+          if (!todo) throw new Error(`Todo not found after linking: ${id}`);
+          entry.todo = todo;
+          void syncWorktreeWatchers(win, repoRootDir, currentDir);
+          return { todo, worktree: entry };
+        },
         switchDir: async ({ dir: targetDir }) => {
           // バリデーション: worktree list に含まれるパスのみ許可
           const worktrees = await getWorktreeList(repoRootDir);
