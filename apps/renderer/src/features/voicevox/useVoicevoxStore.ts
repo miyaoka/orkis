@@ -146,14 +146,18 @@ export const useVoicevoxStore = defineStore("voicevox", () => {
   /** 有効化処理中 */
   const activating = ref(false);
 
-  // 起動時に設定を読み込む
-  void tryCatch(request.configLoad()).then((result) => {
+  // 起動時に設定を読み込み、enabled なら Engine の起動も試みる
+  void tryCatch(request.configLoad()).then(async (result) => {
     if (!result.ok) return;
     const voicevox = result.value.voicevox;
     if (!voicevox) return;
-    if (typeof voicevox.enabled === "boolean") enabled.value = voicevox.enabled;
     if (typeof voicevox.speedScale === "number") speedScale.value = voicevox.speedScale;
     if (typeof voicevox.volumeScale === "number") volumeScale.value = voicevox.volumeScale;
+    if (voicevox.enabled) {
+      const errorMessage = await activate();
+      // Engine 起動に失敗した場合は無効に戻す（enabled: false で保存される）
+      if (errorMessage) enabled.value = false;
+    }
   });
 
   function saveSettings() {
