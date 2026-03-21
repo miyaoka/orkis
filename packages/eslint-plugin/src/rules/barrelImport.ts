@@ -54,10 +54,9 @@ function isBarrelImport(importSource: string, toScope: string): boolean {
   const lastSegment = importSource.split("/").pop();
   if (!lastSegment) return false;
 
-  // 拡張子付きなら index.ts / index.vue かどうか
+  // 拡張子付きなら index.ts かどうか（index.vue 等はバレルではない）
   if (lastSegment.includes(".")) {
-    const base = path.basename(lastSegment, path.extname(lastSegment));
-    return base === "index";
+    return lastSegment === "index.ts";
   }
 
   // 拡張子なし: スコープのディレクトリ名と一致すればディレクトリ import（index 暗黙解決）

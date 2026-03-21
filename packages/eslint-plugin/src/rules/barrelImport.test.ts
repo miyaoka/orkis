@@ -139,5 +139,11 @@ tester.run("barrel-import", rule, {
       filename: `${BASE}/features/layout/MainLayout.vue`,
       errors: [{ messageId: "noDirectImport" }],
     },
+    {
+      name: "NG: index.vue はバレルファイルではない",
+      code: 'import TerminalIndex from "../terminal/index.vue";',
+      filename: `${BASE}/features/layout/MainLayout.vue`,
+      errors: [{ messageId: "noDirectImport" }],
+    },
   ],
 });
