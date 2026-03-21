@@ -24,8 +24,8 @@ import {
 import {
   isAllowedProtocol,
   readFileContent,
-  resolveSecurePath,
-  assertInsideRoot,
+  resolveExistingFsPath,
+  resolveGitPath,
 } from "./security";
 import { generateClaudeSettings } from "./claudeHooks";
 import { getShellEnv } from "./shellEnv";
@@ -216,7 +216,7 @@ const fileServer = Bun.serve({
 
     // /{windowId}/git/{relPath} — git show HEAD:path でファイルを返す
     if (source === "git") {
-      const insideResult = tryCatch(() => assertInsideRoot(dir, relPath));
+      const insideResult = tryCatch(() => resolveGitPath(dir, relPath));
       if (!insideResult.ok) return new Response("Forbidden", { status: 403 });
       const proc = Bun.spawn(["git", "show", `HEAD:${relPath}`], { cwd: dir });
       const bufResult = await tryCatch(new Response(proc.stdout).arrayBuffer());
@@ -229,7 +229,7 @@ const fileServer = Bun.serve({
 
     // /{windowId}/fs/{relPath} — ファイルシステムから直接返す
     if (source === "fs") {
-      const pathResult = await tryCatch(resolveSecurePath(dir, relPath));
+      const pathResult = await tryCatch(resolveExistingFsPath(dir, relPath));
       if (!pathResult.ok) return new Response("Forbidden", { status: 403 });
       return new Response(Bun.file(pathResult.value), { headers });
     }
@@ -618,7 +618,7 @@ function createWindowWithRPC(dir: string, options?: CreateWindowOptions): OrkisW
           return spawnPty(win, realCwd, cols, rows);
         },
         fsReadDir: async ({ relPath }) => {
-          const absolutePath = await resolveSecurePath(currentDir, relPath);
+          const absolutePath = await resolveExistingFsPath(currentDir, relPath);
           const entries = await fsp.readdir(absolutePath, { withFileTypes: true });
           const visibleEntries = entries.filter((e) => e.name !== ".git");
           const names = visibleEntries.map((e) => e.name);
@@ -643,14 +643,14 @@ function createWindowWithRPC(dir: string, options?: CreateWindowOptions): OrkisW
           );
         },
         fsReadFile: async ({ relPath }) => {
-          const absolutePath = await resolveSecurePath(currentDir, relPath);
+          const absolutePath = await resolveExistingFsPath(currentDir, relPath);
           return readFileContent(absolutePath);
         },
         fsReadFileAbsolute: async ({ absolutePath }) => {
           return readFileContent(absolutePath);
         },
         gitShowFile: async ({ relPath }) => {
-          assertInsideRoot(currentDir, relPath);
+          resolveGitPath(currentDir, relPath);
           const proc = Bun.spawn(["git", "show", `HEAD:${relPath}`], { cwd: currentDir });
           const result = await tryCatch(new Response(proc.stdout).arrayBuffer());
           await proc.exited;
@@ -664,7 +664,7 @@ function createWindowWithRPC(dir: string, options?: CreateWindowOptions): OrkisW
           return { content: new TextDecoder().decode(bytes), isBinary: false };
         },
         gitDiffFile: async ({ relPath }) => {
-          assertInsideRoot(currentDir, relPath);
+          resolveGitPath(currentDir, relPath);
           const result = await tryCatch(
             new Response(
               Bun.spawn(["git", "diff", "HEAD", "--", relPath], { cwd: currentDir }).stdout,

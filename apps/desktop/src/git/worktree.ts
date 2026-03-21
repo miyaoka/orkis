@@ -2,6 +2,7 @@ import fsp from "node:fs/promises";
 import path from "node:path";
 import { tryCatch } from "@orkis/shared";
 import type { WorktreeEntry } from "@orkis/rpc";
+import { resolveCreatableFsPath, resolveExistingFsPath } from "../security";
 import { getGitStatus, countChanges } from "./status";
 import { assertBranchName } from "./branch";
 
@@ -12,12 +13,11 @@ export async function addWorktree(
   worktreeDir: string,
   branch: string,
 ): Promise<WorktreeEntry> {
-  const wtPath = path.join(cwd, WORKTREE_DIR, worktreeDir);
-  assertWorktreePath(cwd, wtPath);
+  const worktreeRoot = path.join(cwd, WORKTREE_DIR);
+  await fsp.mkdir(worktreeRoot, { recursive: true });
+  const wtPath = await resolveCreatableFsPath(worktreeRoot, worktreeDir);
 
   assertBranchName(branch);
-
-  await fsp.mkdir(path.join(cwd, WORKTREE_DIR), { recursive: true });
 
   // ブランチが既存かどうかを判定し、存在しなければ -b で新規作成。
   // 判定後〜作成前に同名ブランチが作られる競合は理論上あり得るが、
@@ -45,17 +45,9 @@ export async function addWorktree(
   return { path: wtPath, head, branch, isMain: false };
 }
 
-/** wtPath が WORKTREE_DIR 配下であることを検証する */
-export function assertWorktreePath(cwd: string, wtPath: string): void {
-  const allowed = path.resolve(cwd, WORKTREE_DIR);
-  const resolved = path.resolve(wtPath);
-  if (!resolved.startsWith(allowed + path.sep) && resolved !== allowed) {
-    throw new Error("Access denied: path is outside worktree directory");
-  }
-}
-
 export async function removeWorktree(cwd: string, wtPath: string, force?: boolean): Promise<void> {
-  assertWorktreePath(cwd, wtPath);
+  const worktreeRoot = path.join(cwd, WORKTREE_DIR);
+  await resolveExistingFsPath(worktreeRoot, path.relative(worktreeRoot, wtPath));
 
   const args = ["git", "worktree", "remove"];
   if (force) args.push("--force");
