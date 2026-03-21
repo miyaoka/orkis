@@ -9,7 +9,7 @@ import { FitAddon } from "@xterm/addon-fit";
 import { Unicode11Addon } from "@xterm/addon-unicode11";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import { WebglAddon } from "@xterm/addon-webgl";
-import { Terminal } from "@xterm/xterm";
+import { Terminal, type IMarker } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
 import { onMounted, onBeforeUnmount, ref, watch } from "vue";
 import { useRpc } from "../rpc/useRpc";
@@ -39,6 +39,7 @@ let terminal: Terminal | undefined;
 let fitAddon: FitAddon | undefined;
 let resizeObserver: ResizeObserver | undefined;
 let detachDisposer: (() => void) | undefined;
+let writeParsedDisposer: (() => void) | undefined;
 let unmounted = false;
 
 /** fit() の RAF デバウンス制御 */
@@ -191,31 +192,56 @@ onMounted(async () => {
   if (unmounted) return;
 
   // store の PTY セッションに接続（ring buffer replay + live attach）
-  // ghostty の Pin トラッキングに倣い、write() 後にスクロール位置を保持する。
-  // TUI アプリ（Claude Code 等）の再描画でエスケープシーケンスにより viewportY が
-  // リセットされる場合があるため、write() 前の viewportY を記録して復元する。
-  // xterm.js の WriteBuffer はチャンクを非同期キューに積むため、コールバック実行時に
-  // write() 呼び出し時のスナップショットが古くなっている可能性がある。
-  // そのためコールバック内でも現在の状態を再チェックする
-  let lastSavedViewportY = 0;
-  let lastWasAtBottom = true;
-  detachDisposer = terminalStore.attachTerminal(props.leafId, (data) => {
+  // ghostty の Pin / WezTerm の StableRowIndex に倣い、Marker ベースの安定アンカーで
+  // スクロール位置を保持する。TUI アプリ（Claude Code 等）の再描画でエスケープシーケンスに
+  // より viewportY がリセットされる場合があるため、Marker で物理行を追跡して復元する。
+  // 復元処理は onWriteParsed（フレームごとに最大1回発火）で集約する
+  type ViewportIntent = { kind: "bottom" } | { kind: "anchored"; marker: IMarker };
+  let viewportIntent: ViewportIntent = { kind: "bottom" };
+  let parsedSinceLastRestore = false;
+
+  function disposeViewportMarker() {
+    if (viewportIntent.kind === "anchored" && !viewportIntent.marker.isDisposed) {
+      viewportIntent.marker.dispose();
+    }
+  }
+
+  function captureViewportIntent() {
     const buf = term.buffer.active;
-    // write() 呼び出し時の状態を記録（コールバック内で参照）
-    // 複数の write() がキューに積まれた場合、最新の write() 時点の値が使われる
-    lastSavedViewportY = buf.viewportY;
-    lastWasAtBottom = buf.viewportY >= buf.baseY;
+    if (buf.type === "alternate" || buf.viewportY >= buf.baseY) {
+      disposeViewportMarker();
+      viewportIntent = { kind: "bottom" };
+      return;
+    }
+    // Marker で現在の viewport 位置をアンカーする（行の追加・削除に追従する）
+    const marker = term.registerMarker(buf.viewportY - buf.baseY - buf.cursorY);
+    disposeViewportMarker();
+    viewportIntent = marker !== undefined ? { kind: "anchored", marker } : { kind: "bottom" };
+  }
+
+  function restoreViewportIntent() {
+    const buf = term.buffer.active;
+    if (buf.type === "alternate" || viewportIntent.kind === "bottom") {
+      if (buf.viewportY < buf.baseY) term.scrollToBottom();
+      return;
+    }
+    if (viewportIntent.marker.isDisposed) return;
+    const targetLine = Math.min(viewportIntent.marker.line, buf.baseY);
+    if (buf.viewportY !== targetLine) {
+      term.scrollToLine(targetLine);
+    }
+  }
+
+  writeParsedDisposer = term.onWriteParsed(() => {
+    if (!parsedSinceLastRestore) return;
+    parsedSinceLastRestore = false;
+    restoreViewportIntent();
+  }).dispose;
+
+  detachDisposer = terminalStore.attachTerminal(props.leafId, (data) => {
+    captureViewportIntent();
     term.write(data, () => {
-      const currentBuf = term.buffer.active;
-      const isAtBottom = currentBuf.viewportY >= currentBuf.baseY;
-      if (isAtBottom) return; // 既に bottom なら何もしない
-      if (lastWasAtBottom) {
-        // write() 前に bottom だった場合、escape sequence で一時的に外れても bottom に復帰する
-        term.scrollToBottom();
-      } else if (currentBuf.viewportY !== lastSavedViewportY) {
-        // スクロールバック中: エスケープシーケンスで viewportY が変更された場合のみ復元
-        term.scrollToLine(Math.min(lastSavedViewportY, currentBuf.baseY));
-      }
+      parsedSinceLastRestore = true;
     });
   });
 
@@ -247,6 +273,7 @@ onBeforeUnmount(() => {
   unmounted = true;
   if (fitRafId) cancelAnimationFrame(fitRafId);
   resizeObserver?.disconnect();
+  writeParsedDisposer?.();
   detachDisposer?.();
   terminal?.dispose();
 });
