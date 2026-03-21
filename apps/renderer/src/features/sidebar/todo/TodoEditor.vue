@@ -32,8 +32,9 @@ onMounted(() => {
 const IME_KEYCODE = 229;
 function onEnterSubmit(e: KeyboardEvent) {
   // WKWebView では isComposing が false のまま keyCode 229 が送られる
-  if (e.isComposing || e.keyCode === IME_KEYCODE || e.shiftKey || isEmpty.value) return;
+  if (e.isComposing || e.keyCode === IME_KEYCODE || e.shiftKey) return;
   e.preventDefault();
+  if (isEmpty.value) return;
   emit("save");
 }
 </script>
