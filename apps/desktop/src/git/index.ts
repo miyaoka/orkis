@@ -1,7 +1,6 @@
 export { filterIgnored, getGitStatus, countChanges } from "./status";
 export {
   WORKTREE_DIR,
-  generateWorktreeId,
   addWorktree,
   assertWorktreePath,
   removeWorktree,

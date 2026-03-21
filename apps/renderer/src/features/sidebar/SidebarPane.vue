@@ -22,7 +22,7 @@ worktree 行ごとの Claude 状態表示は `WorktreeItem.vue` に委譲。
 
 <script setup lang="ts">
 import type { Todo, WorktreeEntry } from "@orkis/rpc";
-import { tryCatch } from "@orkis/shared";
+import { tryCatch, generateWorktreeId } from "@orkis/shared";
 import { useEventListener, useIntervalFn } from "@vueuse/core";
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import { useCommandRegistry } from "../command/useCommandRegistry";
@@ -263,6 +263,43 @@ function cancelNewTodo() {
   isAddingTodo.value = false;
 }
 
+// --- 新規 Worktree 作成（Todo 作成 + worktree 紐づけ） ---
+
+const isAddingWorktree = ref(false);
+const newWorktreeBody = ref("");
+const newWorktreeIcon = ref<string>();
+
+function startAddingWorktree() {
+  isAddingWorktree.value = true;
+  newWorktreeBody.value = generateWorktreeId();
+  newWorktreeIcon.value = undefined;
+}
+
+async function saveNewWorktree() {
+  if (!newWorktreeBody.value.trim()) {
+    isAddingWorktree.value = false;
+    return;
+  }
+  isCreating.value = true;
+  const addResult = await tryCatch(
+    request.todoAdd({ body: newWorktreeBody.value, icon: newWorktreeIcon.value }),
+  );
+  if (!addResult.ok) {
+    isCreating.value = false;
+    return;
+  }
+  isAddingWorktree.value = false;
+  const startResult = await tryCatch(request.todoStart({ id: addResult.value.id }));
+  if (startResult.ok) {
+    await fetchData();
+  }
+  isCreating.value = false;
+}
+
+function cancelNewWorktree() {
+  isAddingWorktree.value = false;
+}
+
 // --- データ取得 ---
 
 async function fetchData() {
@@ -461,7 +498,7 @@ onUnmounted(() => {
           (anchorName, wt) =>
             openMenu(anchorName, { type: 'worktree', worktree: wt, todo: wt.todo })
         "
-        @add="addWorktree()"
+        @add="startAddingWorktree"
         @set-view-mode="terminalStore.viewMode = $event"
       >
         <template #after-item="{ wt }">
@@ -472,6 +509,15 @@ onUnmounted(() => {
             @save="submitEdit"
             @cancel="cancelEdit"
             @icon-change="saveEditIcon"
+          />
+        </template>
+        <template #add-form>
+          <TodoEditor
+            v-if="isAddingWorktree"
+            v-model:body="newWorktreeBody"
+            v-model:icon="newWorktreeIcon"
+            @save="saveNewWorktree"
+            @cancel="cancelNewWorktree"
           />
         </template>
       </WorktreeList>

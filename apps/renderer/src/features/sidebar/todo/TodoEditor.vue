@@ -4,7 +4,7 @@ Todo のインライン編集フォーム。アイコン選択 + テキスト入
 </doc>
 
 <script setup lang="ts">
-import { onMounted, useTemplateRef } from "vue";
+import { computed, onMounted, useTemplateRef } from "vue";
 import TodoIconPicker from "./TodoIconPicker.vue";
 
 defineProps<{
@@ -20,6 +20,8 @@ const emit = defineEmits<{
   iconChange: [];
 }>();
 
+const isEmpty = computed(() => body.value.trim() === "");
+
 const textareaRef = useTemplateRef<HTMLTextAreaElement>("textarea");
 
 onMounted(() => {
@@ -30,7 +32,7 @@ onMounted(() => {
 const IME_KEYCODE = 229;
 function onEnterSubmit(e: KeyboardEvent) {
   // WKWebView では isComposing が false のまま keyCode 229 が送られる
-  if (e.isComposing || e.keyCode === IME_KEYCODE || e.shiftKey) return;
+  if (e.isComposing || e.keyCode === IME_KEYCODE || e.shiftKey || isEmpty.value) return;
   e.preventDefault();
   emit("save");
 }
@@ -56,7 +58,8 @@ function onEnterSubmit(e: KeyboardEvent) {
         Cancel
       </button>
       <button
-        class="rounded-sm bg-blue-600 px-2 py-1 text-xs text-white hover:bg-blue-500"
+        class="rounded-sm bg-blue-600 px-2 py-1 text-xs text-white hover:bg-blue-500 disabled:opacity-40 disabled:hover:bg-blue-600"
+        :disabled="isEmpty"
         @click="emit('save')"
       >
         Save

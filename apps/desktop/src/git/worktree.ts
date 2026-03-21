@@ -1,25 +1,11 @@
 import fsp from "node:fs/promises";
 import path from "node:path";
-import { tryCatch } from "@orkis/shared";
+import { generateWorktreeId, tryCatch } from "@orkis/shared";
 import type { WorktreeEntry } from "@orkis/rpc";
 import { getGitStatus, countChanges } from "./status";
 import { assertBranchName } from "./branch";
 
 export const WORKTREE_DIR = ".orkis/worktrees";
-
-export function generateWorktreeId(): string {
-  const now = new Date();
-  const timestamp = [
-    now.getFullYear(),
-    String(now.getMonth() + 1).padStart(2, "0"),
-    String(now.getDate()).padStart(2, "0"),
-    "_",
-    String(now.getHours()).padStart(2, "0"),
-    String(now.getMinutes()).padStart(2, "0"),
-    String(now.getSeconds()).padStart(2, "0"),
-  ].join("");
-  return `wt-${timestamp}`;
-}
 
 export async function addWorktree(cwd: string, branch?: string): Promise<WorktreeEntry> {
   const id = generateWorktreeId();
