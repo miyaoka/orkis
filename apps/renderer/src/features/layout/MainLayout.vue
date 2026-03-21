@@ -28,7 +28,6 @@ import ResizeHandle from "./ResizeHandle.vue";
 
 const workspaceStore = useWorkspaceStore();
 const contextKeys = useContextKeys();
-const terminalPaneRef = useTemplateRef<InstanceType<typeof TerminalPane>>("terminalPane");
 const explorerPopoverRef = useTemplateRef<HTMLElement>("explorerPopover");
 const filerPaneRef = useTemplateRef<InstanceType<typeof FilerPane>>("filerPane");
 
@@ -105,10 +104,8 @@ const terminalWidth = computed(() =>
   ),
 );
 
-/** ドラッグ開始時に Terminal の DOM 実測幅を取得する */
-const getTerminalWidth = () =>
-  (terminalPaneRef.value?.$el as HTMLElement | undefined)?.getBoundingClientRect().width ??
-  terminalWidth.value;
+/** ドラッグ開始時の Terminal 幅（レイアウト計算値） */
+const getTerminalWidth = () => terminalWidth.value;
 
 /** ドラッグ開始時に popover 左側の空きスペースを返す（Explorer 最大幅の制約に使用） */
 const getExplorerBeforeSize = () => windowWidth.value - explorerWidth.value;
@@ -186,7 +183,7 @@ watchEffect(() => {
         :get-after-size="getTerminalWidth"
       />
 
-      <TerminalPane ref="terminalPane" />
+      <TerminalPane />
 
       <!-- Explorer 開閉ボタン（開く専用。閉じるのは light dismiss または popover 内の close） -->
       <button
