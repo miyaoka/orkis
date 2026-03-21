@@ -15,7 +15,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, ref, useTemplateRef } from "vue";
-import { useRpc } from "../rpc";
+import { useRpc } from "../../shared/rpc";
 import {
   getDeletedEntries,
   resolveDirectoryGitChange,

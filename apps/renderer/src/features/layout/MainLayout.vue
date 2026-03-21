@@ -16,12 +16,12 @@
 <script setup lang="ts">
 import { useElementSize, useEventListener, useWindowSize } from "@vueuse/core";
 import { computed, nextTick, onUnmounted, ref, useTemplateRef, watch, watchEffect } from "vue";
-import { useCommandRegistry, useContextKeys } from "../command";
+import { useCommandRegistry, useContextKeys } from "../../shared/command";
+import { useRpc } from "../../shared/rpc";
 import { DebugPane } from "../debug";
 import { DiagnosticsPane } from "../diagnostics";
 import { FilerPane, useWorkspaceStore } from "../filer";
 import { PreviewPane } from "../preview";
-import { useRpc } from "../rpc";
 import { SidebarPane } from "../sidebar";
 import {
   collectLeafIds,

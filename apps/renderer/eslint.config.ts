@@ -105,22 +105,31 @@ export default defineConfigWithVueTs(
           project: "./tsconfig.app.json",
         },
       },
-      "boundaries/elements": [{ type: "feature", pattern: "src/features/*", mode: "folder" }],
+      "boundaries/elements": [
+        { type: "feature", pattern: "src/features/*", mode: "folder" },
+        { type: "shared", pattern: "src/shared/*", mode: "folder" },
+      ],
     },
     rules: {
-      // feature 外から feature の内部モジュールを直接 import することを禁止する
-      // 同一 feature 内の依存は checkInternals: false（デフォルト）によりスキップされる
-      // feature 以外への依存は unknown element となりデフォルトでスキップされる
+      // feature / shared の内部モジュールを直接 import することを禁止する（バレルファイル強制）
+      // 同一要素内の依存は checkInternals: false（デフォルト）によりスキップされる
       "boundaries/dependencies": [
         "error",
         {
           default: "allow",
           rules: [
-            // feature への依存は index.ts 以外を禁止
+            // feature / shared への依存は index.ts 以外を禁止
             {
-              to: { type: "feature" },
+              to: [{ type: "feature" }, { type: "shared" }],
               disallow: {
                 to: { internalPath: "!index.ts" },
+              },
+            },
+            // shared → feature は禁止（下位層が上位層に依存してはいけない）
+            {
+              from: { type: "shared" },
+              disallow: {
+                to: { type: "feature" },
               },
             },
           ],

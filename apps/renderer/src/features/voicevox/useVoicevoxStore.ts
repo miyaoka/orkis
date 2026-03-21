@@ -1,7 +1,7 @@
 import { tryCatch } from "@gozd/shared";
 import { acceptHMRUpdate, defineStore } from "pinia";
 import { ref, watch } from "vue";
-import { useRpc } from "../rpc";
+import { useRpc } from "../../shared/rpc";
 
 /** ずんだもん（ノーマル） */
 const DEFAULT_SPEAKER_ID = 3;

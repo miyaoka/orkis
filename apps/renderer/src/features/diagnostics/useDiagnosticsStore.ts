@@ -1,7 +1,7 @@
 import type { FileDiagnostics, LspDiagnostic } from "@gozd/rpc";
 import { acceptHMRUpdate, defineStore } from "pinia";
 import { computed, ref } from "vue";
-import { useRpc } from "../rpc";
+import { useRpc } from "../../shared/rpc";
 
 /** severity 定数 */
 const SEVERITY_ERROR = 1;
