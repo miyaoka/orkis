@@ -1,6 +1,5 @@
 <doc lang="md">
 xterm.js ベースのターミナルエミュレータ。
-ghostty-web の代替として、日本語入力が安定している環境で使用する。
 </doc>
 
 <script setup lang="ts">
@@ -192,7 +191,7 @@ onMounted(async () => {
   if (unmounted) return;
 
   // store の PTY セッションに接続（ring buffer replay + live attach）
-  // ghostty の Pin / WezTerm の StableRowIndex に倣い、Marker ベースの安定アンカーで
+  // Marker ベースの安定アンカーで
   // スクロール位置を保持する。TUI アプリ（Claude Code 等）の再描画でエスケープシーケンスに
   // より viewportY がリセットされる場合があるため、Marker で物理行を追跡して復元する。
   // 復元処理は onWriteParsed（フレームごとに最大1回発火）で集約する

@@ -5,7 +5,6 @@ packages:
 allowBuilds:
   "@tailwindcss/oxide": true
   esbuild: true
-  ghostty-web: true
   lefthook: true
   unrs-resolver: true
 
