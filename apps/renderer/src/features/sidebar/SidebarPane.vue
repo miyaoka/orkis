@@ -31,12 +31,9 @@ import { useDiagnosticsStore } from "../diagnostics";
 import { useWorkspaceStore } from "../filer";
 import { useTerminalStore } from "../terminal";
 import { useVoicevoxStore } from "../voicevox";
-import TodoEditor from "./todo/TodoEditor.vue";
-import TodoList from "./todo/TodoList.vue";
+import { TodoEditor, TodoList } from "./features/todo";
+import { BranchList, RootWorktree, WorktreeList } from "./features/worktree";
 import { dirName, generateTimestamp, worktreeDisplayName } from "./utils";
-import BranchList from "./worktree/BranchList.vue";
-import RootWorktree from "./worktree/RootWorktree.vue";
-import WorktreeList from "./worktree/WorktreeList.vue";
 
 const workspaceStore = useWorkspaceStore();
 const diagnosticsStore = useDiagnosticsStore();

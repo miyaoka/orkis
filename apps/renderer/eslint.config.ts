@@ -111,21 +111,73 @@ export default defineConfigWithVueTs(
       ],
     },
     rules: {
-      // feature / shared の内部モジュールを直接 import することを禁止する（バレルファイル強制）
-      // 同一要素内の依存は checkInternals: false（デフォルト）によりスキップされる
+      // feature / shared のバレルファイル強制と依存方向制御
+      // checkInternals: true で内部依存もチェック対象にし、
+      // ネストされた子 feature（features/ サブディレクトリ）の内部直接 import も禁止する
+      // ルール順序は last-write-wins: 最後にマッチしたルールの結果が最終結果
+      //
+      // NG: feature 外 → 内部モジュール直接 import
+      // NG: 親 feature 内 → 子 feature の内部モジュール直接 import（3階層目含む）
+      // NG: 親 feature 内 → 子 feature のバレルでないファイル直接 import
+      // NG: shared → feature
+      // OK: feature 外 → バレル経由
+      // OK: 親 feature 内 → 子 feature のバレル経由
+      // OK: 親 feature 内 → 3 階層目の子 feature のバレル経由
+      // OK: 同一 feature 内の通常ファイル参照
       "boundaries/dependencies": [
         "error",
         {
           default: "allow",
+          checkInternals: true,
           rules: [
-            // feature / shared への依存は index.ts 以外を禁止
+            // 1. feature / shared への依存は原則として index.ts のみ許可
             {
               to: [{ type: "feature" }, { type: "shared" }],
               disallow: {
                 to: { internalPath: "!index.ts" },
               },
             },
-            // shared → feature は禁止（下位層が上位層に依存してはいけない）
+            // 2. shared 内の内部依存は自由（1 の禁止を上書き）
+            {
+              from: { type: "shared" },
+              allow: {
+                dependency: {
+                  relationship: { to: "internal" },
+                },
+              },
+            },
+            // 3. feature 内の通常ファイル間 import は自由（features/ 配下を除く）
+            {
+              from: { type: "feature" },
+              allow: {
+                dependency: {
+                  relationship: { to: "internal" },
+                },
+                to: { internalPath: "!features/**" },
+              },
+            },
+            // 4. 子 feature 内のファイル同士の import は自由
+            //    from の internalPath が features/X/ で始まるファイルから、
+            //    同じ features/X/ 内のファイルへの import を許可する
+            {
+              from: { type: "feature", internalPath: "features/**" },
+              allow: {
+                dependency: {
+                  relationship: { to: "internal" },
+                },
+              },
+            },
+            // 5. feature 内の子 feature へは index.ts 経由のみ許可
+            {
+              from: { type: "feature" },
+              allow: {
+                dependency: {
+                  relationship: { to: "internal" },
+                },
+                to: { internalPath: "features/**/index.ts" },
+              },
+            },
+            // 5. shared → feature は常に禁止（最後に置いて上書き）
             {
               from: { type: "shared" },
               disallow: {
