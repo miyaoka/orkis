@@ -58,15 +58,13 @@ function scheduleFit() {
     if (width <= 0 || height <= 0) return;
     if (width === lastFitWidth && height === lastFitHeight) return;
 
-    // alternate buffer / Claude Code 実行中 / bottom にいた場合は bottom にリセットする
-    // primary buffer（通常シェル）のスクロールバック中のみ Marker で位置を保持する
+    // alternate buffer（TUI アプリ）は scrollback がないため bottom にリセットする
+    // primary buffer（通常シェル）は Marker で reflow に追従してスクロール位置を保持する
     const isAlternate = terminal?.buffer.active.type === "alternate";
-    const claudeState = terminalStore.getClaudeState(props.leafId);
-    const isClaudeActive = claudeState === "working" || claudeState === "asking";
     const buf = terminal?.buffer.active;
     const wasAtBottom = buf !== undefined && buf.viewportY >= buf.baseY;
     const marker =
-      !isAlternate && !isClaudeActive && !wasAtBottom && terminal !== undefined && buf !== undefined
+      !isAlternate && !wasAtBottom && terminal !== undefined && buf !== undefined
         ? terminal.registerMarker(buf.viewportY - buf.baseY - buf.cursorY)
         : undefined;
 
@@ -76,7 +74,7 @@ function scheduleFit() {
 
     // リサイズ後にスクロール位置を復元
     if (terminal !== undefined) {
-      if (isAlternate || isClaudeActive || wasAtBottom) {
+      if (isAlternate || wasAtBottom) {
         terminal.scrollToBottom();
       } else if (marker !== undefined && !marker.isDisposed) {
         terminal.scrollToLine(Math.min(marker.line, terminal.buffer.active.baseY));
@@ -193,14 +191,20 @@ onMounted(async () => {
   if (unmounted) return;
 
   // store の PTY セッションに接続（ring buffer replay + live attach）
-  // Claude Code は normal buffer で動作する TUI アプリ。再描画で baseY が増加し
-  // スクロール位置がトップにずれるため、active 中は常に bottom に追従する
+  // ghostty の Pin トラッキングに倣い、write() 後にスクロール位置を保持する。
+  // TUI アプリ（Claude Code 等）の再描画でエスケープシーケンスにより viewportY が
+  // リセットされる場合があるため、write() 前の viewportY を記録して復元する
   detachDisposer = terminalStore.attachTerminal(props.leafId, (data) => {
-    const scrollAfterWrite =
-      terminalStore.getClaudeState(props.leafId) === "working" ||
-      terminalStore.getClaudeState(props.leafId) === "asking";
-    terminal?.write(data, () => {
-      if (scrollAfterWrite) terminal?.scrollToBottom();
+    const buf = term.buffer.active;
+    const wasAtBottom = buf.viewportY >= buf.baseY;
+    const savedViewportY = buf.viewportY;
+    term.write(data, () => {
+      if (wasAtBottom) {
+        term.scrollToBottom();
+      } else if (term.buffer.active.viewportY !== savedViewportY) {
+        // エスケープシーケンスで viewportY が変更された場合のみ復元
+        term.scrollToLine(Math.min(savedViewportY, term.buffer.active.baseY));
+      }
     });
   });
 
