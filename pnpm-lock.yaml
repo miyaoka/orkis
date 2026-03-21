@@ -183,9 +183,6 @@ importers:
       electrobun:
         specifier: 'catalog:'
         version: 1.16.0
-      ghostty-web:
-        specifier: 0.4.0-next.14.g6a1a50d
-        version: 0.4.0-next.14.g6a1a50d
       marked:
         specifier: 17.0.4
         version: 17.0.4
@@ -2167,9 +2164,6 @@ packages:
   get-uri@6.0.5:
     resolution: {integrity: sha512-b1O07XYq8eRuVzBNgJLstU6FYc1tS6wnMtF1I1D9lE8LxZSOGZ7LhxN54yPP6mGw5f2CkXY2BQUL9Fx41qvcIg==}
     engines: {node: '>= 14'}
-
-  ghostty-web@0.4.0-next.14.g6a1a50d:
-    resolution: {integrity: sha512-01H59pAKq43Y8ZZiIhH98cu0ahZaoGoPQPtW4KnZPT0JFdQYen2djsXrOnt27JnMv64D4eLeAq8D6h72mo52xQ==}
 
   glob-parent@5.1.2:
     resolution: {integrity: sha512-AOIgSQCepiJYwP3ARnGx+5VnTu2HBYdzbGP45eLw1vr3zB3vZLeyed1sC9hnbcOc9/SrMyM5RPQrkGz4aS9Zow==}
@@ -5118,8 +5112,6 @@ snapshots:
       debug: 4.4.3
     transitivePeerDependencies:
       - supports-color
-
-  ghostty-web@0.4.0-next.14.g6a1a50d: {}
 
   glob-parent@5.1.2:
     dependencies:

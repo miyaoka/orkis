@@ -1,5 +1,5 @@
 /**
- * ターミナル共通設定。ghostty-web / xterm.js 両バックエンドで共有する。
+ * ターミナル共通設定。
  * 将来的にユーザー設定で Partial<TerminalConfig> をマージして上書きする。
  */
 
