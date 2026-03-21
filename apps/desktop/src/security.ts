@@ -37,22 +37,43 @@ export async function readFileContent(absolutePath: string): Promise<FileReadRes
   return { content, isBinary: false };
 }
 
-export async function resolveSecurePath(root: string, relPath: string): Promise<string> {
+/** path.relative() の結果が root の外を指すかを判定する */
+export function isPathOutside(relative: string): boolean {
+  return relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative);
+}
+
+/** Git 論理パスの検証。realpath は使わない（git は repo 内の論理パスで操作するため） */
+export function resolveGitPath(root: string, relPath: string): string {
+  const resolved = path.resolve(root, relPath);
+  const relative = path.relative(root, resolved);
+  if (!relative || isPathOutside(relative)) {
+    throw new Error("Access denied: path is outside workspace root");
+  }
+  return resolved;
+}
+
+/** 既存 FS パスの検証。realpath で symlink を解決し、実パスが root 配下であることを確認する */
+export async function resolveExistingFsPath(root: string, relPath: string): Promise<string> {
   const resolved = path.resolve(root, relPath);
   const real = await fsp.realpath(resolved);
   const realRoot = await fsp.realpath(root);
   const relative = path.relative(realRoot, real);
-  if (relative.startsWith("..") || path.isAbsolute(relative)) {
+  if (isPathOutside(relative)) {
     throw new Error("Access denied: path is outside workspace root");
   }
   return real;
 }
 
-/** ファイルが存在しなくてもパストラバーサルだけを防ぐチェック（git 操作用） */
-export function assertInsideRoot(root: string, relPath: string): void {
+/** 未存在 FS パスの検証。親ディレクトリを realpath で検証し、作成先が root 配下であることを確認する */
+export async function resolveCreatableFsPath(root: string, relPath: string): Promise<string> {
   const resolved = path.resolve(root, relPath);
-  const relative = path.relative(root, resolved);
-  if (relative.startsWith("..") || path.isAbsolute(relative)) {
+  const parent = path.dirname(resolved);
+  const realParent = await fsp.realpath(parent);
+  const realRoot = await fsp.realpath(root);
+  const parentRelative = path.relative(realRoot, realParent);
+  if (isPathOutside(parentRelative)) {
     throw new Error("Access denied: path is outside workspace root");
   }
+  // 親の実パスを基準にファイル名を結合して返す
+  return path.join(realParent, path.basename(resolved));
 }

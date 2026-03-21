@@ -160,9 +160,9 @@ export type OrkisRPC = {
         params: undefined;
         response: string[];
       };
-      /** worktree を作成する（branch 未指定なら新規ブランチを自動生成） */
-      gitWorktreeAdd: {
-        params: { branch?: string };
+      /** worktree を作成する */
+      createWorktree: {
+        params: { worktreeDir: string; branch: string };
         response: WorktreeEntry;
       };
       /** worktree を解除する（ブランチは残る） */
@@ -195,9 +195,9 @@ export type OrkisRPC = {
         params: { id: string };
         response: void;
       };
-      /** Todo から worktree を作成して紐づける */
-      todoStart: {
-        params: { id: string };
+      /** Todo に worktree を作成して紐づける */
+      createWorktreeWithTodo: {
+        params: { id: string; worktreeDir: string; branch: string };
         response: { todo: Todo; worktree: WorktreeEntry };
       };
       /** 表示対象ディレクトリを切り替える（worktree 選択） */

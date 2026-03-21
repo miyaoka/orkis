@@ -46,7 +46,7 @@ Todo の [⋮] → "Worktree 化" → worktree 作成 + worktreeDir 紐づけ
 ### 直接 worktree 作成
 
 ```text
-[New worktree] → worktree 作成 + 空 body の Todo 自動生成・紐づけ
+[New worktree] → Todo 入力パネル表示（デフォルトでタイムスタンプ入力済み） → Todo 作成 + worktree 作成・紐づけ
 ```
 
 ### 削除・クリーンアップ
@@ -125,14 +125,14 @@ WORKTREES
 ### 新規追加
 
 ```text
-todoList:   undefined → Todo[]
-todoAdd:    { body, icon?, worktreeDir? } → Todo
-todoUpdate: { id, body, icon? } → Todo
-todoRemove: { id } → void
-todoStart:  { id } → { todo: Todo, worktree: WorktreeEntry }
+todoList:               undefined → Todo[]
+todoAdd:                { body, icon?, worktreeDir? } → Todo
+todoUpdate:             { id, body, icon? } → Todo
+todoRemove:             { id } → void
+createWorktreeWithTodo: { id, worktreeDir, branch } → { todo: Todo, worktree: WorktreeEntry }
 ```
 
 ### 既存変更
 
-- `gitWorktreeAdd`: レスポンスに自動生成した Todo を含める
+- `createWorktree`: worktreeDir と branch を renderer 側から指定する設計に変更
 - `gitWorktreeList`: 各 worktree に紐づく Todo を含める

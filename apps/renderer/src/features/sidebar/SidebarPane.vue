@@ -34,7 +34,7 @@ import { useTerminalStore } from "../terminal/useTerminalStore";
 import { useVoicevoxStore } from "../voicevox/useVoicevoxStore";
 import TodoEditor from "./todo/TodoEditor.vue";
 import TodoList from "./todo/TodoList.vue";
-import { dirName, worktreeDisplayName } from "./utils";
+import { dirName, generateTimestamp, worktreeDisplayName } from "./utils";
 import BranchList from "./worktree/BranchList.vue";
 import RootWorktree from "./worktree/RootWorktree.vue";
 import WorktreeList from "./worktree/WorktreeList.vue";
@@ -263,6 +263,48 @@ function cancelNewTodo() {
   isAddingTodo.value = false;
 }
 
+// --- 新規 Worktree 作成（Todo 入力パネル） ---
+
+const isAddingWorktree = ref(false);
+const newWorktreeBody = ref("");
+const newWorktreeIcon = ref<string>();
+/** worktree のディレクトリ名・ブランチ名（パネル表示時に確定） */
+const newWorktreeDir = ref("");
+
+function startAddingWorktree() {
+  isAddingWorktree.value = true;
+  const id = generateTimestamp();
+  newWorktreeDir.value = id;
+  newWorktreeBody.value = id;
+  newWorktreeIcon.value = undefined;
+}
+
+async function submitNewWorktree() {
+  if (!newWorktreeBody.value.trim()) {
+    isAddingWorktree.value = false;
+    return;
+  }
+  isCreating.value = true;
+  const addResult = await tryCatch(
+    request.todoAdd({ body: newWorktreeBody.value, icon: newWorktreeIcon.value }),
+  );
+  if (!addResult.ok) {
+    isCreating.value = false;
+    return;
+  }
+  isAddingWorktree.value = false;
+  // worktree 作成が失敗しても Todo は作成済み。TODOS 欄に表示される
+  await createWorktreeWithTodo({
+    todo: addResult.value,
+    worktreeDir: newWorktreeDir.value,
+    branch: newWorktreeDir.value,
+  });
+}
+
+function cancelNewWorktree() {
+  isAddingWorktree.value = false;
+}
+
 // --- データ取得 ---
 
 async function fetchData() {
@@ -307,16 +349,16 @@ async function handleWorktreeSelect(wt: WorktreeEntry) {
   isSwitching.value = false;
 }
 
-async function addWorktree(branch?: string) {
+async function createWorktree(branch: string) {
   isCreating.value = true;
-  if (branch) {
-    freeBranches.value = freeBranches.value.filter((b) => b !== branch);
-  }
+  freeBranches.value = freeBranches.value.filter((b) => b !== branch);
 
-  const result = await tryCatch(request.gitWorktreeAdd({ branch }));
+  const result = await tryCatch(
+    request.createWorktree({ worktreeDir: generateTimestamp(), branch }),
+  );
   if (result.ok) {
     await fetchData();
-  } else if (branch) {
+  } else {
     freeBranches.value.push(branch);
   }
   isCreating.value = false;
@@ -355,14 +397,26 @@ async function handleWorktreeRemove(wt: WorktreeEntry) {
 
 // --- Todo 操作 ---
 
-async function handleTodoStart(todo: Todo) {
-  closeMenu();
+async function createWorktreeWithTodo({
+  todo,
+  worktreeDir,
+  branch,
+}: {
+  todo: Todo;
+  worktreeDir: string;
+  branch: string;
+}) {
   isCreating.value = true;
-  const result = await tryCatch(request.todoStart({ id: todo.id }));
-  if (result.ok) {
-    await fetchData();
-  }
+  // 失敗しても Todo は残る。fetchData で TODOS 欄に反映され、再試行または削除できる
+  await tryCatch(request.createWorktreeWithTodo({ id: todo.id, worktreeDir, branch }));
+  await fetchData();
   isCreating.value = false;
+}
+
+function handleTodoCreateWorktree(todo: Todo) {
+  closeMenu();
+  const timestamp = generateTimestamp();
+  createWorktreeWithTodo({ todo, worktreeDir: timestamp, branch: timestamp });
 }
 
 async function handleTodoRemove(todo: Todo) {
@@ -392,7 +446,7 @@ async function handleWorktreeEditTodo(wt: WorktreeEntry) {
 
 function handleBranchLink(branch: string) {
   closeMenu();
-  addWorktree(branch);
+  createWorktree(branch);
 }
 
 watch(
@@ -452,6 +506,7 @@ onUnmounted(() => {
         :loading="worktrees.length === 0"
         :active-dir="workspaceStore.dir"
         :is-creating="isCreating"
+        :is-adding-worktree="isAddingWorktree"
         :ctrl-pressed="ctrlPressed"
         :now="now"
         :view-mode="terminalStore.viewMode"
@@ -461,7 +516,7 @@ onUnmounted(() => {
           (anchorName, wt) =>
             openMenu(anchorName, { type: 'worktree', worktree: wt, todo: wt.todo })
         "
-        @add="addWorktree()"
+        @add="startAddingWorktree"
         @set-view-mode="terminalStore.viewMode = $event"
       >
         <template #after-item="{ wt }">
@@ -472,6 +527,15 @@ onUnmounted(() => {
             @save="submitEdit"
             @cancel="cancelEdit"
             @icon-change="saveEditIcon"
+          />
+        </template>
+        <template #add-form>
+          <TodoEditor
+            v-if="isAddingWorktree"
+            v-model:body="newWorktreeBody"
+            v-model:icon="newWorktreeIcon"
+            @save="submitNewWorktree"
+            @cancel="cancelNewWorktree"
           />
         </template>
       </WorktreeList>
@@ -545,7 +609,7 @@ onUnmounted(() => {
         <button
           class="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-zinc-800"
           :disabled="isCreating"
-          @click="handleTodoStart(menuContext.todo)"
+          @click="handleTodoCreateWorktree(menuContext.todo)"
         >
           <span class="icon-[lucide--play] text-xs" />
           Create worktree

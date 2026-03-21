@@ -23,9 +23,10 @@ import {
 } from "./git";
 import {
   isAllowedProtocol,
+  isPathOutside,
   readFileContent,
-  resolveSecurePath,
-  assertInsideRoot,
+  resolveExistingFsPath,
+  resolveGitPath,
 } from "./security";
 import { generateClaudeSettings } from "./claudeHooks";
 import { getShellEnv } from "./shellEnv";
@@ -216,7 +217,7 @@ const fileServer = Bun.serve({
 
     // /{windowId}/git/{relPath} — git show HEAD:path でファイルを返す
     if (source === "git") {
-      const insideResult = tryCatch(() => assertInsideRoot(dir, relPath));
+      const insideResult = tryCatch(() => resolveGitPath(dir, relPath));
       if (!insideResult.ok) return new Response("Forbidden", { status: 403 });
       const proc = Bun.spawn(["git", "show", `HEAD:${relPath}`], { cwd: dir });
       const bufResult = await tryCatch(new Response(proc.stdout).arrayBuffer());
@@ -229,7 +230,7 @@ const fileServer = Bun.serve({
 
     // /{windowId}/fs/{relPath} — ファイルシステムから直接返す
     if (source === "fs") {
-      const pathResult = await tryCatch(resolveSecurePath(dir, relPath));
+      const pathResult = await tryCatch(resolveExistingFsPath(dir, relPath));
       if (!pathResult.ok) return new Response("Forbidden", { status: 403 });
       return new Response(Bun.file(pathResult.value), { headers });
     }
@@ -349,7 +350,7 @@ function startWatching(win: OrkisWindow, root: string) {
           for (const lsp of clients) {
             // プロジェクトルートからの相対パスを各 LSP の rootDir からの相対パスに変換
             const lspRelPath = path.relative(lsp.rootDir, absPath);
-            if (lspRelPath.startsWith("..")) continue; // この LSP の管轄外
+            if (isPathOutside(lspRelPath)) continue; // この LSP の管轄外
             if (fileResult.ok) {
               lsp.didChange(lspRelPath, fileResult.value);
             } else {
@@ -618,7 +619,7 @@ function createWindowWithRPC(dir: string, options?: CreateWindowOptions): OrkisW
           return spawnPty(win, realCwd, cols, rows);
         },
         fsReadDir: async ({ relPath }) => {
-          const absolutePath = await resolveSecurePath(currentDir, relPath);
+          const absolutePath = await resolveExistingFsPath(currentDir, relPath);
           const entries = await fsp.readdir(absolutePath, { withFileTypes: true });
           const visibleEntries = entries.filter((e) => e.name !== ".git");
           const names = visibleEntries.map((e) => e.name);
@@ -643,14 +644,14 @@ function createWindowWithRPC(dir: string, options?: CreateWindowOptions): OrkisW
           );
         },
         fsReadFile: async ({ relPath }) => {
-          const absolutePath = await resolveSecurePath(currentDir, relPath);
+          const absolutePath = await resolveExistingFsPath(currentDir, relPath);
           return readFileContent(absolutePath);
         },
         fsReadFileAbsolute: async ({ absolutePath }) => {
           return readFileContent(absolutePath);
         },
         gitShowFile: async ({ relPath }) => {
-          assertInsideRoot(currentDir, relPath);
+          resolveGitPath(currentDir, relPath);
           const proc = Bun.spawn(["git", "show", `HEAD:${relPath}`], { cwd: currentDir });
           const result = await tryCatch(new Response(proc.stdout).arrayBuffer());
           await proc.exited;
@@ -664,7 +665,7 @@ function createWindowWithRPC(dir: string, options?: CreateWindowOptions): OrkisW
           return { content: new TextDecoder().decode(bytes), isBinary: false };
         },
         gitDiffFile: async ({ relPath }) => {
-          assertInsideRoot(currentDir, relPath);
+          resolveGitPath(currentDir, relPath);
           const result = await tryCatch(
             new Response(
               Bun.spawn(["git", "diff", "HEAD", "--", relPath], { cwd: currentDir }).stdout,
@@ -688,8 +689,8 @@ function createWindowWithRPC(dir: string, options?: CreateWindowOptions): OrkisW
           return entries;
         },
         gitBranchList: () => getBranchList(projectDir),
-        gitWorktreeAdd: async ({ branch }) => {
-          const entry = await addWorktree(projectDir, branch);
+        createWorktree: async ({ worktreeDir, branch }) => {
+          const entry = await addWorktree(projectDir, worktreeDir, branch);
           void syncWorktreeWatchers(win, projectDir, currentDir);
           return entry;
         },
@@ -713,8 +714,8 @@ function createWindowWithRPC(dir: string, options?: CreateWindowOptions): OrkisW
         todoAdd: ({ body, icon, worktreeDir }) => addTodo(projectDir, body, icon, worktreeDir),
         todoUpdate: ({ id, body, icon }) => updateTodo(projectDir, id, body, icon),
         todoRemove: ({ id }) => removeTodo(projectDir, id),
-        todoStart: async ({ id }) => {
-          const entry = await addWorktree(projectDir);
+        createWorktreeWithTodo: async ({ id, worktreeDir, branch }) => {
+          const entry = await addWorktree(projectDir, worktreeDir, branch);
           linkTodoToWorktree(projectDir, id, entry.path);
           const todo = loadTodos(projectDir).find((t) => t.id === id);
           if (!todo) throw new Error(`Todo not found after linking: ${id}`);

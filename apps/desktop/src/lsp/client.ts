@@ -11,6 +11,7 @@ import fsp from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import type { LspDiagnostic } from "@orkis/rpc";
+import { isPathOutside } from "../security";
 
 // --- JSON-RPC 型 ---
 
@@ -586,7 +587,7 @@ export function createLspClient(options: LspClientOptions): LspClient {
     if (!uri.startsWith("file://")) return undefined;
     const absPath = fileURLToPath(uri);
     const relPath = path.relative(rootDir, absPath);
-    if (relPath.startsWith("..") || path.isAbsolute(relPath)) return undefined;
+    if (isPathOutside(relPath)) return undefined;
     return relPath;
   }
 
