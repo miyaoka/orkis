@@ -22,7 +22,7 @@ worktree 行ごとの Claude 状態表示は `WorktreeItem.vue` に委譲。
 
 <script setup lang="ts">
 import type { Todo, WorktreeEntry } from "@orkis/rpc";
-import { tryCatch, generateWorktreeId } from "@orkis/shared";
+import { tryCatch } from "@orkis/shared";
 import { useEventListener, useIntervalFn } from "@vueuse/core";
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import { useCommandRegistry } from "../command/useCommandRegistry";
@@ -34,7 +34,7 @@ import { useTerminalStore } from "../terminal/useTerminalStore";
 import { useVoicevoxStore } from "../voicevox/useVoicevoxStore";
 import TodoEditor from "./todo/TodoEditor.vue";
 import TodoList from "./todo/TodoList.vue";
-import { dirName, worktreeDisplayName } from "./utils";
+import { dirName, generateWorktreeId, worktreeDisplayName } from "./utils";
 import BranchList from "./worktree/BranchList.vue";
 import RootWorktree from "./worktree/RootWorktree.vue";
 import WorktreeList from "./worktree/WorktreeList.vue";
@@ -289,7 +289,8 @@ async function saveNewWorktree() {
     return;
   }
   isAddingWorktree.value = false;
-  await tryCatch(request.todoStart({ id: addResult.value.id }));
+  const [firstLine] = newWorktreeBody.value.split("\n");
+  await tryCatch(request.todoStart({ id: addResult.value.id, name: firstLine.trim() }));
   await fetchData();
   isCreating.value = false;
 }
@@ -348,7 +349,7 @@ async function addWorktree(branch?: string) {
     freeBranches.value = freeBranches.value.filter((b) => b !== branch);
   }
 
-  const result = await tryCatch(request.gitWorktreeAdd({ branch }));
+  const result = await tryCatch(request.gitWorktreeAdd({ name: generateWorktreeId(), branch }));
   if (result.ok) {
     await fetchData();
   } else if (branch) {
@@ -393,7 +394,9 @@ async function handleWorktreeRemove(wt: WorktreeEntry) {
 async function handleTodoStart(todo: Todo) {
   closeMenu();
   isCreating.value = true;
-  const result = await tryCatch(request.todoStart({ id: todo.id }));
+  const [firstLine] = todo.body.split("\n");
+  if (!firstLine.trim()) throw new Error("Todo body is empty");
+  const result = await tryCatch(request.todoStart({ id: todo.id, name: firstLine.trim() }));
   if (result.ok) {
     await fetchData();
   }
