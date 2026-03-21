@@ -688,8 +688,8 @@ function createWindowWithRPC(dir: string, options?: CreateWindowOptions): OrkisW
           return entries;
         },
         gitBranchList: () => getBranchList(projectDir),
-        gitWorktreeAdd: async ({ name, branch }) => {
-          const entry = await addWorktree(projectDir, name, branch);
+        createWorktree: async ({ worktreeDir, branch }) => {
+          const entry = await addWorktree(projectDir, worktreeDir, branch);
           void syncWorktreeWatchers(win, projectDir, currentDir);
           return entry;
         },
@@ -713,8 +713,8 @@ function createWindowWithRPC(dir: string, options?: CreateWindowOptions): OrkisW
         todoAdd: ({ body, icon, worktreeDir }) => addTodo(projectDir, body, icon, worktreeDir),
         todoUpdate: ({ id, body, icon }) => updateTodo(projectDir, id, body, icon),
         todoRemove: ({ id }) => removeTodo(projectDir, id),
-        todoStart: async ({ id, name }) => {
-          const entry = await addWorktree(projectDir, name);
+        createWorktreeWithTodo: async ({ id, worktreeDir, branch }) => {
+          const entry = await addWorktree(projectDir, worktreeDir, branch);
           linkTodoToWorktree(projectDir, id, entry.path);
           const todo = loadTodos(projectDir).find((t) => t.id === id);
           if (!todo) throw new Error(`Todo not found after linking: ${id}`);

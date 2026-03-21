@@ -9,22 +9,24 @@ export const WORKTREE_DIR = ".orkis/worktrees";
 
 export async function addWorktree(
   cwd: string,
-  name: string,
-  branch?: string,
+  worktreeDir: string,
+  branch: string,
 ): Promise<WorktreeEntry> {
-  const id = name;
-  const wtPath = path.join(cwd, WORKTREE_DIR, id);
+  const wtPath = path.join(cwd, WORKTREE_DIR, worktreeDir);
 
-  if (branch) {
-    assertBranchName(branch);
-  }
+  assertBranchName(branch);
 
   await fsp.mkdir(path.join(cwd, WORKTREE_DIR), { recursive: true });
 
-  // branch 指定あり → 既存ブランチをチェックアウト、なし → 新規ブランチ作成
-  const args = branch
+  // ブランチが既存かどうかを判定し、存在しなければ -b で新規作成。
+  // 判定後〜作成前に同名ブランチが作られる競合は理論上あり得るが、
+  // タイムスタンプベースの名前で実質衝突しない。万一衝突しても git がエラーを返す
+  const branchExists =
+    (await Bun.spawn(["git", "rev-parse", "--verify", `refs/heads/${branch}`], { cwd }).exited) ===
+    0;
+  const args = branchExists
     ? ["git", "worktree", "add", wtPath, branch]
-    : ["git", "worktree", "add", "-b", id, wtPath];
+    : ["git", "worktree", "add", "-b", branch, wtPath];
 
   const proc = Bun.spawn(args, { cwd, stderr: "pipe" });
   await proc.exited;
@@ -39,7 +41,7 @@ export async function addWorktree(
   );
   const head = headResult.ok ? headResult.value.trim() : "";
 
-  return { path: wtPath, head, branch: branch ?? id, isMain: false };
+  return { path: wtPath, head, branch, isMain: false };
 }
 
 /** wtPath が WORKTREE_DIR 配下であることを検証する */

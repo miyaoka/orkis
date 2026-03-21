@@ -125,14 +125,14 @@ WORKTREES
 ### 新規追加
 
 ```text
-todoList:   undefined → Todo[]
-todoAdd:    { body, icon?, worktreeDir? } → Todo
-todoUpdate: { id, body, icon? } → Todo
-todoRemove: { id } → void
-todoStart:  { id } → { todo: Todo, worktree: WorktreeEntry }
+todoList:               undefined → Todo[]
+todoAdd:                { body, icon?, worktreeDir? } → Todo
+todoUpdate:             { id, body, icon? } → Todo
+todoRemove:             { id } → void
+createWorktreeWithTodo: { id, worktreeDir, branch } → { todo: Todo, worktree: WorktreeEntry }
 ```
 
 ### 既存変更
 
-- `gitWorktreeAdd`: レスポンスに自動生成した Todo を含める
+- `createWorktree`: worktreeDir と branch を renderer 側から指定する設計に変更
 - `gitWorktreeList`: 各 worktree に紐づく Todo を含める
