@@ -13,24 +13,30 @@ interface TerminalLayoutState {
   focusedLeafId: string;
 }
 
-interface PaneEntry {
-  dir: string;
+/** paneRegistry へのペーン登録・削除アクセサ。store が所有する paneRegistry のエントリ管理だけを操作する */
+interface PaneRegistrar {
+  /** ペーンを登録する（dir のみ設定。session は ptySession が管理） */
+  registerPane: (leafId: string, dir: string) => void;
+  /** ペーンを削除する（PTY kill + CWD 削除も含む） */
+  unregisterPane: (leafId: string) => void;
+  /** leafId に対応するペーンの dir を返す。存在しなければ undefined */
+  getPaneDir: (leafId: string) => string | undefined;
+  /** 指定 dir に属する全 leafId を返す */
+  getLeafIdsByDir: (dir: string) => string[];
 }
 
 interface TerminalLayoutDeps {
   layoutsByDir: Ref<Record<string, TerminalLayoutState>>;
   visitedDirs: Ref<string[]>;
-  paneRegistry: Ref<Record<string, PaneEntry>>;
+  panes: PaneRegistrar;
   /** フォーカス中のペインを閉じるときに terminalFocus をリセットする */
   resetTerminalFocus: () => void;
-  /** ペイン削除時に PTY kill + 関連リソースのクリーンアップを行う */
-  onPaneRemoved: (leafId: string) => void;
 }
 
 export type { TerminalLayoutState };
 
 export function createTerminalLayout(deps: TerminalLayoutDeps) {
-  const { layoutsByDir, visitedDirs, paneRegistry, resetTerminalFocus, onPaneRemoved } = deps;
+  const { layoutsByDir, visitedDirs, panes, resetTerminalFocus } = deps;
 
   /** layoutsByDir[dir] を返す。未登録なら初期リーフで作成する */
   function ensureLayout(dir: string): TerminalLayoutState {
@@ -43,7 +49,7 @@ export function createTerminalLayout(deps: TerminalLayoutDeps) {
       focusedLeafId: leaf.id,
     };
     layoutsByDir.value[dir] = layout;
-    paneRegistry.value[leaf.id] = { dir };
+    panes.registerPane(leaf.id, dir);
     return layout;
   }
 
@@ -69,7 +75,7 @@ export function createTerminalLayout(deps: TerminalLayoutDeps) {
     };
 
     if (result.createdLeafId !== undefined) {
-      paneRegistry.value[result.createdLeafId] = { dir };
+      panes.registerPane(result.createdLeafId, dir);
     }
   }
 
@@ -91,8 +97,7 @@ export function createTerminalLayout(deps: TerminalLayoutDeps) {
     }
 
     // 削除確定後に PTY kill + paneRegistry / CWD 削除
-    onPaneRemoved(leafId);
-    delete paneRegistry.value[leafId];
+    panes.unregisterPane(leafId);
 
     layoutsByDir.value[dir] = {
       root: result.root,
@@ -111,10 +116,8 @@ export function createTerminalLayout(deps: TerminalLayoutDeps) {
     if (layout === undefined) return;
 
     // 既存の全ペインを破棄
-    for (const [leafId, entry] of Object.entries(paneRegistry.value)) {
-      if (entry.dir !== dir) continue;
-      onPaneRemoved(leafId);
-      delete paneRegistry.value[leafId];
+    for (const leafId of panes.getLeafIdsByDir(dir)) {
+      panes.unregisterPane(leafId);
     }
 
     resetTerminalFocus();
@@ -125,7 +128,7 @@ export function createTerminalLayout(deps: TerminalLayoutDeps) {
       root: leaf,
       focusedLeafId: leaf.id,
     };
-    paneRegistry.value[leaf.id] = { dir };
+    panes.registerPane(leaf.id, dir);
   }
 
   /** branch の ratio を更新する */
@@ -141,13 +144,13 @@ export function createTerminalLayout(deps: TerminalLayoutDeps) {
 
   /** フォーカスを変更する */
   function focusPane(leafId: string) {
-    const entry = paneRegistry.value[leafId];
-    if (entry === undefined) return;
+    const dir = panes.getPaneDir(leafId);
+    if (dir === undefined) return;
 
-    const layout = layoutsByDir.value[entry.dir];
+    const layout = layoutsByDir.value[dir];
     if (layout === undefined) return;
 
-    layoutsByDir.value[entry.dir] = {
+    layoutsByDir.value[dir] = {
       ...layout,
       focusedLeafId: leafId,
     };
@@ -162,8 +165,7 @@ export function createTerminalLayout(deps: TerminalLayoutDeps) {
     if (layout !== undefined) {
       const leafIds = collectLeafIds(layout.root);
       for (const leafId of leafIds) {
-        onPaneRemoved(leafId);
-        delete paneRegistry.value[leafId];
+        panes.unregisterPane(leafId);
       }
       delete layoutsByDir.value[dir];
     }

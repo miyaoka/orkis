@@ -50,7 +50,8 @@ const props = defineProps<{
 
 const terminalStore = useTerminalStore();
 const workspaceStore = useWorkspaceStore();
-const layout = computed(() => terminalStore.ensureLayout(props.dir));
+// visit() が先に呼ばれるため、layoutsByDir[dir] は必ず存在する
+const layout = computed(() => terminalStore.layoutsByDir[props.dir]);
 
 const HUE_OFFSET = 30;
 

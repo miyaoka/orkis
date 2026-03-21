@@ -46,7 +46,15 @@ export const useTerminalStore = defineStore("terminal", () => {
   // --- モジュール初期化 ---
 
   const ptySession = createPtySessionManager({
-    paneRegistry,
+    panes: {
+      getPane: (leafId) => paneRegistry.value[leafId],
+      setSession: (leafId, session) => {
+        const entry = paneRegistry.value[leafId];
+        if (entry === undefined) return;
+        paneRegistry.value[leafId] = { ...entry, session };
+      },
+      iterateEntries: () => Object.entries(paneRegistry.value),
+    },
     requestPtySpawn: request.ptySpawn,
     sendPtyKill: send.ptyKill,
     onDataReceived: (ptyId, data) => claude.detectInterrupt(ptyId, data),
@@ -55,19 +63,36 @@ export const useTerminalStore = defineStore("terminal", () => {
 
   const claude = createClaudeStatusManager({
     claudeStatusByPtyId,
-    paneRegistry,
+    panes: {
+      getSessionPtyId: (leafId) => paneRegistry.value[leafId]?.session?.ptyId,
+      iteratePanes: function* () {
+        for (const [leafId, entry] of Object.entries(paneRegistry.value)) {
+          yield { leafId, dir: entry.dir, ptyId: entry.session?.ptyId };
+        }
+      },
+    },
     isPtyAlive: ptySession.isPtyAlive,
   });
 
   const layout = createTerminalLayout({
     layoutsByDir,
     visitedDirs,
-    paneRegistry,
-    resetTerminalFocus: () => contextKeys.set("terminalFocus", false),
-    onPaneRemoved: (leafId) => {
-      ptySession.killPty(leafId);
-      delete cwdByLeafId.value[leafId];
+    panes: {
+      registerPane: (leafId, dir) => {
+        paneRegistry.value[leafId] = { dir };
+      },
+      unregisterPane: (leafId) => {
+        ptySession.killPty(leafId);
+        delete cwdByLeafId.value[leafId];
+        delete paneRegistry.value[leafId];
+      },
+      getPaneDir: (leafId) => paneRegistry.value[leafId]?.dir,
+      getLeafIdsByDir: (dir) =>
+        Object.entries(paneRegistry.value)
+          .filter(([, entry]) => entry.dir === dir)
+          .map(([leafId]) => leafId),
     },
+    resetTerminalFocus: () => contextKeys.set("terminalFocus", false),
   });
 
   // --- computed ---
@@ -108,6 +133,18 @@ export const useTerminalStore = defineStore("terminal", () => {
 
   initSubscriptions();
 
+  // --- pane getter ---
+
+  /** leafId に対応するペーンの dir を返す */
+  function getPaneDir(leafId: string): string | undefined {
+    return paneRegistry.value[leafId]?.dir;
+  }
+
+  /** leafId に対応する PTY の ptyId を返す */
+  function getPtyId(leafId: string): number | undefined {
+    return paneRegistry.value[leafId]?.session?.ptyId;
+  }
+
   // --- CWD ---
 
   /** OSC 7 で通知された CWD を保存する */
@@ -129,14 +166,12 @@ export const useTerminalStore = defineStore("terminal", () => {
     // state
     visitedDirs,
     layoutsByDir,
-    paneRegistry,
     dragSuspendCount,
     viewMode,
     cwdByLeafId,
     // computed
     claudeActiveLeafIds,
     // layout
-    ensureLayout: layout.ensureLayout,
     visit: layout.visit,
     splitPane: layout.splitPane,
     closePane: layout.closePane,
@@ -152,6 +187,9 @@ export const useTerminalStore = defineStore("terminal", () => {
     getClaudeState: claude.getClaudeState,
     getClaudeStatusesByDir: claude.getClaudeStatusesByDir,
     clearDoneStates: claude.clearDoneStates,
+    // pane getter
+    getPaneDir,
+    getPtyId,
     // cwd
     setCwd,
     // drag

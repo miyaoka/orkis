@@ -61,20 +61,23 @@ const ASK_DEBOUNCE_MS = 150;
 const INTERRUPT_MARKER = "⎿ \u00A0Interrupted";
 const PTY_TAIL_BUFFER_SIZE = 50;
 
-interface PaneEntry {
-  dir: string;
-  session?: { ptyId: number };
+/** paneRegistry の読み取り専用ビュー。claudeStatus が必要とする情報だけを公開する */
+interface PaneAccessor {
+  /** leafId に対応する session の ptyId を返す。session がなければ undefined */
+  getSessionPtyId: (leafId: string) => number | undefined;
+  /** 全ペインを走査する。各エントリは leafId, dir, ptyId（session がなければ undefined） */
+  iteratePanes: () => Iterable<{ leafId: string; dir: string; ptyId: number | undefined }>;
 }
 
 interface ClaudeStatusManagerDeps {
   claudeStatusByPtyId: Ref<Record<number, ClaudeStatus>>;
-  paneRegistry: Ref<Record<string, PaneEntry>>;
-  /** ptyId → leafId 逆引き。PTY 生存判定に使う */
+  panes: PaneAccessor;
+  /** ptyId が生存中かどうか */
   isPtyAlive: (ptyId: number) => boolean;
 }
 
 export function createClaudeStatusManager(deps: ClaudeStatusManagerDeps) {
-  const { claudeStatusByPtyId, paneRegistry, isPtyAlive } = deps;
+  const { claudeStatusByPtyId, panes, isPtyAlive } = deps;
 
   /** ptyId → PermissionRequest の debounce タイマー */
   const askTimers = new Map<number, ReturnType<typeof setTimeout>>();
@@ -204,18 +207,18 @@ export function createClaudeStatusManager(deps: ClaudeStatusManagerDeps) {
 
   /** leafId に対応する Claude Code の状態を返す。未起動（エントリなし）の場合は undefined */
   function getClaudeState(leafId: string): ClaudeState | undefined {
-    const entry = paneRegistry.value[leafId];
-    if (entry?.session === undefined) return undefined;
-    return claudeStatusByPtyId.value[entry.session.ptyId]?.state;
+    const ptyId = panes.getSessionPtyId(leafId);
+    if (ptyId === undefined) return undefined;
+    return claudeStatusByPtyId.value[ptyId]?.state;
   }
 
   /** Claude セッションが存在する（idle / working / asking / done）leafId 一覧 */
   function getClaudeActiveLeafIds(): string[] {
     const ids: string[] = [];
-    for (const [leafId, entry] of Object.entries(paneRegistry.value)) {
-      if (entry.session === undefined) continue;
-      if (claudeStatusByPtyId.value[entry.session.ptyId] !== undefined) {
-        ids.push(leafId);
+    for (const pane of panes.iteratePanes()) {
+      if (pane.ptyId === undefined) continue;
+      if (claudeStatusByPtyId.value[pane.ptyId] !== undefined) {
+        ids.push(pane.leafId);
       }
     }
     return ids;
@@ -224,10 +227,10 @@ export function createClaudeStatusManager(deps: ClaudeStatusManagerDeps) {
   /** worktree dir に属する全ターミナルの Claude 状態を返す（未起動は除外） */
   function getClaudeStatusesByDir(dir: string): ClaudeStatus[] {
     const statuses: ClaudeStatus[] = [];
-    for (const paneEntry of Object.values(paneRegistry.value)) {
-      if (paneEntry.dir !== dir) continue;
-      if (paneEntry.session === undefined) continue;
-      const status = claudeStatusByPtyId.value[paneEntry.session.ptyId];
+    for (const pane of panes.iteratePanes()) {
+      if (pane.dir !== dir) continue;
+      if (pane.ptyId === undefined) continue;
+      const status = claudeStatusByPtyId.value[pane.ptyId];
       if (status !== undefined) {
         statuses.push(status);
       }
@@ -240,11 +243,11 @@ export function createClaudeStatusManager(deps: ClaudeStatusManagerDeps) {
    * フォーカス時の既読消化に使う。Claude セッションは生きているため idle へ。
    */
   function clearDoneStates(dir: string) {
-    for (const entry of Object.values(paneRegistry.value)) {
-      if (entry.dir !== dir) continue;
-      if (entry.session === undefined) continue;
-      if (claudeStatusByPtyId.value[entry.session.ptyId]?.state === "done") {
-        claudeStatusByPtyId.value[entry.session.ptyId] = { state: "idle" };
+    for (const pane of panes.iteratePanes()) {
+      if (pane.dir !== dir) continue;
+      if (pane.ptyId === undefined) continue;
+      if (claudeStatusByPtyId.value[pane.ptyId]?.state === "done") {
+        claudeStatusByPtyId.value[pane.ptyId] = { state: "idle" };
       }
     }
   }

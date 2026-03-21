@@ -1,5 +1,4 @@
 import { tryCatch } from "@gozd/shared";
-import type { Ref } from "vue";
 import { terminalConfig } from "./terminalConfig";
 
 /** PTY セッション。store が所有し、コンポーネントの mount/unmount を跨いで維持される */
@@ -21,8 +20,18 @@ export interface PaneEntry {
 /** ring buffer の容量（チャンク数）。scrollback（行数）とは単位が異なるが、十分な再生データを保持する目安として同じ値を使う */
 const PTY_RING_BUFFER_CAPACITY = terminalConfig.scrollback;
 
+/** paneRegistry への session 読み書きアクセサ。store が所有する paneRegistry の session フィールドだけを操作する */
+interface PaneSessionAccessor {
+  /** leafId に対応するペインの dir と session を返す。存在しなければ undefined */
+  getPane: (leafId: string) => PaneEntry | undefined;
+  /** leafId に対応するペインの session を設定する */
+  setSession: (leafId: string, session: PtySession | undefined) => void;
+  /** 全ペインエントリを走査する（HMR 復元用） */
+  iterateEntries: () => Iterable<[string, PaneEntry]>;
+}
+
 interface PtySessionManagerDeps {
-  paneRegistry: Ref<Record<string, PaneEntry>>;
+  panes: PaneSessionAccessor;
   /** RPC: PTY を spawn する */
   requestPtySpawn: (params: { dir: string; cols: number; rows: number }) => Promise<number>;
   /** RPC: PTY を kill する（fire-and-forget） */
@@ -34,7 +43,7 @@ interface PtySessionManagerDeps {
 }
 
 export function createPtySessionManager(deps: PtySessionManagerDeps) {
-  const { paneRegistry, requestPtySpawn, sendPtyKill, onDataReceived, onPtyCleanup } = deps;
+  const { panes, requestPtySpawn, sendPtyKill, onDataReceived, onPtyCleanup } = deps;
 
   /** leafId → xterm.write コールバック。attach 中のみ存在 */
   const terminalWriters = new Map<string, (data: string) => void>();
@@ -57,7 +66,7 @@ export function createPtySessionManager(deps: PtySessionManagerDeps) {
    */
   function rebuildPtyIdMap() {
     ptyIdToLeafId.clear();
-    for (const [leafId, entry] of Object.entries(paneRegistry.value)) {
+    for (const [leafId, entry] of panes.iterateEntries()) {
       if (entry.session === undefined) continue;
       if (entry.session.exited) continue;
       ptyIdToLeafId.set(entry.session.ptyId, leafId);
@@ -68,7 +77,7 @@ export function createPtySessionManager(deps: PtySessionManagerDeps) {
   function handlePtyData(id: number, data: string) {
     const leafId = ptyIdToLeafId.get(id);
     if (leafId === undefined) return;
-    const entry = paneRegistry.value[leafId];
+    const entry = panes.getPane(leafId);
     if (entry?.session === undefined) return;
 
     // interrupt 検知等の外部コールバック
@@ -89,7 +98,7 @@ export function createPtySessionManager(deps: PtySessionManagerDeps) {
   function handlePtyExit(id: number) {
     const leafId = ptyIdToLeafId.get(id);
     if (leafId === undefined) return;
-    const entry = paneRegistry.value[leafId];
+    const entry = panes.getPane(leafId);
     if (entry?.session === undefined) return;
 
     const session = entry.session;
@@ -110,7 +119,7 @@ export function createPtySessionManager(deps: PtySessionManagerDeps) {
 
   /** PTY を spawn する。生存中 session または spawn 中であれば何もしない */
   async function spawnPty(leafId: string, cols: number, rows: number): Promise<void> {
-    const entry = paneRegistry.value[leafId];
+    const entry = panes.getPane(leafId);
     if (entry === undefined) return;
     // 生存中 session があればスキップ（HMR 再マウント時）
     // exited session は再 spawn を許可する
@@ -130,7 +139,7 @@ export function createPtySessionManager(deps: PtySessionManagerDeps) {
     const ptyId = result.value;
 
     // spawn 完了前に leaf が削除されていたら即 kill
-    const current = paneRegistry.value[leafId];
+    const current = panes.getPane(leafId);
     if (current === undefined) {
       sendPtyKill({ id: ptyId });
       return;
@@ -149,20 +158,20 @@ export function createPtySessionManager(deps: PtySessionManagerDeps) {
       exited: false,
     };
 
-    paneRegistry.value[leafId] = { ...current, session };
+    panes.setSession(leafId, session);
     ptyIdToLeafId.set(ptyId, leafId);
   }
 
   /** PTY を kill し、関連リソースをクリーンアップする */
   function killPty(leafId: string) {
-    const entry = paneRegistry.value[leafId];
+    const entry = panes.getPane(leafId);
     if (entry?.session === undefined) return;
 
     sendPtyKill({ id: entry.session.ptyId });
     ptyIdToLeafId.delete(entry.session.ptyId);
     onPtyCleanup?.(entry.session.ptyId);
     terminalWriters.delete(leafId);
-    paneRegistry.value[leafId] = { ...entry, session: undefined };
+    panes.setSession(leafId, undefined);
   }
 
   /**
@@ -171,7 +180,7 @@ export function createPtySessionManager(deps: PtySessionManagerDeps) {
    * @returns detach 用の disposer
    */
   function attachTerminal(leafId: string, writer: (data: string) => void): () => void {
-    const entry = paneRegistry.value[leafId];
+    const entry = panes.getPane(leafId);
     if (entry?.session !== undefined) {
       // ring buffer replay
       const session = entry.session;
