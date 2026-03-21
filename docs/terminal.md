@@ -8,9 +8,9 @@ xterm.js をバックエンドとして使用する。
 ```
 features/terminal/
 ├── TerminalPane.vue              # （未使用）旧分割レイアウト管理
-├── TerminalLeaf.vue              # リーフノード（バックエンド切り替え、フォーカス管理）。MainLayout が直接配置
+├── TerminalLeaf.vue              # リーフノード（XtermTerminal ラップ、フォーカス管理）。MainLayout が直接配置
 ├── SplitResizeHandle.vue         # 分割リサイズハンドル（ドラッグ）
-├── XtermTerminal.vue             # xterm.js バックエンド（デフォルト）
+├── XtermTerminal.vue             # xterm.js ターミナルエミュレータ
 ├── splitTree.ts                  # immutable な分割ツリー操作（split, remove, resize）
 ├── terminalConfig.ts             # 共通設定（フォント、テーマ）
 ├── registerTerminalCommands.ts   # 分割・ナビゲーションコマンドの登録
@@ -139,7 +139,7 @@ leafNode
 - テーマ: zinc 系ダークテーマ（xterm 背景 `#18181b`）
 - ペイン背景: プロジェクト名（repoName）のハッシュから類似色（+30°）の2色グラデーションを生成。非アクティブ leaf は `opacity-50` で背景が透ける
 - カーソル: 点滅有効
-- ANSI カラーは各バックエンドのデフォルトパレットを使用
+- ANSI カラーは xterm.js のデフォルトパレットを使用
 
 ## スクロール位置保持（xterm.js）
 
