@@ -167,9 +167,12 @@ export function createPtySessionManager(deps: PtySessionManagerDeps) {
     const entry = panes.getPane(leafId);
     if (entry?.session === undefined) return;
 
-    sendPtyKill({ id: entry.session.ptyId });
-    ptyIdToLeafId.delete(entry.session.ptyId);
-    onPtyCleanup?.(entry.session.ptyId);
+    // 自然終了済み（handlePtyExit で処理済み）なら kill/cleanup をスキップ
+    if (!entry.session.exited) {
+      sendPtyKill({ id: entry.session.ptyId });
+      ptyIdToLeafId.delete(entry.session.ptyId);
+      onPtyCleanup?.(entry.session.ptyId);
+    }
     terminalWriters.delete(leafId);
     panes.setSession(leafId, undefined);
   }
