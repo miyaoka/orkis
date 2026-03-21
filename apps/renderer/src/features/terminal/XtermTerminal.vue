@@ -198,17 +198,22 @@ onMounted(async () => {
   // write() 呼び出し時のスナップショットが古くなっている可能性がある。
   // そのためコールバック内でも現在の状態を再チェックする
   let lastSavedViewportY = 0;
+  let lastWasAtBottom = true;
   detachDisposer = terminalStore.attachTerminal(props.leafId, (data) => {
     const buf = term.buffer.active;
-    // write() 呼び出し時の viewportY を記録（コールバック内で参照）
+    // write() 呼び出し時の状態を記録（コールバック内で参照）
     // 複数の write() がキューに積まれた場合、最新の write() 時点の値が使われる
     lastSavedViewportY = buf.viewportY;
+    lastWasAtBottom = buf.viewportY >= buf.baseY;
     term.write(data, () => {
       const currentBuf = term.buffer.active;
       const isAtBottom = currentBuf.viewportY >= currentBuf.baseY;
       if (isAtBottom) return; // 既に bottom なら何もしない
-      if (currentBuf.viewportY !== lastSavedViewportY) {
-        // エスケープシーケンスで viewportY が変更された場合のみ復元
+      if (lastWasAtBottom) {
+        // write() 前に bottom だった場合、escape sequence で一時的に外れても bottom に復帰する
+        term.scrollToBottom();
+      } else if (currentBuf.viewportY !== lastSavedViewportY) {
+        // スクロールバック中: エスケープシーケンスで viewportY が変更された場合のみ復元
         term.scrollToLine(Math.min(lastSavedViewportY, currentBuf.baseY));
       }
     });
