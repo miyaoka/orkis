@@ -506,6 +506,7 @@ onUnmounted(() => {
         :loading="worktrees.length === 0"
         :active-dir="workspaceStore.dir"
         :is-creating="isCreating"
+        :is-adding-worktree="isAddingWorktree"
         :ctrl-pressed="ctrlPressed"
         :now="now"
         :view-mode="terminalStore.viewMode"

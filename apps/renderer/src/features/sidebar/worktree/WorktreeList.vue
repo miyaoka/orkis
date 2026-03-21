@@ -31,6 +31,7 @@ defineProps<{
   loading: boolean;
   activeDir: string | undefined;
   isCreating: boolean;
+  isAddingWorktree: boolean;
   ctrlPressed: boolean;
   now: number;
   viewMode: ViewMode;
@@ -91,6 +92,7 @@ defineSlots<{
     <slot name="add-form" />
 
     <button
+      v-if="!isAddingWorktree"
       class="mt-1 grid grid-cols-[auto_1fr] gap-x-2 rounded-sm py-1.5 pl-2 text-left text-sm text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300"
       :disabled="isCreating"
       @click="$emit('add')"
