@@ -113,6 +113,13 @@ orkis/
 - プロジェクト一覧の永続化（ストレージ方式の選定含む）
 - シングルウィンドウ化（マルチウィンドウからの移行）
 
+## クロスプラットフォーム方針
+
+現状は macOS 専用アプリ（Electrobun / WKWebView）だが、パス処理などプラットフォーム依存が生じるコードはクロスプラットフォームを前提に書く。
+
+- パス区切りのリテラル（`/`、`\\`）をハードコードしない。`path.sep`、`path.join()`、`path.resolve()` を使う
+- root 外判定は `relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)` のイディオムを使う
+
 ## コーディング規約
 
 ### 一時ファイル・ソケット

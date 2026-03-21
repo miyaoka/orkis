@@ -23,6 +23,7 @@ import {
 } from "./git";
 import {
   isAllowedProtocol,
+  isPathOutside,
   readFileContent,
   resolveExistingFsPath,
   resolveGitPath,
@@ -349,7 +350,7 @@ function startWatching(win: OrkisWindow, root: string) {
           for (const lsp of clients) {
             // プロジェクトルートからの相対パスを各 LSP の rootDir からの相対パスに変換
             const lspRelPath = path.relative(lsp.rootDir, absPath);
-            if (lspRelPath.startsWith("..")) continue; // この LSP の管轄外
+            if (isPathOutside(lspRelPath)) continue; // この LSP の管轄外
             if (fileResult.ok) {
               lsp.didChange(lspRelPath, fileResult.value);
             } else {

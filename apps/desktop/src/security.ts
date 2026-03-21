@@ -37,11 +37,16 @@ export async function readFileContent(absolutePath: string): Promise<FileReadRes
   return { content, isBinary: false };
 }
 
+/** path.relative() の結果が root の外を指すかを判定する */
+export function isPathOutside(relative: string): boolean {
+  return relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative);
+}
+
 /** Git 論理パスの検証。realpath は使わない（git は repo 内の論理パスで操作するため） */
 export function resolveGitPath(root: string, relPath: string): string {
   const resolved = path.resolve(root, relPath);
   const relative = path.relative(root, resolved);
-  if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) {
+  if (!relative || isPathOutside(relative)) {
     throw new Error("Access denied: path is outside workspace root");
   }
   return resolved;
@@ -53,7 +58,7 @@ export async function resolveExistingFsPath(root: string, relPath: string): Prom
   const real = await fsp.realpath(resolved);
   const realRoot = await fsp.realpath(root);
   const relative = path.relative(realRoot, real);
-  if (relative.startsWith("..") || path.isAbsolute(relative)) {
+  if (isPathOutside(relative)) {
     throw new Error("Access denied: path is outside workspace root");
   }
   return real;
@@ -66,7 +71,7 @@ export async function resolveCreatableFsPath(root: string, relPath: string): Pro
   const realParent = await fsp.realpath(parent);
   const realRoot = await fsp.realpath(root);
   const parentRelative = path.relative(realRoot, realParent);
-  if (parentRelative.startsWith("..") || path.isAbsolute(parentRelative)) {
+  if (isPathOutside(parentRelative)) {
     throw new Error("Access denied: path is outside workspace root");
   }
   // 親の実パスを基準にファイル名を結合して返す
