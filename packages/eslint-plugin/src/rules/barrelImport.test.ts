@@ -6,7 +6,6 @@ import rule from "./barrelImport";
 // bun:test を RuleTester に使わせる
 RuleTester.describe = describe;
 RuleTester.it = test;
-RuleTester.itOnly = test.only.bind(test);
 
 const tester = new RuleTester({
   languageOptions: {
