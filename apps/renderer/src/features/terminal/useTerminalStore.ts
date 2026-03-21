@@ -15,28 +15,50 @@ import { terminalConfig } from "./terminalConfig";
 
 /**
  * Claude Code の状態。
+ * - idle: セッション開始済みだがプロンプト待ち（通知不要）
  * - working: エージェントが作業中（UserPromptSubmit / PostToolUse）
  * - asking: 承認待ち（PermissionRequest）— ユーザー操作が必要
- * - done: 応答完了 / ユーザー入力待ち（Stop）— 次のプロンプト待ち
+ * - done: 応答完了（Stop）— 人間の確認・入力待ち（通知が必要）
+ *
+ * undefined（エントリなし）= Claude 未起動
  */
-export type ClaudeState = "working" | "asking" | "done";
+export type ClaudeState = "idle" | "working" | "asking" | "done";
 
 /** Claude Code の状態エントリ。状態と付随データを一体管理する */
 export type ClaudeStatus =
+  | { state: "idle" }
   | { state: "working"; startedAt: number }
   | { state: "asking"; toolName?: string; toolInput?: Record<string, unknown> }
   | { state: "done"; message?: string };
 
 /**
  * hooks イベント種別。
+ * - session-start: SessionStart（セッション開始）
+ * - session-end: SessionEnd（セッション終了）
  * - running: UserPromptSubmit（プロンプト送信）
  * - needs-input: PermissionRequest（承認ダイアログ表示）
  * - done: Stop（応答完了）
- * - tool-done: PostToolUse / PostToolUseFailure（ツール実行完了）
+ * - tool-done: PostToolUse（ツール実行完了）
+ * - tool-failure: PostToolUseFailure（ツール実行失敗。is_interrupt で中断判定）
  */
-type HookEvent = "running" | "needs-input" | "done" | "tool-done";
+type HookEvent =
+  | "session-start"
+  | "session-end"
+  | "running"
+  | "needs-input"
+  | "done"
+  | "tool-done"
+  | "tool-failure";
 
-const HOOK_EVENTS: readonly HookEvent[] = ["running", "needs-input", "done", "tool-done"];
+const HOOK_EVENTS: readonly HookEvent[] = [
+  "session-start",
+  "session-end",
+  "running",
+  "needs-input",
+  "done",
+  "tool-done",
+  "tool-failure",
+];
 
 function isHookEvent(value: string): value is HookEvent {
   return (HOOK_EVENTS as readonly string[]).includes(value);
@@ -125,6 +147,16 @@ export const useTerminalStore = defineStore("terminal", () => {
     const current = claudeStatusByPtyId.value[ptyId];
 
     switch (event) {
+      case "session-start": {
+        cancelAskTimer(ptyId);
+        claudeStatusByPtyId.value[ptyId] = { state: "idle" };
+        break;
+      }
+      case "session-end": {
+        cancelAskTimer(ptyId);
+        delete claudeStatusByPtyId.value[ptyId];
+        break;
+      }
       case "running": {
         cancelAskTimer(ptyId);
         // 初回 working 遷移時のみ開始時刻を記録（tool-done → working の再遷移では維持）
@@ -147,6 +179,19 @@ export const useTerminalStore = defineStore("terminal", () => {
             claudeStatusByPtyId.value[ptyId] = { state: "asking", toolName, toolInput };
           }, ASK_DEBOUNCE_MS),
         );
+        break;
+      }
+      case "tool-failure": {
+        cancelAskTimer(ptyId);
+        if (payload.is_interrupt === true) {
+          // ユーザーが Ctrl+C でツール実行を中断 → プロンプト待ちに戻る
+          claudeStatusByPtyId.value[ptyId] = { state: "idle" };
+          break;
+        }
+        // interrupt でないツール失敗は tool-done と同じ扱い（working 継続）
+        if (current?.state === "done") break;
+        const sf = current?.state === "working" ? current.startedAt : Date.now();
+        claudeStatusByPtyId.value[ptyId] = { state: "working", startedAt: sf };
         break;
       }
       case "tool-done": {
@@ -212,6 +257,22 @@ export const useTerminalStore = defineStore("terminal", () => {
       if (leafId === undefined) return;
       const entry = paneRegistry.value[leafId];
       if (entry?.session === undefined) return;
+
+      // --- interrupt 検知（マジックストリングによる PTY 出力パターンマッチ） ---
+      // Claude Code は Ctrl+C/Escape で中断されると以下を PTY に出力する:
+      //   "⎿ \u00A0Interrupted · What should Claude do instead?"
+      // しかし interrupt 時にフックは発火しない（Stop も PostToolUseFailure も来ない）。
+      // Claude Code にはユーザー中断を通知するフック（UserInterrupt 等）が存在しないため
+      // （anthropics/claude-code#9516 で要望中）、PTY 出力のパターンマッチで代替している。
+      // Claude Code の UI 変更でこの文字列が変わると壊れるので注意。
+      // "⎿"(U+23BF) は Claude Code のツール出力プレフィックス、空白は SP(U+0020) + NBSP(U+00A0)。
+      if (
+        claudeStatusByPtyId.value[id]?.state === "working" &&
+        data.includes("⎿ \u00A0Interrupted")
+      ) {
+        cancelAskTimer(id);
+        claudeStatusByPtyId.value[id] = { state: "idle" };
+      }
 
       // ring buffer に追記
       const session = entry.session;
@@ -307,15 +368,15 @@ export const useTerminalStore = defineStore("terminal", () => {
   }
 
   /**
-   * worktree dir に属する done 状態のエントリをクリアする。
-   * フォーカス時の既読消化に使う。working / asking は維持する。
+   * worktree dir に属する done 状態を idle に遷移する。
+   * フォーカス時の既読消化に使う。Claude セッションは生きているため idle へ。
    */
   function clearDoneStates(dir: string) {
     for (const entry of Object.values(paneRegistry.value)) {
       if (entry.dir !== dir) continue;
       if (entry.session === undefined) continue;
       if (claudeStatusByPtyId.value[entry.session.ptyId]?.state === "done") {
-        delete claudeStatusByPtyId.value[entry.session.ptyId];
+        claudeStatusByPtyId.value[entry.session.ptyId] = { state: "idle" };
       }
     }
   }
