@@ -232,17 +232,19 @@ onMounted(async () => {
     }
   }
 
-  writeParsedDisposer = term.onWriteParsed(() => {
+  const writeParsedSubscription = term.onWriteParsed(() => {
     if (!parsedSinceLastRestore) return;
     parsedSinceLastRestore = false;
     restoreViewportIntent();
-  }).dispose;
+  });
+  writeParsedDisposer = () => writeParsedSubscription.dispose();
 
   detachDisposer = terminalStore.attachTerminal(props.leafId, (data) => {
     captureViewportIntent();
-    term.write(data, () => {
-      parsedSinceLastRestore = true;
-    });
+    // write 前にフラグを立てる。write() callback と onWriteParsed の発火順序は
+    // API 仕様で担保されていないため、callback ではなくここで立てる
+    parsedSinceLastRestore = true;
+    term.write(data);
   });
 
   // xterm → PTY
