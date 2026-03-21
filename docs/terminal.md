@@ -5,7 +5,7 @@ xterm.js をバックエンドとして使用する。
 
 ## 構成
 
-```
+```text
 features/terminal/
 ├── TerminalPane.vue              # （未使用）旧分割レイアウト管理
 ├── TerminalLeaf.vue              # リーフノード（XtermTerminal ラップ、フォーカス管理）。MainLayout が直接配置
