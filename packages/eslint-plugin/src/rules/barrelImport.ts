@@ -11,6 +11,11 @@ import path from "node:path";
 
 import type { Rule } from "eslint";
 
+/** Windows パス区切り文字を正規化する */
+function normalizePath(filePath: string): string {
+  return filePath.replaceAll("\\", "/");
+}
+
 /** features/ または shared/ セグメントの直後のディレクトリ名までをスコープとして抽出する */
 const SCOPE_PATTERN = /(?:^|\/)((?:features|shared)\/[^/]+)(?:\/|$)/;
 
@@ -90,54 +95,65 @@ const rule: Rule.RuleModule = {
     schema: [],
   },
   create(context) {
-    const filename = context.filename;
+    const filename = normalizePath(context.filename);
+
+    function check(sourceNode: Rule.Node, importSource: string) {
+      // 外部パッケージ（相対パスでない）はスキップ
+      if (!importSource.startsWith(".")) return;
+
+      // import 先の絶対パスを解決
+      const resolvedPath = normalizePath(
+        path.resolve(path.dirname(filename), importSource),
+      );
+
+      // import 先のスコープを抽出
+      const toScope = extractScope(resolvedPath);
+      if (!toScope) return;
+
+      // shared → features の依存チェック
+      if (isInSharedScope(filename) && isInFeaturesScope(resolvedPath)) {
+        context.report({
+          node: sourceNode,
+          messageId: "noSharedToFeature",
+        });
+        return;
+      }
+
+      // import 元のスコープを抽出
+      const fromScope = extractScope(filename);
+
+      // 同じスコープ内のファイル同士は自由
+      if (fromScope === toScope) return;
+
+      // 子 feature から親スコープの内部ファイルへのアクセスは自由
+      // import 元のパスに to のスコープが含まれている = to は from の祖先スコープ
+      if (fromScope && fromScope !== toScope && filename.includes(`/${toScope}/`)) return;
+
+      // バレル（index.ts）経由ならOK
+      if (isBarrelImport(importSource, toScope)) return;
+
+      // それ以外は禁止
+      context.report({
+        node: sourceNode,
+        messageId: "noDirectImport",
+        data: {
+          importSource,
+          scopeName: toScope,
+        },
+      });
+    }
 
     return {
       ImportDeclaration(node) {
-        const importSource = node.source.value;
-        if (typeof importSource !== "string") return;
-
-        // 外部パッケージ（相対パスでない）はスキップ
-        if (!importSource.startsWith(".")) return;
-
-        // import 先の絶対パスを解決
-        const resolvedPath = path.resolve(path.dirname(filename), importSource);
-
-        // import 先のスコープを抽出
-        const toScope = extractScope(resolvedPath);
-        if (!toScope) return;
-
-        // shared → features の依存チェック
-        if (isInSharedScope(filename) && isInFeaturesScope(resolvedPath)) {
-          context.report({
-            node: node.source,
-            messageId: "noSharedToFeature",
-          });
-          return;
+        check(node, String(node.source.value));
+      },
+      ExportNamedDeclaration(node) {
+        if (node.source) {
+          check(node, String(node.source.value));
         }
-
-        // import 元のスコープを抽出
-        const fromScope = extractScope(filename);
-
-        // 同じスコープ内のファイル同士は自由
-        if (fromScope === toScope) return;
-
-        // 子 feature から親スコープの内部ファイルへのアクセスは自由
-        // import 元のパスに to のスコープが含まれている = to は from の祖先スコープ
-        if (fromScope && fromScope !== toScope && filename.includes(`/${toScope}/`)) return;
-
-        // バレル（index.ts）経由ならOK
-        if (isBarrelImport(importSource, toScope)) return;
-
-        // それ以外は禁止
-        context.report({
-          node: node.source,
-          messageId: "noDirectImport",
-          data: {
-            importSource,
-            scopeName: toScope,
-          },
-        });
+      },
+      ExportAllDeclaration(node) {
+        check(node, String(node.source.value));
       },
     };
   },

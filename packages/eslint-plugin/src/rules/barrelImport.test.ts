@@ -78,6 +78,11 @@ describe("barrel-import", () => {
           code: 'import { MainLayout } from "./features/layout";',
           filename: `${BASE}/App.vue`,
         },
+        // OK: バレル経由の re-export
+        {
+          code: 'export { useTerminalStore } from "../terminal";',
+          filename: `${BASE}/features/layout/MainLayout.vue`,
+        },
       ],
       invalid: [],
     });
@@ -124,6 +129,18 @@ describe("barrel-import", () => {
       name: "NG: App.vue → feature の内部モジュール直接 import",
       code: 'import { useWorkspaceStore } from "./features/filer/useWorkspaceStore";',
       filename: `${BASE}/App.vue`,
+      messageId: "noDirectImport",
+    },
+    {
+      name: "NG: export { } from で内部モジュール直接 re-export",
+      code: 'export { useTerminalStore } from "../terminal/useTerminalStore";',
+      filename: `${BASE}/features/layout/MainLayout.vue`,
+      messageId: "noDirectImport",
+    },
+    {
+      name: "NG: export * from で内部モジュール直接 re-export",
+      code: 'export * from "../terminal/useTerminalStore";',
+      filename: `${BASE}/features/layout/MainLayout.vue`,
       messageId: "noDirectImport",
     },
   ];
