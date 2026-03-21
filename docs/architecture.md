@@ -36,15 +36,15 @@ gozd.app/Contents/
 ├── MacOS/bun          # Electrobun が提供する Bun ランタイム
 └── Resources/app/
     ├── bun/index.js   # desktop のバンドル（import.meta.dir はここ）
-    ├── views/main/    # renderer のビルド成果物（← @gozd/renderer/dist/）
+    ├── views/main/    # renderer のビルド成果物（← @gozd/renderer/dist/）★ build のみ
     ├── bin/gozd      # CLI のエントリポイント（← @gozd/cli/bin/）
     ├── cli/index.js   # CLI のバンドル（← @gozd/cli/dist/）★ build のみ
     └── zsh/           # zsh 初期化ファイル（← apps/desktop/zsh/）
 ```
 
 > [!WARNING]
-> `cli/index.js` は `pnpm build` でのみ生成される。`pnpm dev`（`electrobun dev`）では `@gozd/cli` のビルドが走らないため `.app` 内に `cli/` は存在しない。
-> そのため dev 時の `GOZD_CLI_PATH` は `.app` 内のパスではなく、ソースから直接 `bun apps/cli/src/index.ts` で実行する。
+> `views/main/` と `cli/` は `pnpm build` でのみコピーされる。`pnpm dev`（`electrobun dev`）では `GOZD_DEV_PROJECT_ROOT` の存在により copy がスキップされる。
+> dev 時の renderer は Vite dev server（localhost:5173）から配信され、CLI はソースから直接 `bun apps/cli/src/index.ts` で実行する。
 
 ### `bin/gozd` シェルスクリプトの動作
 
