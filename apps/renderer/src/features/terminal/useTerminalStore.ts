@@ -342,14 +342,14 @@ export const useTerminalStore = defineStore("terminal", () => {
 
   initHookSubscription();
 
-  /** leafId に対応する Claude Code の状態を返す。idle / 未起動の場合は undefined */
+  /** leafId に対応する Claude Code の状態を返す。未起動（エントリなし）の場合は undefined */
   function getClaudeState(leafId: string): ClaudeState | undefined {
     const entry = paneRegistry.value[leafId];
     if (entry?.session === undefined) return undefined;
     return claudeStatusByPtyId.value[entry.session.ptyId]?.state;
   }
 
-  /** Claude が起動中（working / asking / done）の leafId 一覧 */
+  /** Claude セッションが存在する（idle / working / asking / done）leafId 一覧 */
   const claudeActiveLeafIds = computed(() => {
     const ids: string[] = [];
     for (const [leafId, entry] of Object.entries(paneRegistry.value)) {
@@ -366,7 +366,7 @@ export const useTerminalStore = defineStore("terminal", () => {
     cwdByLeafId.value[leafId] = cwd;
   }
 
-  /** worktree dir に属する全ターミナルの Claude 状態を返す（idle は除外） */
+  /** worktree dir に属する全ターミナルの Claude 状態を返す（未起動は除外） */
   function getClaudeStatusesByDir(dir: string): ClaudeStatus[] {
     const statuses: ClaudeStatus[] = [];
     for (const paneEntry of Object.values(paneRegistry.value)) {
