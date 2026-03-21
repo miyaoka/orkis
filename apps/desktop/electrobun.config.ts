@@ -1,5 +1,7 @@
 import type { ElectrobunConfig } from "electrobun";
 
+const isDev = process.argv.includes("dev");
+
 export default {
   app: {
     name: "gozd",
@@ -17,8 +19,13 @@ export default {
       },
     },
     copy: {
-      "node_modules/@gozd/renderer/dist/": "views/main/",
-      "node_modules/@gozd/cli/dist/": "cli/",
+      // renderer/cli の dist/ は pnpm build でのみ生成される
+      ...(isDev
+        ? {}
+        : {
+            "node_modules/@gozd/renderer/dist/": "views/main/",
+            "node_modules/@gozd/cli/dist/": "cli/",
+          }),
       "node_modules/@gozd/cli/bin/": "bin/",
       "zsh/": "zsh/",
     },
