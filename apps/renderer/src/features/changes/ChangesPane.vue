@@ -29,15 +29,15 @@ const gitStatusStore = useGitStatusStore();
 const commitFiles = ref<Record<string, string>>({});
 const loading = ref(false);
 
-/** 未選択 or Uncommitted 選択時は git status を使う */
-const isUncommittedMode = computed(
-  () => gitGraphStore.selectedHash === null || gitGraphStore.selectedHash === UNCOMMITTED_HASH,
-);
+/** Uncommitted Changes 行が選択されているか */
+const isUncommittedMode = computed(() => gitGraphStore.selectedHash === UNCOMMITTED_HASH);
 
 /** 表示するファイル一覧のソース */
-const fileStatuses = computed(() =>
-  isUncommittedMode.value ? gitStatusStore.gitStatuses : commitFiles.value,
-);
+const fileStatuses = computed(() => {
+  if (gitGraphStore.selectedHash === null) return {};
+  if (isUncommittedMode.value) return gitStatusStore.gitStatuses;
+  return commitFiles.value;
+});
 
 /** パスでソート済みの [path, statusCode] ペア */
 const sortedFiles = computed(() =>
@@ -48,9 +48,9 @@ const fileCount = computed(() => sortedFiles.value.length);
 
 /** ヘッダーに表示するラベル */
 const headerLabel = computed(() => {
-  if (isUncommittedMode.value) return "Uncommitted Changes";
   const hash = gitGraphStore.selectedHash;
-  if (hash === null) return "Changes";
+  if (hash === null) return "";
+  if (isUncommittedMode.value) return "Uncommitted Changes";
   return hash.slice(0, 7);
 });
 

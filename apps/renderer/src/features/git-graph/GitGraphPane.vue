@@ -184,6 +184,47 @@ function formatDate(timestamp: number): string {
   const minutes = date.getMinutes().toString().padStart(2, "0");
   return `${day} ${month} ${hours}:${minutes}`;
 }
+
+const scrollContainer = ref<HTMLElement | null>(null);
+
+/** 現在選択中のノードのインデックス */
+function selectedIndex(): number {
+  if (gitGraphStore.selectedHash === null) return -1;
+  return layout.value.nodes.findIndex((n) => n.commit.hash === gitGraphStore.selectedHash);
+}
+
+/** 選択行をビューポート内にスクロール */
+function scrollToIndex(index: number) {
+  const container = scrollContainer.value;
+  if (!container) return;
+  const rowTop = index * ROW_HEIGHT;
+  const rowBottom = rowTop + ROW_HEIGHT;
+  if (rowTop < container.scrollTop) {
+    container.scrollTop = rowTop;
+  } else if (rowBottom > container.scrollTop + container.clientHeight) {
+    container.scrollTop = rowBottom - container.clientHeight;
+  }
+}
+
+function onKeydown(e: KeyboardEvent) {
+  const nodes = layout.value.nodes;
+  if (nodes.length === 0) return;
+
+  if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+  e.preventDefault();
+
+  const current = selectedIndex();
+  let next: number;
+
+  if (e.key === "ArrowUp") {
+    next = current <= 0 ? 0 : current - 1;
+  } else {
+    next = current >= nodes.length - 1 ? nodes.length - 1 : current + 1;
+  }
+
+  gitGraphStore.select(nodes[next].commit.hash);
+  scrollToIndex(next);
+}
 </script>
 
 <template>
@@ -198,7 +239,13 @@ function formatDate(timestamp: number): string {
       <div class="text-xs text-zinc-500">No commits</div>
     </div>
 
-    <div v-else class="flex-1 overflow-auto">
+    <div
+      v-else
+      ref="scrollContainer"
+      class="flex-1 overflow-auto outline-none"
+      tabindex="0"
+      @keydown="onKeydown"
+    >
       <div class="relative" :style="{ minHeight: `${svgHeight}px` }">
         <!-- Graph SVG overlay -->
         <svg

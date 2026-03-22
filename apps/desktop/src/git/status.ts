@@ -44,8 +44,11 @@ export async function getGitStatus(cwd: string): Promise<Record<string, string>>
 
 /**
  * コミットの変更ファイル一覧を取得する。
- * git diff-tree の出力を gitStatus と同じ Record<path, statusCode> 形式で返す。
+ * git diff --name-status の出力を gitStatus と同じ Record<path, statusCode> 形式で返す。
  * statusCode は porcelain v1 互換（例: "M " = index 側 modified）。
+ *
+ * `hash^1..hash` で first parent との差分を取る。
+ * マージコミットでも「そのマージで入った変更」のみが表示される。
  */
 export async function getGitCommitFiles(
   cwd: string,
@@ -53,9 +56,7 @@ export async function getGitCommitFiles(
 ): Promise<Record<string, string>> {
   const result = await tryCatch(
     new Response(
-      Bun.spawn(["git", "diff-tree", "--no-commit-id", "-r", "--name-status", "-z", hash], {
-        cwd,
-      }).stdout,
+      Bun.spawn(["git", "diff", "--name-status", "-z", `${hash}^1`, hash], { cwd }).stdout,
     ).text(),
   );
   if (!result.ok) return {};
@@ -68,7 +69,7 @@ export async function getGitCommitFiles(
     const status = parts[i];
     const filePath = parts[i + 1];
     if (status && filePath) {
-      // diff-tree の status は1文字（M, A, D, R 等）。porcelain v1 互換に変換（index 側にセット）
+      // git diff の status は1文字（M, A, D, R 等）。porcelain v1 互換に変換（index 側にセット）
       statuses[filePath] = `${status} `;
     }
     i += 2;

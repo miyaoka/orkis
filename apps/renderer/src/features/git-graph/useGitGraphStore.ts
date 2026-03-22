@@ -6,11 +6,7 @@ export const useGitGraphStore = defineStore("gitGraph", () => {
   const selectedHash = ref<string | null>(null);
 
   function select(hash: string) {
-    if (selectedHash.value === hash) {
-      selectedHash.value = null;
-    } else {
-      selectedHash.value = hash;
-    }
+    selectedHash.value = hash;
   }
 
   function clearSelection() {
