@@ -4,7 +4,7 @@ import { homedir } from "node:os";
 import { tryCatch } from "@gozd/shared";
 import type { WorktreeEntry } from "@gozd/rpc";
 import { projectKey } from "../projectKey";
-import { resolveCreatableFsPath, resolveExistingFsPath } from "../security";
+import { resolveCreatableFsPath, resolveExistingFsPath, resolveGitPath } from "../security";
 import { getGitStatus, countChanges } from "./status";
 import { assertBranchName } from "./branch";
 
@@ -130,6 +130,14 @@ async function createWorktreeSymlinks(
       // ソース: realpath で実パスを検証し、リポジトリ外へのトラバーサルを防止
       const sourceResult = await tryCatch(resolveExistingFsPath(mainRepoDir, target));
       if (!sourceResult.ok) return;
+
+      // 論理パスでトラバーサルを事前チェック（mkdir 前にセキュリティ検証）
+      const logicalResult = tryCatch(() => resolveGitPath(wtPath, target));
+      if (!logicalResult.ok) return;
+
+      // ネストされたパスに対応するため、親ディレクトリを作成
+      const destParent = path.dirname(logicalResult.value);
+      await tryCatch(fsp.mkdir(destParent, { recursive: true }));
 
       // dest: 親ディレクトリの realpath を検証し、worktree 外への書き込みを防止
       const destResult = await tryCatch(resolveCreatableFsPath(wtPath, target));
