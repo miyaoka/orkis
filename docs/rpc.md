@@ -60,7 +60,6 @@ flowchart LR
 | `worktreeChange`  | `void`                                                 | 非アクティブ worktree でのファイル変更通知 |
 | `gozdOpen`        | `{ dir, file?, fileServerBaseUrl, channel, repoName }` | ウィンドウ open                            |
 | `gozdHook`        | `{ event, payload }`                                   | Claude Code Hook イベント                  |
-| `lspDiagnostics`  | `FileDiagnostics`                                      | LSP 型診断結果                             |
 
 ### renderer → desktop
 
@@ -110,20 +109,6 @@ interface GitCommit {
   date: number; // Unix timestamp
   message: string;
   refs: string[]; // ブランチ名、タグ、HEAD 等
-}
-
-interface LspDiagnostic {
-  startLine: number;
-  startCharacter: number;
-  endLine: number;
-  endCharacter: number;
-  message: string;
-  severity: number; // 1=error, 2=warning, 3=info, 4=hint
-}
-
-interface FileDiagnostics {
-  relPath: string;
-  diagnostics: LspDiagnostic[];
 }
 
 interface VoicevoxConfig {

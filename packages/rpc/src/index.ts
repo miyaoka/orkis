@@ -17,22 +17,6 @@ export interface FileReadResult {
   isDirectory?: boolean;
 }
 
-/** LSP 診断情報（textDocument/publishDiagnostics の簡略版） */
-export interface LspDiagnostic {
-  /** 開始行（0-based） */
-  startLine: number;
-  /** 開始列（0-based） */
-  startCharacter: number;
-  /** 終了行（0-based） */
-  endLine: number;
-  /** 終了列（0-based） */
-  endCharacter: number;
-  /** メッセージ */
-  message: string;
-  /** 1=Error, 2=Warning, 3=Information, 4=Hint */
-  severity: number;
-}
-
 /** git status の変更種別ごとのファイル数 */
 export interface WorktreeChangeCounts {
   modified: number;
@@ -108,12 +92,6 @@ export interface VoicevoxConfig {
 /** アプリのグローバル設定 */
 export interface AppConfig {
   voicevox?: VoicevoxConfig;
-}
-
-export interface FileDiagnostics {
-  /** プロジェクトルートからの相対パス */
-  relPath: string;
-  diagnostics: LspDiagnostic[];
 }
 
 /** git log のコミット情報 */
@@ -282,8 +260,6 @@ export type GozdRPC = {
         switchToDir?: string;
       };
       gozdHook: { event: string; payload: Record<string, unknown> };
-      /** LSP 診断結果の更新（ファイル単位） */
-      lspDiagnostics: FileDiagnostics;
     };
   }>;
 };

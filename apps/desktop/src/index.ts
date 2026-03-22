@@ -6,9 +6,7 @@ import { homedir, tmpdir } from "node:os";
 import path from "node:path";
 import net from "node:net";
 import { tryCatch } from "@gozd/shared";
-import type { LspDiagnostic, GozdRPC, OpenTargetSelection } from "@gozd/rpc";
-import { createLspClient, resolveTsgoPath, resolveVueLspPaths } from "./lsp";
-import type { LspClient } from "./lsp";
+import type { GozdRPC, OpenTargetSelection } from "@gozd/rpc";
 import {
   parseOwnerRepo,
   resolveOpenTarget,
@@ -24,7 +22,6 @@ import {
 } from "./git";
 import {
   isAllowedProtocol,
-  isPathOutside,
   readFileContent,
   resolveExistingFsPath,
   resolveGitPath,
@@ -242,11 +239,6 @@ const fileServer = Bun.serve({
 
 console.log(`[file-server] listening on http://localhost:${fileServer.port}`);
 
-// --- LSP 管理 ---
-
-/** ウィンドウごとに複数の LSP クライアント（tsgo + vue）を管理 */
-const windowLspClients = new Map<GozdWindow, LspClient[]>();
-
 // --- ウィンドウ管理 ---
 
 /** ウィンドウ → UUID */
@@ -338,34 +330,6 @@ function startWatching(win: GozdWindow, root: string) {
     const relDir = path.dirname(filename);
     win.webview.rpc?.send.fsChange({ relDir });
     scheduleGitStatusUpdate(win, root);
-
-    // TS/Vue ファイルの変更を LSP に通知
-    if (/\.[tj]sx?$|\.vue$/.test(filename)) {
-      const clients = windowLspClients.get(win);
-      if (clients) {
-        const gen = windowSwitchGen.get(win) ?? 0;
-        void (async () => {
-          // 世代が変わっていたら stale な通知を捨てる
-          if ((windowSwitchGen.get(win) ?? 0) !== gen) return;
-          const absPath = path.join(root, filename);
-          const fileResult = await tryCatch(fsp.readFile(absPath, "utf-8"));
-          if ((windowSwitchGen.get(win) ?? 0) !== gen) return;
-          for (const lsp of clients) {
-            // プロジェクトルートからの相対パスを各 LSP の rootDir からの相対パスに変換
-            const lspRelPath = path.relative(lsp.rootDir, absPath);
-            if (isPathOutside(lspRelPath)) continue; // この LSP の管轄外
-            if (fileResult.ok) {
-              lsp.didChange(lspRelPath, fileResult.value);
-            } else {
-              lsp.didClose(lspRelPath);
-            }
-          }
-          if (!fileResult.ok) {
-            win.webview.rpc?.send.lspDiagnostics({ relPath: filename, diagnostics: [] });
-          }
-        })();
-      }
-    }
   });
 
   windowFsWatchers.set(win, watcher);
@@ -577,14 +541,6 @@ function cleanupWindow(win: GozdWindow) {
     if (entry.win === win) {
       entry.proc.kill();
       ptys.delete(id);
-    }
-  }
-  // LSP クライアントをシャットダウン
-  const clients = windowLspClients.get(win);
-  if (clients) {
-    windowLspClients.delete(win);
-    for (const lsp of clients) {
-      void lsp.shutdown();
     }
   }
 }
@@ -811,15 +767,6 @@ function createWindowWithRPC(dir: string, options?: CreateWindowOptions): GozdWi
           const gen = (windowSwitchGen.get(win) ?? 0) + 1;
           windowSwitchGen.set(win, gen);
 
-          // 既存 LSP を shutdown（再起動はしない）
-          const clients = windowLspClients.get(win);
-          if (clients) {
-            windowLspClients.delete(win);
-            for (const lsp of clients) {
-              void lsp.shutdown();
-            }
-          }
-
           // ディレクトリを切り替え
           currentDir = targetReal;
           // ファイル監視を付け替え
@@ -890,73 +837,6 @@ function createWindowWithRPC(dir: string, options?: CreateWindowOptions): GozdWi
 
           // 非アクティブ worktree の監視を開始
           void syncWorktreeWatchers(win, projectDir, currentDir);
-
-          // TODO: LSP 機能を再有効化するときはこのフラグを true にする
-          const lspEnabled = false;
-          // webview 準備完了後に LSP を起動
-          if (lspEnabled)
-            void (async () => {
-              const clients: LspClient[] = [];
-              const gen = windowSwitchGen.get(win) ?? 0;
-              const diagCallback = (
-                source: string,
-                relPath: string,
-                diagnostics: LspDiagnostic[],
-              ) => {
-                // 世代が変わっていたら stale な診断を捨てる
-                if ((windowSwitchGen.get(win) ?? 0) !== gen) return;
-                if (diagnostics.length > 0) {
-                  console.log(`[diag:${source}] ${relPath}: ${diagnostics.length} items`);
-                }
-                win.webview.rpc?.send.lspDiagnostics({ relPath, diagnostics });
-              };
-
-              // tsgo（TS/JS 用）
-              const tsgoPath = await resolveTsgoPath(projectDir);
-              if (tsgoPath) {
-                clients.push(
-                  createLspClient({
-                    rootDir: projectDir,
-                    server: { kind: "tsgo", binaryPath: tsgoPath },
-                    onDiagnostics: (relPath, diags) => diagCallback("tsgo", relPath, diags),
-                    onError: (msg) => console.error(`[lsp:tsgo] ${msg}`),
-                  }),
-                );
-              }
-
-              // Vue Language Server（Vue SFC 用、apps/renderer をルートにする）
-              const rendererDir = path.join(projectDir, "apps", "renderer");
-              console.log(`[lsp:vue] rendererDir: ${rendererDir}`);
-              const vuePaths = resolveVueLspPaths(projectDir, rendererDir);
-              console.log(`[lsp:vue] resolved paths:`, vuePaths ?? "not found");
-              if (vuePaths) {
-                console.log(`[lsp:vue] server: ${vuePaths.serverPath}, tsdk: ${vuePaths.tsdkPath}`);
-                const RENDERER_PREFIX = "apps/renderer/";
-                clients.push(
-                  createLspClient({
-                    rootDir: rendererDir,
-                    server: {
-                      kind: "vue",
-                      serverPath: vuePaths.serverPath,
-                      tsdkPath: vuePaths.tsdkPath,
-                      pluginProbeLocation: vuePaths.pluginProbeLocation,
-                    },
-                    onDiagnostics: (relPath, diagnostics) => {
-                      diagCallback("vue", `${RENDERER_PREFIX}${relPath}`, diagnostics);
-                    },
-                    onError: (msg) => console.error(`[lsp:vue] ${msg}`),
-                  }),
-                );
-              }
-
-              if (clients.length === 0) {
-                console.log("[lsp] no LSP servers found, skipping");
-                return;
-              }
-
-              windowLspClients.set(win, clients);
-              await Promise.all(clients.map((lsp) => lsp.scanProject()));
-            })();
         },
       },
     },

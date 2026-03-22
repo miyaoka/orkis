@@ -3,7 +3,6 @@ import { tryCatch } from "@gozd/shared";
 import type { Ref } from "vue";
 import { ref } from "vue";
 import { useRpc } from "../../../../shared/rpc";
-import { useDiagnosticsStore } from "../../../diagnostics";
 import { useTerminalStore } from "../../../terminal";
 import { useWorktreeStore } from "../../../worktree";
 import { generateTimestamp, worktreeDisplayName } from "../../utils";
@@ -28,7 +27,6 @@ export function useWorktreeActions({
   showAlert,
 }: UseWorktreeActionsOptions) {
   const worktreeStore = useWorktreeStore();
-  const diagnosticsStore = useDiagnosticsStore();
   const terminalStore = useTerminalStore();
   const { request } = useRpc();
 
@@ -96,7 +94,6 @@ export function useWorktreeActions({
     isSwitching.value = true;
     const result = await tryCatch(request.switchDir({ dir: wt.path }));
     if (result.ok) {
-      diagnosticsStore.clear();
       worktreeStore.setOpen(result.value.dir, undefined, result.value.fileServerBaseUrl);
     }
     isSwitching.value = false;

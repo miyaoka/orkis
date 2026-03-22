@@ -10,7 +10,6 @@
 <script setup lang="ts">
 import { tryCatch } from "@gozd/shared";
 import { onMounted, onUnmounted } from "vue";
-import { useDiagnosticsStore } from "./features/diagnostics";
 import { MainLayout } from "./features/layout";
 import { useWorktreeStore } from "./features/worktree";
 import { useKeyBindings } from "./shared/command";
@@ -19,7 +18,6 @@ import { useRpc } from "./shared/rpc";
 useKeyBindings();
 
 const worktreeStore = useWorktreeStore();
-const diagnosticsStore = useDiagnosticsStore();
 const { request, send, onGozdOpen } = useRpc();
 
 let cleanup: (() => void) | undefined;
@@ -31,7 +29,6 @@ onMounted(() => {
         // 既存ウィンドウで別 worktree への切り替えが必要な場合
         const result = await tryCatch(request.switchDir({ dir: switchToDir }));
         if (result.ok) {
-          diagnosticsStore.clear();
           worktreeStore.setOpen(
             result.value.dir,
             selection,
