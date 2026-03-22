@@ -35,7 +35,7 @@ const isUncommittedMode = computed(() => gitGraphStore.selectedHash === UNCOMMIT
 /** 表示するファイル一覧のソース */
 const fileStatuses = computed(() => {
   if (gitGraphStore.selectedHash === null) return {};
-  if (isUncommittedMode.value) return gitStatusStore.gitStatuses;
+  if (isUncommittedMode.value && !isRangeMode.value) return gitStatusStore.gitStatuses;
   return commitFiles.value;
 });
 
@@ -46,11 +46,20 @@ const sortedFiles = computed(() =>
 
 const fileCount = computed(() => sortedFiles.value.length);
 
+/** 範囲選択モードか */
+const isRangeMode = computed(() => gitGraphStore.compareHash !== null);
+
 /** ヘッダーに表示するラベル */
 const headerLabel = computed(() => {
   const hash = gitGraphStore.selectedHash;
   if (hash === null) return "";
-  if (isUncommittedMode.value) return "Uncommitted Changes";
+  if (isUncommittedMode.value && !isRangeMode.value) return "Uncommitted Changes";
+  const compareHash = gitGraphStore.compareHash;
+  if (compareHash !== null) {
+    const a = hash === UNCOMMITTED_HASH ? "working" : hash.slice(0, 7);
+    const b = compareHash === UNCOMMITTED_HASH ? "working" : compareHash.slice(0, 7);
+    return `${a}..${b}`;
+  }
   return hash.slice(0, 7);
 });
 
@@ -96,14 +105,40 @@ function dirPath(filePath: string): string {
 
 // コミット選択が変わったら変更ファイルを取得
 watch(
-  () => gitGraphStore.selectedHash,
-  async (hash) => {
-    if (hash === null || hash === UNCOMMITTED_HASH) {
+  () => [gitGraphStore.selectedHash, gitGraphStore.compareHash] as const,
+  async ([hash, compareHash]) => {
+    console.log(
+      "[changes] watch fired, hash =",
+      hash?.slice(0, 7),
+      "compare =",
+      compareHash?.slice(0, 7),
+    );
+    if (hash === null) {
       commitFiles.value = {};
       return;
     }
+    // uncommitted 単体選択は git status を使う
+    if (hash === UNCOMMITTED_HASH && compareHash === null) {
+      commitFiles.value = {};
+      return;
+    }
+    // 範囲選択で片方が UNCOMMITTED_HASH の場合、もう片方と HEAD の差分
+    const resolvedHash = hash === UNCOMMITTED_HASH ? "HEAD" : hash;
+    const resolvedCompare =
+      compareHash === null ? undefined : compareHash === UNCOMMITTED_HASH ? "HEAD" : compareHash;
     loading.value = true;
-    commitFiles.value = await request.gitCommitFiles({ hash });
+    console.log(
+      "[changes] RPC gitCommitFiles, hash =",
+      resolvedHash.slice(0, 7),
+      "compare =",
+      resolvedCompare?.slice(0, 7),
+    );
+    const result = await request.gitCommitFiles({
+      hash: resolvedHash,
+      compareHash: resolvedCompare,
+    });
+    console.log("[changes] RPC result, files =", Object.keys(result).length, result);
+    commitFiles.value = result;
     loading.value = false;
   },
   { immediate: true },

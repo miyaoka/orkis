@@ -146,9 +146,9 @@ export type GozdRPC = {
         params: undefined;
         response: Record<string, string>;
       };
-      /** git diff-tree でコミットの変更ファイル一覧を取得 */
+      /** コミットの変更ファイル一覧を取得。compareHash 指定時は2コミット間の差分 */
       gitCommitFiles: {
-        params: { hash: string };
+        params: { hash: string; compareHash?: string };
         response: Record<string, string>;
       };
       /** git log でコミット履歴を取得（現在ブランチ + main） */

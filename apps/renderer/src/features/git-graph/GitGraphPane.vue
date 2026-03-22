@@ -228,13 +228,50 @@ function onKeydown(e: KeyboardEvent) {
     next = current >= nodes.length - 1 ? nodes.length - 1 : current + 1;
   }
 
-  gitGraphStore.select(nodes[next].commit.hash);
+  if (e.shiftKey) {
+    gitGraphStore.selectCompare(nodes[next].commit.hash);
+  } else {
+    gitGraphStore.select(nodes[next].commit.hash);
+  }
   scrollToIndex(next);
+}
+
+function onRowClick(hash: string, e: MouseEvent) {
+  if (e.shiftKey) {
+    gitGraphStore.selectCompare(hash);
+  } else {
+    gitGraphStore.select(hash);
+  }
+}
+
+/** 行のハイライトクラスを返す */
+function rowHighlightClass(hash: string): string {
+  if (hash === gitGraphStore.selectedHash || hash === gitGraphStore.compareHash) {
+    return "bg-blue-900/40 hover:bg-blue-900/50";
+  }
+  if (isInRange(hash)) {
+    return "bg-blue-900/20 hover:bg-blue-900/30";
+  }
+  return "hover:bg-zinc-800/60";
+}
+
+/** 2点間の範囲内にあるかどうか */
+function isInRange(hash: string): boolean {
+  const { selectedHash, compareHash } = gitGraphStore;
+  if (selectedHash === null || compareHash === null) return false;
+  const nodes = layout.value.nodes;
+  const selectedIdx = nodes.findIndex((n) => n.commit.hash === selectedHash);
+  const compareIdx = nodes.findIndex((n) => n.commit.hash === compareHash);
+  const currentIdx = nodes.findIndex((n) => n.commit.hash === hash);
+  if (selectedIdx === -1 || compareIdx === -1 || currentIdx === -1) return false;
+  const minIdx = Math.min(selectedIdx, compareIdx);
+  const maxIdx = Math.max(selectedIdx, compareIdx);
+  return currentIdx > minIdx && currentIdx < maxIdx;
 }
 </script>
 
 <template>
-  <div class="flex size-full flex-col overflow-hidden bg-zinc-900 text-zinc-300">
+  <div class="flex size-full flex-col overflow-hidden bg-zinc-900 text-zinc-300 select-none">
     <div class="flex shrink-0 items-center gap-1.5 border-b border-zinc-700 px-3 py-1.5">
       <span class="icon-[lucide--git-commit-horizontal] size-4 text-zinc-400" />
       <span class="text-xs font-semibold text-zinc-400">Git Graph</span>
@@ -287,13 +324,9 @@ function onKeydown(e: KeyboardEvent) {
           v-for="node in layout.nodes"
           :key="node.commit.hash"
           class="_graph-row flex cursor-pointer items-center text-xs"
-          :class="
-            gitGraphStore.selectedHash === node.commit.hash
-              ? 'bg-blue-900/40 hover:bg-blue-900/50'
-              : 'hover:bg-zinc-800/60'
-          "
+          :class="rowHighlightClass(node.commit.hash)"
           :style="{ height: `${ROW_HEIGHT}px` }"
-          @click="gitGraphStore.select(node.commit.hash)"
+          @click="onRowClick(node.commit.hash, $event)"
         >
           <!-- Graph spacer -->
           <div class="shrink-0" :style="{ width: `${graphColumnWidth}px` }" />

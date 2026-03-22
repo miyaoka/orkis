@@ -47,16 +47,38 @@ export async function getGitStatus(cwd: string): Promise<Record<string, string>>
  * git diff --name-status の出力を gitStatus と同じ Record<path, statusCode> 形式で返す。
  * statusCode は porcelain v1 互換（例: "M " = index 側 modified）。
  *
- * `hash^1..hash` で first parent との差分を取る。
- * マージコミットでも「そのマージで入った変更」のみが表示される。
+ * compareHash 未指定: `hash^1..hash` で first parent との差分。
+ * compareHash 指定: 古い方の親から新しい方までの差分（範囲内の全変更ファイルの和集合）。
  */
 export async function getGitCommitFiles(
   cwd: string,
   hash: string,
+  compareHash?: string,
 ): Promise<Record<string, string>> {
+  let from: string;
+  let to: string;
+  if (compareHash === undefined) {
+    from = `${hash}^1`;
+    to = hash;
+  } else {
+    // 古い方の親を起点に、新しい方を終点にする
+    // git merge-base --is-ancestor で順序を判定
+    const orderResult = await tryCatch(
+      Bun.spawn(["git", "merge-base", "--is-ancestor", hash, compareHash], { cwd }).exited,
+    );
+    // exit 0 = hash is ancestor of compareHash (hash が古い)
+    const hashIsOlder = orderResult.ok && orderResult.value === 0;
+    if (hashIsOlder) {
+      from = `${hash}^1`;
+      to = compareHash;
+    } else {
+      from = `${compareHash}^1`;
+      to = hash;
+    }
+  }
   const result = await tryCatch(
     new Response(
-      Bun.spawn(["git", "diff", "--name-status", "-z", `${hash}^1`, hash], { cwd }).stdout,
+      Bun.spawn(["git", "diff", "--name-status", "-z", from, to], { cwd }).stdout,
     ).text(),
   );
   if (!result.ok) return {};

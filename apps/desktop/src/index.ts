@@ -635,7 +635,7 @@ function createWindowWithRPC(dir: string, options?: CreateWindowOptions): GozdWi
           return result.value;
         },
         gitStatus: () => getGitStatus(currentDir),
-        gitCommitFiles: ({ hash }) => getGitCommitFiles(currentDir, hash),
+        gitCommitFiles: ({ hash, compareHash }) => getGitCommitFiles(currentDir, hash, compareHash),
         gitLog: ({ maxCount }) => getGitLog({ cwd: currentDir, maxCount }),
         gitWorktreeList: async () => {
           const entries = await attachChangeCounts(await getWorktreeList(projectDir));
