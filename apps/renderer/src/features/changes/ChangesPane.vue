@@ -3,8 +3,7 @@ Changed files list. Shows HEAD vs working directory by default, or a selected co
 
 ## Behavior
 
-- No commit selected: empty
-- Uncommitted commit selected: shows git status converted to GitFileChange[]
+- Default (Uncommitted Changes selected): shows git status converted to GitFileChange[]
 - Normal commit selected: fetches changed files via `gitCommitFiles` RPC
 - Shift+click range: fetches diff between the two commits
 - Clicking a file emits `select` with the relative path
@@ -58,7 +57,6 @@ function gitStatusToFileChanges(statuses: Record<string, string>): GitFileChange
 
 /** 表示するファイル一覧 */
 const fileChanges = computed<GitFileChange[]>(() => {
-  if (gitGraphStore.selectedHash === null) return [];
   if (isUncommittedMode.value && !isRangeMode.value) {
     return gitStatusToFileChanges(gitStatusStore.gitStatuses);
   }
@@ -75,7 +73,6 @@ const fileCount = computed(() => sortedFiles.value.length);
 /** ヘッダーに表示するラベル */
 const headerLabel = computed(() => {
   const hash = gitGraphStore.selectedHash;
-  if (hash === null) return "";
   if (isUncommittedMode.value && !isRangeMode.value) return "Uncommitted Changes";
   const compareHash = gitGraphStore.compareHash;
   if (compareHash !== null) {
@@ -109,10 +106,6 @@ function dirPath(filePath: string): string {
 watch(
   () => [gitGraphStore.selectedHash, gitGraphStore.compareHash] as const,
   async ([hash, compareHash]) => {
-    if (hash === null) {
-      commitFiles.value = [];
-      return;
-    }
     if (hash === UNCOMMITTED_HASH && compareHash === null) {
       commitFiles.value = [];
       return;

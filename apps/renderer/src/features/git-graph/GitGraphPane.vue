@@ -208,7 +208,6 @@ const scrollContainer = ref<HTMLElement | null>(null);
 
 /** 現在選択中のノードのインデックス */
 function selectedIndex(): number {
-  if (gitGraphStore.selectedHash === null) return -1;
   return layout.value.nodes.findIndex((n) => n.commit.hash === gitGraphStore.selectedHash);
 }
 
@@ -271,7 +270,7 @@ function rowHighlightClass(hash: string): string {
 /** 2点間の範囲内にあるかどうか */
 function isInRange(hash: string): boolean {
   const { selectedHash, compareHash } = gitGraphStore;
-  if (selectedHash === null || compareHash === null) return false;
+  if (compareHash === null) return false;
   const nodes = layout.value.nodes;
   const selectedIdx = nodes.findIndex((n) => n.commit.hash === selectedHash);
   const compareIdx = nodes.findIndex((n) => n.commit.hash === compareHash);
