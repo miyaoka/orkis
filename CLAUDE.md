@@ -132,6 +132,8 @@ import { useTerminalStore } from "../terminal/useTerminalStore";
 
 全体チェックはルートの `pnpm typecheck:all` / `lint:all` / `test:all` を使う。各 workspace の同名スクリプトを一括実行する。
 
+- import の整理（未使用 import の削除、並び替え）は commit 時に lint が自動実行する。手動で整理しない
+
 ## 現在のフォーカス
 
 並列プロジェクト・並列 worktree による開発環境の実現（[workspace.md](docs/workspace.md)）。

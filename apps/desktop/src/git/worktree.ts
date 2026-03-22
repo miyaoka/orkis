@@ -4,7 +4,7 @@ import { homedir } from "node:os";
 import { tryCatch } from "@gozd/shared";
 import type { WorktreeEntry } from "@gozd/rpc";
 import { projectKey } from "../projectKey";
-import { isPathOutside, resolveCreatableFsPath, resolveExistingFsPath } from "../security";
+import { resolveCreatableFsPath } from "../security";
 import { getGitStatus, countChanges } from "./status";
 import { assertBranchName } from "./branch";
 
@@ -53,14 +53,6 @@ export async function addWorktree(
 }
 
 export async function removeWorktree(cwd: string, wtPath: string, force?: boolean): Promise<void> {
-  // wtPath が WORKTREE_BASE 配下（新旧どちらの外部配置も含む）か cwd 配下（旧 .gozd/worktrees/）かを検証する
-  const relFromBase = path.relative(WORKTREE_BASE, wtPath);
-  const relFromCwd = path.relative(cwd, wtPath);
-  const isUnderBase = !isPathOutside(relFromBase);
-  const root = isUnderBase ? WORKTREE_BASE : cwd;
-  const rel = isUnderBase ? relFromBase : relFromCwd;
-  await resolveExistingFsPath(root, rel);
-
   const args = ["git", "worktree", "remove"];
   if (force) args.push("--force");
   args.push(wtPath);

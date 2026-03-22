@@ -16,7 +16,7 @@ const SUFFIX_BYTES = 1 + HASH_LENGTH;
 const MAX_NAME_BYTES = NAME_MAX_BYTES - SUFFIX_BYTES;
 
 /** UTF-8 バイト数が上限に収まるよう文字列を切り詰める */
-function truncateToBytes(str: string, maxBytes: number): string {
+export function truncateToBytes(str: string, maxBytes: number): string {
   const buf = Buffer.from(str, "utf-8");
   if (buf.length <= maxBytes) return str;
   // マルチバイト文字の途中で切れないよう、1文字ずつ確認する
