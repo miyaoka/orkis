@@ -72,6 +72,16 @@ async function loadLog() {
   commits.value = result;
   lastHead = findHeadCommit(result)?.hash ?? "";
   recomputeLayout();
+
+  // 選択中のコミットが一覧から消えた場合はクリア
+  const { selectedHash } = gitGraphStore;
+  if (
+    selectedHash !== null &&
+    selectedHash !== UNCOMMITTED_HASH &&
+    !result.some((c) => c.hash === selectedHash)
+  ) {
+    gitGraphStore.clearSelection();
+  }
 }
 
 onMounted(loadLog);
