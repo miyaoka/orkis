@@ -55,7 +55,7 @@ catalogs:
       specifier: 4.3.6
       version: 4.3.6
 
-packageExtensionsChecksum: sha256-ORLkGssAUdsa3uaVOSIbi8I3fWw3dXZvUZvbpTCV2Zk=
+packageExtensionsChecksum: sha256-NVv3A6vyxyvFckISV8x0q1fJEcmeF7QsKjelUFIfxJ8=
 
 importers:
 
@@ -3414,6 +3414,7 @@ snapshots:
 
   '@iconify/tailwind4@1.2.3(tailwindcss@4.2.2)':
     dependencies:
+      '@iconify-json/lucide': 1.2.98
       '@iconify/tools': 5.0.5
       '@iconify/types': 2.0.0
       '@iconify/utils': 3.1.0
