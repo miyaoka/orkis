@@ -109,12 +109,11 @@ export function useWorktreeActions({
     );
     if (result.ok) {
       await fetchData();
-      isCreating.value = false;
       await handleWorktreeSelect(result.value);
     } else {
       freeBranches.value.push(branch);
-      isCreating.value = false;
     }
+    isCreating.value = false;
   }
 
   function removeFromList(wt: WorktreeEntry) {
@@ -164,10 +163,10 @@ export function useWorktreeActions({
       request.createWorktreeWithTodo({ id: todo.id, worktreeDir, branch }),
     );
     await fetchData();
-    isCreating.value = false;
     if (result.ok) {
       await handleWorktreeSelect(result.value.worktree);
     }
+    isCreating.value = false;
   }
 
   /** ブランチを worktree 化する */
