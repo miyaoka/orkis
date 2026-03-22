@@ -13,6 +13,7 @@ import {
   parseOwnerRepo,
   resolveOpenTarget,
   filterIgnored,
+  getGitLog,
   getGitStatus,
   getWorktreeList,
   addWorktree,
@@ -292,18 +293,20 @@ function scheduleGitStatusUpdate(win: GozdWindow, root: string) {
     }
 
     gitStatusInFlight.add(win);
-    try {
-      const statuses = await getGitStatus(root);
-      // 世代が変わっていたら stale な結果を捨てる
-      if ((windowSwitchGen.get(win) ?? 0) !== gen) return;
-      win.webview.rpc?.send.gitStatusChange({ statuses });
-    } finally {
-      gitStatusInFlight.delete(win);
-      if (gitStatusNeedsRerun.has(win)) {
-        gitStatusNeedsRerun.delete(win);
-        scheduleGitStatusUpdate(win, root);
-      }
+    const [statusResult, headResult] = await Promise.all([
+      tryCatch(getGitStatus(root)),
+      tryCatch(new Response(Bun.spawn(["git", "rev-parse", "HEAD"], { cwd: root }).stdout).text()),
+    ]);
+    gitStatusInFlight.delete(win);
+    if (gitStatusNeedsRerun.has(win)) {
+      gitStatusNeedsRerun.delete(win);
+      scheduleGitStatusUpdate(win, root);
     }
+    if (!statusResult.ok) return;
+    // 世代が変わっていたら stale な結果を捨てる
+    if ((windowSwitchGen.get(win) ?? 0) !== gen) return;
+    const head = headResult.ok ? headResult.value.trim() : "";
+    win.webview.rpc?.send.gitStatusChange({ statuses: statusResult.value, head });
   }, GIT_STATUS_DEBOUNCE_MS);
 
   gitStatusTimers.set(win, timer);
@@ -675,6 +678,7 @@ function createWindowWithRPC(dir: string, options?: CreateWindowOptions): GozdWi
           return result.value;
         },
         gitStatus: () => getGitStatus(currentDir),
+        gitLog: ({ maxCount }) => getGitLog({ cwd: currentDir, maxCount }),
         gitWorktreeList: async () => {
           const entries = await attachChangeCounts(await getWorktreeList(projectDir));
           // 各 worktree に紐づく Todo を付与
