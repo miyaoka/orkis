@@ -14,19 +14,30 @@ const DEFAULT_MAX_COUNT = 200;
 
 /**
  * リモートのデフォルトブランチ名を取得する。
- * origin/HEAD が設定されていればそこから、なければ "main" にフォールバック。
+ * origin/HEAD → main → master の優先順で解決する。
  */
 async function resolveDefaultBranch(cwd: string): Promise<string> {
+  // origin/HEAD から取得を試みる
   const result = await tryCatch(
     new Response(
       Bun.spawn(["git", "symbolic-ref", "refs/remotes/origin/HEAD"], { cwd }).stdout,
     ).text(),
   );
-  if (!result.ok) return "main";
-  // "refs/remotes/origin/main" → "main"
-  const ref = result.value.trim();
-  const branch = ref.replace("refs/remotes/origin/", "");
-  return branch || "main";
+  if (result.ok) {
+    // "refs/remotes/origin/main" → "main"
+    const branch = result.value.trim().replace("refs/remotes/origin/", "");
+    if (branch) return branch;
+  }
+
+  // origin/HEAD がない場合、main / master の存在を確認
+  for (const candidate of ["main", "master"]) {
+    const check = await tryCatch(
+      Bun.spawn(["git", "rev-parse", "--verify", `refs/heads/${candidate}`], { cwd }).exited,
+    );
+    if (check.ok && check.value === 0) return candidate;
+  }
+
+  return "main";
 }
 
 /**

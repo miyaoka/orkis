@@ -11,7 +11,7 @@ Git commit graph showing the current worktree branch and the default branch.
 <script setup lang="ts">
 import type { GitCommit } from "@gozd/rpc";
 import { storeToRefs } from "pinia";
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRpc } from "../../shared/rpc";
 import { useGitStatusStore, useWorktreeStore } from "../worktree";
 import { computeGraphLayout } from "./graphLayout";
@@ -20,7 +20,7 @@ import type { GraphLayout } from "./graphLayout";
 /** Uncommitted Changes の仮想コミットハッシュ */
 const UNCOMMITTED_HASH = "0000000000000000000000000000000000000000";
 
-const { request } = useRpc();
+const { request, onGitStatusChange } = useRpc();
 const worktreeStore = useWorktreeStore();
 const gitStatusStore = useGitStatusStore();
 const { gitStatuses } = storeToRefs(gitStatusStore);
@@ -71,9 +71,22 @@ onMounted(loadLog);
 // worktree 切り替え時に再取得
 watch(() => worktreeStore.dir, loadLog);
 
-// git status 変更時は uncommitted 行の件数を再計算するだけ（git log の再取得は不要）
-// 新コミットの検出は .git/refs の監視等で別途行う
+// git status 変更時は uncommitted 行の件数を再計算
 watch(uncommittedChangeCount, recomputeLayout);
+
+// HEAD 変更（コミット、リベース等）を検知して git log を再取得する。
+// gitStatusChange は .git/HEAD と refs/heads/<branch> の変更でも発火するため、
+// 前回の HEAD ハッシュと比較して変化があった場合のみ再取得する。
+const disposeGitStatus = onGitStatusChange(async () => {
+  const prevHead = commits.value[0]?.hash;
+  const result = await request.gitLog({ maxCount: 200 });
+  const newHead = result[0]?.hash;
+  if (newHead !== prevHead) {
+    commits.value = result;
+    recomputeLayout();
+  }
+});
+onUnmounted(disposeGitStatus);
 
 /** グラフ描画の定数 */
 const LANE_WIDTH = 16;
