@@ -3,8 +3,8 @@
 
 ## 構成
 
-- 水平方向: SidebarPane → ターミナル Grid コンテナ（各ペイン間にリサイズハンドル）
-- 垂直方向: メインエリア → DebugPane（リサイズハンドル）
+- 水平方向: SidebarPane → Terminal → ChangesPane → Explorer 開閉ボタン（各ペイン間にリサイズハンドル）
+- 垂直方向: メインエリア → GitGraphPane（リサイズハンドル）
 - Explorer（FilerPane + PreviewPane）は Popover API でトップレイヤーに配置し、レイアウトフローから分離
 
 ## リサイズ
@@ -18,9 +18,9 @@ import { useWindowSize } from "@vueuse/core";
 import { computed, nextTick, onUnmounted, ref, useTemplateRef, watch, watchEffect } from "vue";
 import { useCommandRegistry, useContextKeys } from "../../shared/command";
 import { useRpc } from "../../shared/rpc";
-import { DebugPane } from "../debug";
-import { DiagnosticsPane } from "../diagnostics";
+import { ChangesPane } from "../changes";
 import { FilerPane } from "../filer";
+import { GitGraphPane } from "../git-graph";
 import { PreviewPane } from "../preview";
 import { SidebarPane } from "../sidebar";
 import { TerminalPane } from "../terminal";
@@ -59,12 +59,14 @@ const PREVIEW_MIN_WIDTH = 200;
 const TERMINAL_MIN_WIDTH = 200;
 /** Explorer popover の最小幅（H(left edge) + Filer + H(filer|preview) + Preview） */
 const EXPLORER_MIN_WIDTH = HANDLE_WIDTH + FILER_MIN_WIDTH + HANDLE_WIDTH + PREVIEW_MIN_WIDTH;
-const DEBUG_MIN_HEIGHT = 40;
+const CHANGES_MIN_WIDTH = 180;
+const GIT_GRAPH_MIN_HEIGHT = 40;
 const MAIN_MIN_HEIGHT = 200;
 
 const { width: windowWidth, height: windowHeight } = useWindowSize();
 
 const sidebarWidth = ref(224);
+const changesWidth = ref(240);
 const filerWidth = ref(256);
 /**
  * Explorer popover 全体の幅（H(left edge) + Filer + H(filer|preview) + Preview）。
@@ -87,7 +89,7 @@ const explorerWidth = computed({
 });
 const explorerOpen = ref(false);
 const mainHeight = ref(600);
-const debugHeight = ref(128);
+const gitGraphHeight = ref(128);
 
 /** Explorer 開閉ボタンの固定幅（px-1 × 2 + size-4 + border-l） */
 const EXPLORER_TOGGLE_WIDTH = 25;
@@ -97,11 +99,16 @@ const previewWidth = computed(
   () => explorerWidth.value - HANDLE_WIDTH - filerWidth.value - HANDLE_WIDTH,
 );
 
-/** Terminal 幅: ウィンドウ幅から Sidebar + H(sidebar|terminal) + 開閉ボタンを引いた残余 */
+/** Terminal 幅: ウィンドウ幅から Sidebar + H + SourceControl + H + 開閉ボタンを引いた残余 */
 const terminalWidth = computed(() =>
   Math.max(
     TERMINAL_MIN_WIDTH,
-    windowWidth.value - sidebarWidth.value - HANDLE_WIDTH - EXPLORER_TOGGLE_WIDTH,
+    windowWidth.value -
+      sidebarWidth.value -
+      HANDLE_WIDTH -
+      changesWidth.value -
+      HANDLE_WIDTH -
+      EXPLORER_TOGGLE_WIDTH,
   ),
 );
 
@@ -165,7 +172,7 @@ watch(
 );
 
 watchEffect(() => {
-  const usedHeight = debugHeight.value + HANDLE_WIDTH;
+  const usedHeight = gitGraphHeight.value + HANDLE_WIDTH;
   mainHeight.value = Math.max(MAIN_MIN_HEIGHT, windowHeight.value - usedHeight);
 });
 </script>
@@ -186,6 +193,18 @@ watchEffect(() => {
 
       <TerminalPane :min-width="TERMINAL_MIN_WIDTH" />
 
+      <ResizeHandle
+        v-model:after-size="changesWidth"
+        direction="horizontal"
+        :before-min-size="TERMINAL_MIN_WIDTH"
+        :after-min-size="CHANGES_MIN_WIDTH"
+        :get-before-size="getTerminalWidth"
+      />
+
+      <div class="shrink-0 overflow-hidden" :style="{ width: `${changesWidth}px` }">
+        <ChangesPane />
+      </div>
+
       <!-- Explorer 開閉ボタン（開く専用。閉じるのは light dismiss または popover 内の close） -->
       <button
         type="button"
@@ -200,26 +219,13 @@ watchEffect(() => {
 
     <ResizeHandle
       v-model:before-size="mainHeight"
-      v-model:after-size="debugHeight"
+      v-model:after-size="gitGraphHeight"
       direction="vertical"
       :before-min-size="MAIN_MIN_HEIGHT"
-      :after-min-size="DEBUG_MIN_HEIGHT"
+      :after-min-size="GIT_GRAPH_MIN_HEIGHT"
     />
-    <div class="flex shrink-0 gap-2 overflow-hidden p-0" :style="{ height: `${debugHeight}px` }">
-      <div class="w-1/2 overflow-hidden">
-        <DebugPane
-          :explorer-open="explorerOpen"
-          :layout-debug="{
-            terminalWidth,
-            explorerWidth,
-            previewWidth,
-            windowWidth,
-          }"
-        />
-      </div>
-      <div class="w-1/2 overflow-hidden">
-        <DiagnosticsPane />
-      </div>
+    <div class="shrink-0 overflow-hidden" :style="{ height: `${gitGraphHeight}px` }">
+      <GitGraphPane />
     </div>
 
     <!-- Explorer popover: トップレイヤーに配置し、レイアウトフローから分離 -->
