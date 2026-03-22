@@ -269,7 +269,7 @@ export type GozdRPC = {
       ptyData: { id: number; data: string };
       ptyExit: { id: number; exitCode: number };
       fsChange: { relDir: string };
-      gitStatusChange: { statuses: Record<string, string> };
+      gitStatusChange: { statuses: Record<string, string>; head: string };
       /** 非アクティブ worktree でファイル変更が検知された通知 */
       worktreeChange: void;
       gozdOpen: {

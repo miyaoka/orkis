@@ -75,15 +75,13 @@ watch(() => worktreeStore.dir, loadLog);
 watch(uncommittedChangeCount, recomputeLayout);
 
 // HEAD 変更（コミット、リベース等）を検知して git log を再取得する。
-// gitStatusChange は .git/HEAD と refs/heads/<branch> の変更でも発火するため、
-// 前回の HEAD ハッシュと比較して変化があった場合のみ再取得する。
-const disposeGitStatus = onGitStatusChange(async () => {
-  const prevHead = commits.value[0]?.hash;
-  const result = await request.gitLog({ maxCount: 200 });
-  const newHead = result[0]?.hash;
-  if (newHead !== prevHead) {
-    commits.value = result;
-    recomputeLayout();
+// gitStatusChange の payload に含まれる head ハッシュを前回と比較し、
+// 変化があった場合のみ git log を再取得する（ファイル保存では走らない）。
+let lastHead = "";
+const disposeGitStatus = onGitStatusChange(({ head }) => {
+  if (head && head !== lastHead) {
+    lastHead = head;
+    void loadLog();
   }
 });
 onUnmounted(disposeGitStatus);
