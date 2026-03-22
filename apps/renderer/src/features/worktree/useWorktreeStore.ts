@@ -54,6 +54,7 @@ export const useWorktreeStore = defineStore("worktree", () => {
     newRepoName?: string,
   ) {
     const dirChanged = dir.value !== newDir;
+    const prevSelectedPath = selectedPath.value;
     dir.value = newDir;
     if (newFileServerBaseUrl) {
       fileServerBaseUrl.value = newFileServerBaseUrl;
@@ -70,9 +71,9 @@ export const useWorktreeStore = defineStore("worktree", () => {
         initialSelection.value = selection;
       }
       selectPath(selection.relPath);
-    } else if (dirChanged && selectedPath.value) {
-      // 切り替え先に保存済み選択があるが selectedPath 文字列が同一の場合、
-      // watch が発火しないため revealVersion で reveal を強制する
+    } else if (dirChanged && selectedPath.value && selectedPath.value === prevSelectedPath) {
+      // 切り替え先に保存済み選択があり文字列が同一の場合、
+      // selectedPath の watch が発火しないため revealVersion で reveal を強制する
       revealVersion.value++;
     }
   }
