@@ -6,7 +6,7 @@
 - コード → CodePreview（Shiki ハイライト）
 - 差分 → DiffPreview（jsdiff 行単位）
 - 画像 / SVG → ImagePreview（ファイルサーバー URL）
-- Markdown → MarkdownPreview（marked + mermaid）
+- Markdown → MarkdownPreview（marked + DOMPurify）
 
 ## モード切替
 
