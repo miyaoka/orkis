@@ -131,13 +131,21 @@ async function createWorktreeSymlinks(
       const sourceResult = await tryCatch(resolveExistingFsPath(mainRepoDir, target));
       if (!sourceResult.ok) return;
 
-      // 論理パスでトラバーサルを事前チェック（mkdir 前にセキュリティ検証）
-      const logicalResult = tryCatch(() => resolveGitPath(wtPath, target));
-      if (!logicalResult.ok) return;
-
       // ネストされたパスに対応するため、親ディレクトリを作成
-      const destParent = path.dirname(logicalResult.value);
-      await tryCatch(fsp.mkdir(destParent, { recursive: true }));
+      // resolveGitPath で論理パスのトラバーサルを事前チェックし、
+      // mkdir 後に resolveExistingFsPath で実パスが worktree 内に収まることを検証する
+      const targetDir = path.dirname(target);
+      if (targetDir !== ".") {
+        const logicalResult = tryCatch(() => resolveGitPath(wtPath, targetDir));
+        if (!logicalResult.ok) return;
+
+        const mkdirResult = await tryCatch(fsp.mkdir(logicalResult.value, { recursive: true }));
+        if (!mkdirResult.ok) return;
+
+        // mkdir で作成されたパスが symlink 経由で worktree 外に出ていないか実パスで検証
+        const parentCheck = await tryCatch(resolveExistingFsPath(wtPath, targetDir));
+        if (!parentCheck.ok) return;
+      }
 
       // dest: 親ディレクトリの realpath を検証し、worktree 外への書き込みを防止
       const destResult = await tryCatch(resolveCreatableFsPath(wtPath, target));
