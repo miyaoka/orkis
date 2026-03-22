@@ -16,6 +16,7 @@ import { useRpc } from "../../shared/rpc";
 import { useGitStatusStore, useWorktreeStore } from "../worktree";
 import { computeGraphLayout } from "./graphLayout";
 import type { GraphLayout } from "./graphLayout";
+import { useGitGraphStore } from "./useGitGraphStore";
 
 /** Uncommitted Changes の仮想コミットハッシュ */
 const UNCOMMITTED_HASH = "0000000000000000000000000000000000000000";
@@ -23,6 +24,7 @@ const UNCOMMITTED_HASH = "0000000000000000000000000000000000000000";
 const { request, onGitStatusChange } = useRpc();
 const worktreeStore = useWorktreeStore();
 const gitStatusStore = useGitStatusStore();
+const gitGraphStore = useGitGraphStore();
 const { gitStatuses } = storeToRefs(gitStatusStore);
 
 const commits = ref<GitCommit[]>([]);
@@ -80,8 +82,14 @@ async function loadLog() {
 
 onMounted(loadLog);
 
-// worktree 切り替え時に再取得
-watch(() => worktreeStore.dir, loadLog);
+// worktree 切り替え時に再取得し、選択をクリア
+watch(
+  () => worktreeStore.dir,
+  () => {
+    gitGraphStore.clearSelection();
+    void loadLog();
+  },
+);
 
 // git status 変更時は uncommitted 行の件数を再計算
 watch(uncommittedChangeCount, recomputeLayout);
@@ -227,8 +235,14 @@ function formatDate(timestamp: number): string {
         <div
           v-for="node in layout.nodes"
           :key="node.commit.hash"
-          class="_graph-row flex items-center text-xs hover:bg-zinc-800/60"
+          class="_graph-row flex cursor-pointer items-center text-xs"
+          :class="
+            gitGraphStore.selectedHash === node.commit.hash
+              ? 'bg-blue-900/40 hover:bg-blue-900/50'
+              : 'hover:bg-zinc-800/60'
+          "
           :style="{ height: `${ROW_HEIGHT}px` }"
+          @click="gitGraphStore.select(node.commit.hash)"
         >
           <!-- Graph spacer -->
           <div class="shrink-0" :style="{ width: `${graphColumnWidth}px` }" />
