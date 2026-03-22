@@ -7,19 +7,32 @@ Filer と Changes をタブで切り替えるコンテナ。
 - v-show で切り替えるため、展開状態やスクロール位置が保持される
 - FilerPane の `reveal()` を親に再公開
 - ChangesPane の `select` emit を `worktreeStore.selectPath()` に接続
+- git-graph でコミットを選択すると自動的に Changes タブをアクティブにする
 </doc>
 
 <script setup lang="ts">
-import { ref, useTemplateRef } from "vue";
+import { ref, useTemplateRef, watch } from "vue";
 import { ChangesPane } from "../changes";
 import { FilerPane } from "../filer";
+import { useGitGraphStore } from "../git-graph";
 import { useWorktreeStore } from "../worktree";
 
 type NavigatorView = "files" | "changes";
 
+const gitGraphStore = useGitGraphStore();
 const worktreeStore = useWorktreeStore();
 const filerPaneRef = useTemplateRef<InstanceType<typeof FilerPane>>("filerPane");
 const activeView = ref<NavigatorView>("files");
+
+/** git-graph でコミットを選択したら Changes タブをアクティブにする。
+ * selectionVersion は select / selectCompare でのみインクリメントされるため、
+ * resetSelection（worktree 切替等）では発火しない */
+watch(
+  () => gitGraphStore.selectionVersion,
+  () => {
+    activeView.value = "changes";
+  },
+);
 
 function onChangesSelect(relPath: string) {
   worktreeStore.selectPath(relPath);
