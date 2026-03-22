@@ -51,7 +51,7 @@ function prependUncommitted(rawCommits: GitCommit[]): GitCommit[] {
     parents: headHash ? [headHash] : [],
     author: "*",
     date: Math.floor(Date.now() / 1000),
-    message: `Uncommitted Changes (${count})`,
+    message: count > 0 ? `Uncommitted Changes (${count})` : "Working Tree (Clean)",
     refs: [],
   };
 
