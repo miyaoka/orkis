@@ -25,12 +25,8 @@ function onChangesSelect(relPath: string) {
   worktreeStore.selectPath(relPath);
 }
 
-/**
- * Files タブがアクティブな場合のみツリーを展開する。
- * Changes タブからのファイル選択時はタブを切り替えない。
- */
+/** ツリーを展開する。v-show で DOM は残るのでタブ状態に関わらず動作する */
 async function reveal(targetPath: string): Promise<void> {
-  if (activeView.value !== "files") return;
   await filerPaneRef.value?.reveal(targetPath);
 }
 
