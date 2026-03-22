@@ -146,6 +146,11 @@ export type GozdRPC = {
         params: undefined;
         response: Record<string, string>;
       };
+      /** git diff-tree でコミットの変更ファイル一覧を取得 */
+      gitCommitFiles: {
+        params: { hash: string };
+        response: Record<string, string>;
+      };
       /** git log でコミット履歴を取得（現在ブランチ + main） */
       gitLog: {
         params: { maxCount?: number };

@@ -42,6 +42,40 @@ export async function getGitStatus(cwd: string): Promise<Record<string, string>>
   return statuses;
 }
 
+/**
+ * コミットの変更ファイル一覧を取得する。
+ * git diff-tree の出力を gitStatus と同じ Record<path, statusCode> 形式で返す。
+ * statusCode は porcelain v1 互換（例: "M " = index 側 modified）。
+ */
+export async function getGitCommitFiles(
+  cwd: string,
+  hash: string,
+): Promise<Record<string, string>> {
+  const result = await tryCatch(
+    new Response(
+      Bun.spawn(["git", "diff-tree", "--no-commit-id", "-r", "--name-status", "-z", hash], {
+        cwd,
+      }).stdout,
+    ).text(),
+  );
+  if (!result.ok) return {};
+  const stdout = result.value;
+  const statuses: Record<string, string> = {};
+  // -z 出力: status\0path\0status\0path\0...
+  const parts = stdout.split("\0");
+  let i = 0;
+  while (i + 1 < parts.length) {
+    const status = parts[i];
+    const filePath = parts[i + 1];
+    if (status && filePath) {
+      // diff-tree の status は1文字（M, A, D, R 等）。porcelain v1 互換に変換（index 側にセット）
+      statuses[filePath] = `${status} `;
+    }
+    i += 2;
+  }
+  return statuses;
+}
+
 /** git status の2文字コードから変更種別ごとのファイル数を算出 */
 export function countChanges(statuses: Record<string, string>): WorktreeChangeCounts {
   let modified = 0;

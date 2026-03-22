@@ -11,6 +11,7 @@ import {
   parseOwnerRepo,
   resolveOpenTarget,
   filterIgnored,
+  getGitCommitFiles,
   getGitLog,
   getGitStatus,
   getWorktreeList,
@@ -634,6 +635,7 @@ function createWindowWithRPC(dir: string, options?: CreateWindowOptions): GozdWi
           return result.value;
         },
         gitStatus: () => getGitStatus(currentDir),
+        gitCommitFiles: ({ hash }) => getGitCommitFiles(currentDir, hash),
         gitLog: ({ maxCount }) => getGitLog({ cwd: currentDir, maxCount }),
         gitWorktreeList: async () => {
           const entries = await attachChangeCounts(await getWorktreeList(projectDir));

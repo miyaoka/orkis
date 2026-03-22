@@ -17,9 +17,7 @@ import { useGitStatusStore, useWorktreeStore } from "../worktree";
 import { computeGraphLayout } from "./graphLayout";
 import type { GraphLayout } from "./graphLayout";
 import { useGitGraphStore } from "./useGitGraphStore";
-
-/** Uncommitted Changes の仮想コミットハッシュ */
-const UNCOMMITTED_HASH = "0000000000000000000000000000000000000000";
+import { UNCOMMITTED_HASH } from ".";
 
 const { request, onGitStatusChange } = useRpc();
 const worktreeStore = useWorktreeStore();
