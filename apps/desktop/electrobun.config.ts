@@ -10,6 +10,9 @@ export default {
     description: "Git Orchestrated Zone for Development",
   },
   build: {
+    mac: {
+      icons: isDev ? "icon.dev.iconset" : "icon.iconset",
+    },
     bun: {
       entrypoint: "src/index.ts",
     },
