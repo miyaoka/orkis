@@ -14,30 +14,18 @@ const DEFAULT_MAX_COUNT = 200;
 
 /**
  * リモートのデフォルトブランチ名を取得する。
- * origin/HEAD → main → master の優先順で解決する。
+ * origin/HEAD が設定されていればそこから取得。なければ undefined。
  */
-async function resolveDefaultBranch(cwd: string): Promise<string> {
-  // origin/HEAD から取得を試みる
+async function resolveDefaultBranch(cwd: string): Promise<string | undefined> {
   const result = await tryCatch(
     new Response(
       Bun.spawn(["git", "symbolic-ref", "refs/remotes/origin/HEAD"], { cwd }).stdout,
     ).text(),
   );
-  if (result.ok) {
-    // "refs/remotes/origin/main" → "main"
-    const branch = result.value.trim().replace("refs/remotes/origin/", "");
-    if (branch) return branch;
-  }
-
-  // origin/HEAD がない場合、main / master の存在を確認
-  for (const candidate of ["main", "master"]) {
-    const check = await tryCatch(
-      Bun.spawn(["git", "rev-parse", "--verify", `refs/heads/${candidate}`], { cwd }).exited,
-    );
-    if (check.ok && check.value === 0) return candidate;
-  }
-
-  return "main";
+  if (!result.ok) return undefined;
+  // "refs/remotes/origin/main" → "main"
+  const branch = result.value.trim().replace("refs/remotes/origin/", "");
+  return branch || undefined;
 }
 
 /**
@@ -54,6 +42,7 @@ export async function getGitLog({
   const count = maxCount ?? DEFAULT_MAX_COUNT;
   const format = ["%H", "%P", "%aN", "%at", "%s", "%D"].join(FIELD_SEPARATOR);
   const defaultBranch = await resolveDefaultBranch(cwd);
+  const refs = defaultBranch ? ["HEAD", defaultBranch] : ["HEAD"];
 
   const result = await tryCatch(
     new Response(
@@ -64,8 +53,7 @@ export async function getGitLog({
           `--format=${RECORD_SEPARATOR}${format}`,
           "--date-order",
           `--max-count=${count}`,
-          "HEAD",
-          defaultBranch,
+          ...refs,
           "--",
         ],
         { cwd },
