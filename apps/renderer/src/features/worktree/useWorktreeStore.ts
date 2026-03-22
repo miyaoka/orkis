@@ -70,6 +70,10 @@ export const useWorktreeStore = defineStore("worktree", () => {
         initialSelection.value = selection;
       }
       selectPath(selection.relPath);
+    } else if (dirChanged && selectedPath.value) {
+      // 切り替え先に保存済み選択があるが selectedPath 文字列が同一の場合、
+      // watch が発火しないため revealVersion で reveal を強制する
+      revealVersion.value++;
     }
   }
 
