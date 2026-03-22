@@ -24,9 +24,11 @@ const worktreeStore = useWorktreeStore();
 const filerPaneRef = useTemplateRef<InstanceType<typeof FilerPane>>("filerPane");
 const activeView = ref<NavigatorView>("files");
 
-/** git-graph でコミットを選択したら Changes タブをアクティブにする */
+/** git-graph でコミットを選択したら Changes タブをアクティブにする。
+ * selectionVersion は select / selectCompare でのみインクリメントされるため、
+ * resetSelection（worktree 切替等）では発火しない */
 watch(
-  () => gitGraphStore.selectedHash,
+  () => gitGraphStore.selectionVersion,
   () => {
     activeView.value = "changes";
   },

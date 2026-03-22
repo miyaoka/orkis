@@ -7,15 +7,19 @@ export const useGitGraphStore = defineStore("gitGraph", () => {
   const selectedHash = ref<string>(UNCOMMITTED_HASH);
   /** shift+クリックで指定した比較対象のコミットハッシュ。null は単一選択モード */
   const compareHash = ref<string | null>(null);
+  /** ユーザー操作による選択のバージョン。select / selectCompare でのみインクリメント */
+  const selectionVersion = ref(0);
 
   function select(hash: string) {
     selectedHash.value = hash;
     compareHash.value = null;
+    selectionVersion.value++;
   }
 
   /** shift+クリックで範囲選択の終点を指定する */
   function selectCompare(hash: string) {
     compareHash.value = hash;
+    selectionVersion.value++;
   }
 
   function resetSelection() {
@@ -23,7 +27,7 @@ export const useGitGraphStore = defineStore("gitGraph", () => {
     compareHash.value = null;
   }
 
-  return { selectedHash, compareHash, select, selectCompare, resetSelection };
+  return { selectedHash, compareHash, selectionVersion, select, selectCompare, resetSelection };
 });
 
 if (import.meta.hot) {
