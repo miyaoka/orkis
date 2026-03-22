@@ -10,7 +10,7 @@ features/preview/
 ├── CodePreview.vue       # コード表示（Shiki ハイライト + 行番号）
 ├── DiffPreview.vue       # diff 表示（行単位の差分色分け、2列行番号）
 ├── ImagePreview.vue      # 画像表示
-├── MarkdownPreview.vue   # Markdown レンダリング（marked + mermaid）
+├── MarkdownPreview.vue   # Markdown レンダリング（marked + DOMPurify）
 └── useHighlight.ts       # Shiki ハイライタの遅延初期化と言語検出
 ```
 
@@ -22,7 +22,7 @@ features/preview/
 | -------- | ----------------------------------------- | --------------------------------------------------------- |
 | image    | png, jpg, jpeg, gif, webp, avif, ico, bmp | `<img>` (ファイルサーバー URL)                            |
 | svg      | svg                                       | 画像プレビュー（ファイルサーバー URL） / ソースコード切替 |
-| markdown | md                                        | marked + mermaid + DOMPurify                              |
+| markdown | md                                        | marked + DOMPurify                                        |
 | code     | その他すべて                              | Shiki シンタックスハイライト                              |
 | binary   | NUL バイト含有                            | 「Binary file」メッセージ                                 |
 
@@ -98,8 +98,6 @@ desktop からの `fsChange` メッセージを購読し、選択中ファイル
 
 - `marked` で HTML に変換後、`DOMPurify.sanitize()` で XSS 対策
 - YAML frontmatter を `hooks.preprocess` でコードブロックに変換して表示
-- mermaid コードブロックを検出し、`mermaid.render()` でダイアグラムに変換
-- ダークテーマ対応（`mermaid.initialize({ theme: "dark" })`）
 
 ### ImagePreview
 

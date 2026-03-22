@@ -18,11 +18,9 @@ flowchart TB
         PTY[PTY 管理]
         WATCH[ファイル監視]
         SOCKET[ソケットサーバー]
-        LSP[LSP クライアント]
         MAIN --> PTY
         MAIN --> WATCH
         MAIN --> SOCKET
-        MAIN --> LSP
     end
 
     subgraph renderer [renderer / WKWebView]
@@ -57,7 +55,7 @@ flowchart TB
 - ディレクトリごとに1ウィンドウ（同じディレクトリの重複不可）
 - `windowDirs` Map で dir → ウィンドウの対応を管理
 - `projectDir`（clone 元、固定）と `currentDir`（切り替え可能な worktree パス）を分離
-- ウィンドウ close 時に全リソース（PTY, watcher, timer, LSP）をクリーンアップ
+- ウィンドウ close 時に全リソース（PTY, watcher, timer）をクリーンアップ
 - `exitOnLastWindowClosed: true` で最後のウィンドウを閉じるとアプリ終了
 
 ### Worktree 切り替え（switchDir）
@@ -65,7 +63,6 @@ flowchart TB
 ウィンドウを閉じずに表示対象ディレクトリを切り替える。切り替え時の処理:
 
 - ファイル監視の付け替え（stopWatching → startWatching）
-- LSP クライアントの再起動
 - 世代番号（`windowSwitchGen`）のインクリメントで stale な結果を破棄
 
 ### 非アクティブ worktree 監視
