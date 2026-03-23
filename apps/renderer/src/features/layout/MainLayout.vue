@@ -31,8 +31,6 @@ const worktreeStore = useWorktreeStore();
 const contextKeys = useContextKeys();
 const previewPopoverRef = useTemplateRef<HTMLElement>("previewPopover");
 const navigatorPaneRef = useTemplateRef<InstanceType<typeof NavigatorPane>>("navigatorPane");
-const commandPaletteRef = useTemplateRef<InstanceType<typeof CommandPalette>>("commandPalette");
-onUnmounted(() => commandPaletteRef.value?.dispose());
 
 // レイアウト・ウィンドウスコープのコマンド登録
 const { register } = useCommandRegistry();
@@ -249,7 +247,7 @@ watchEffect(() => {
       </div>
     </div>
 
-    <CommandPalette ref="commandPalette" />
+    <CommandPalette />
   </div>
 </template>
 

@@ -12,7 +12,7 @@ Command palette dialog. Displays a searchable list of registered commands with t
 
 <script setup lang="ts">
 import { useEventListener } from "@vueuse/core";
-import { computed, nextTick, ref, useTemplateRef, watch } from "vue";
+import { computed, nextTick, onUnmounted, ref, useTemplateRef, watch } from "vue";
 import { useCommandRegistry, useContextKeys } from "../../shared/command";
 import { formatKeyBinding, getKeyBindingMap } from "./keyBindingDisplay";
 
@@ -39,9 +39,11 @@ watch(filteredCommands, () => {
 });
 
 function show() {
+  const dialog = dialogRef.value;
+  if (dialog === null || dialog.open) return;
   query.value = "";
   selectedIndex.value = 0;
-  dialogRef.value?.showModal();
+  dialog.showModal();
   contextKeys.set("commandPaletteVisible", true);
   nextTick(() => {
     inputRef.value?.focus();
@@ -95,13 +97,14 @@ const disposeShow = registry.register("commandPalette.show", {
   },
 });
 
-defineExpose({ dispose: disposeShow });
+onUnmounted(disposeShow);
 </script>
 
 <template>
   <dialog
     ref="dialog"
     class="_command-palette-dialog"
+    aria-label="Command palette"
     @keydown="handleKeydown"
     @close="contextKeys.set('commandPaletteVisible', false)"
   >
@@ -112,6 +115,7 @@ defineExpose({ dispose: disposeShow });
           v-model="query"
           type="text"
           placeholder="Type a command..."
+          aria-label="Search commands"
           class="w-full bg-transparent px-2 py-1 text-sm text-zinc-200 outline-none placeholder:text-zinc-500"
         />
       </div>
