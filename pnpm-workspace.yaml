@@ -28,10 +28,6 @@ catalog:
 
 minimumReleaseAge: 4320
 
-minimumReleaseAgeExclude:
-  - "@miyaoka/fsss"
-  - electrobun
-  - tailwind-csstree
 
 # phantom dependency のワークアラウンド（enableGlobalVirtualStore で顕在化）
 # electrobun が @types/three を dependencies に含めていない問題
