@@ -52,11 +52,15 @@ const selectableIndices = computed(() => {
  * ただし showSignal 処理中は activeIndex を優先するため抑制する。
  */
 let suppressFilterReset = false;
-watch(filteredItems, () => {
-  if (suppressFilterReset) return;
-  const [first] = selectableIndices.value;
-  selectedIndex.value = first ?? 0;
-});
+watch(
+  filteredItems,
+  () => {
+    if (suppressFilterReset) return;
+    const [first] = selectableIndices.value;
+    selectedIndex.value = first ?? 0;
+  },
+  { flush: "sync" },
+);
 
 /** Open dialog when showSignal changes */
 watch(showSignal, () => {
