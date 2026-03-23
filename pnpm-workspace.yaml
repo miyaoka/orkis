@@ -31,6 +31,7 @@ minimumReleaseAge: 4320
 minimumReleaseAgeExclude:
   - "@miyaoka/fsss"
   - electrobun
+  - tailwind-csstree
 
 # phantom dependency のワークアラウンド（enableGlobalVirtualStore で顕在化）
 # electrobun が @types/three を dependencies に含めていない問題
@@ -41,12 +42,15 @@ packageExtensions:
   electrobun@1.16.0:
     dependencies:
       "@types/three": "^0.181.0"
-  tailwind-csstree@0.1.4:
+  tailwind-csstree@0.2.0:
     dependencies:
       "@eslint/css-tree": "*"
   "@iconify/tailwind4@1.2.3":
     dependencies:
       "@iconify-json/lucide": "*"
+overrides:
+  tailwind-csstree: 0.2.0
+
 enableGlobalVirtualStore: true
 
 shellEmulator: true
