@@ -47,6 +47,8 @@ export function registerThemeCommand(): () => void {
   const dispose = registry.register("terminal.selectTheme", {
     label: "Terminal: Select Theme",
     handler: () => {
+      // QuickPick を開いた時点で起動時復元を含む先行リクエストを失効させる
+      generation++;
       const previousTheme = { ...currentTheme.value };
 
       const items: QuickPickItem[] = [
