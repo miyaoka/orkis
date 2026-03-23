@@ -5,24 +5,15 @@
  */
 
 import { tryCatch } from "@gozd/shared";
-import { convertTheme, darkThemeNames, lightThemeNames, themeLoaders } from "@gozd/themes";
-import type { XtermTheme } from "@gozd/themes";
+import { darkThemeNames, lightThemeNames, loadTheme } from "@gozd/themes";
 import { useCommandRegistry } from "../../shared/command";
 import { useQuickPick } from "../../shared/quick-pick";
 import type { QuickPickItem } from "../../shared/quick-pick";
 import { useRpc } from "../../shared/rpc";
 import { currentTheme } from "./terminalConfig";
 
-/** テーマ JSON をロードして XtermTheme に変換する */
-async function loadTheme(name: string): Promise<XtermTheme | undefined> {
-  const loader = themeLoaders[name];
-  if (loader === undefined) return undefined;
-  const mod = await loader();
-  return convertTheme(mod.default as Parameters<typeof convertTheme>[0]);
-}
-
 /** 起動時に保存済みテーマを復元する */
-export async function restoreSavedTheme(
+async function restoreSavedTheme(
   configLoad: () => Promise<{ terminalTheme?: string }>,
 ): Promise<void> {
   const result = await tryCatch(configLoad());
@@ -48,6 +39,11 @@ export function registerThemeCommand(): () => void {
     handler: () => {
       const previousTheme = { ...currentTheme.value };
 
+      // 非同期ロードの競合を防止する世代トークン。
+      // 新しいリクエストが発行されるたびにインクリメントし、
+      // 完了時にトークンが最新でなければ結果を破棄する。
+      let generation = 0;
+
       const items: QuickPickItem[] = [
         { label: "Dark", separator: true },
         ...darkThemeNames.map((name) => ({ label: name })),
@@ -59,14 +55,18 @@ export function registerThemeCommand(): () => void {
         items,
         placeholder: "Select a terminal theme...",
         onHighlight: (item) => {
+          const gen = ++generation;
           void loadTheme(item.label).then((theme) => {
+            if (gen !== generation) return;
             if (theme !== undefined) {
               currentTheme.value = theme;
             }
           });
         },
         onAccept: (item) => {
+          const gen = ++generation;
           void loadTheme(item.label).then((theme) => {
+            if (gen !== generation) return;
             if (theme !== undefined) {
               currentTheme.value = theme;
               void request.configSave({ terminalTheme: item.label });
@@ -74,6 +74,7 @@ export function registerThemeCommand(): () => void {
           });
         },
         onCancel: () => {
+          generation++;
           currentTheme.value = previousTheme;
         },
       });

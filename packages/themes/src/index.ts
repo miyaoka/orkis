@@ -1,3 +1,3 @@
-export { convertTheme } from "./convertTheme";
 export type { XtermTheme } from "./convertTheme";
-export { darkThemeNames, lightThemeNames, themeLoaders, themeNames } from "../dist/themeLoaders";
+export { darkThemeNames, lightThemeNames, themeNames } from "../dist/themeLoaders";
+export { loadTheme } from "./loadTheme";

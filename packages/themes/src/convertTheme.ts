@@ -7,7 +7,7 @@
  * - name フィールドを除去
  */
 
-interface WindowsTerminalTheme {
+export interface WindowsTerminalTheme {
   name: string;
   black: string;
   red: string;
