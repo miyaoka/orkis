@@ -17,6 +17,7 @@
 import { computed, nextTick, ref, watch } from "vue";
 import { useContextKeys } from "../../shared/command";
 import type { ClaudeState } from "./claudeStatus";
+import { currentTheme } from "./terminalConfig";
 import { useTerminalStore } from "./useTerminalStore";
 import XtermTerminal from "./XtermTerminal.vue";
 
@@ -92,15 +93,17 @@ function handleTerminalBlur() {
   <div class="min-h-0 min-w-0" :data-leaf-id="leafId">
     <div
       class="relative size-full rounded-lg p-1 outline"
+      :style="{ backgroundColor: currentTheme.background }"
       :class="
         isFocused
-          ? 'bg-zinc-900 outline-2 -outline-offset-4 outline-green-300/70'
-          : 'bg-zinc-900 -outline-offset-2 outline-zinc-700'
+          ? 'outline-2 -outline-offset-4 outline-green-300/70'
+          : '-outline-offset-2 outline-zinc-700'
       "
     >
       <!-- CWD（左上、ボーダー線上） -->
       <div
-        class="pointer-events-none absolute top-0 left-3 z-10 -translate-y-1/2 bg-zinc-900 px-1 text-xs"
+        class="pointer-events-none absolute top-0 left-3 z-10 -translate-y-1/2 px-1 text-xs"
+        :style="{ backgroundColor: currentTheme.background }"
         :class="isInsideWorktree ? 'text-zinc-400' : 'text-red-300'"
       >
         <span :title="cwd">{{ cwdLabel }}</span>
@@ -108,7 +111,8 @@ function handleTerminalBlur() {
       <!-- Claude Code 状態インジケーター（右上、ボーダー線上） -->
       <div
         v-if="claudeState !== undefined"
-        class="pointer-events-none absolute top-0 right-3 z-10 flex -translate-y-1/2 items-center gap-1 bg-zinc-900 px-1 text-xs leading-none font-semibold"
+        class="pointer-events-none absolute top-0 right-3 z-10 flex -translate-y-1/2 items-center gap-1 px-1 text-xs leading-none font-semibold"
+        :style="{ backgroundColor: currentTheme.background }"
         :class="{
           'text-zinc-500': claudeState === 'idle',
           'text-yellow-300': claudeState === 'working',
