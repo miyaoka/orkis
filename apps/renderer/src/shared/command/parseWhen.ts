@@ -21,6 +21,7 @@ const KNOWN_KEYS = new Set<string>(
     terminalFocus: true,
     previewVisible: true,
     commandPaletteVisible: true,
+    quickPickVisible: true,
     inputFocused: true,
   } satisfies ContextMap),
 );

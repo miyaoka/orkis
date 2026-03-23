@@ -79,10 +79,12 @@ gozd/
 │           │   └── voicevox/    # VOICEVOX 音声合成
 │           └── shared/    # feature に依存しない共通モジュール
 │               ├── command/     # コマンドシステム + keybinding
+│               ├── quick-pick/  # 汎用 QuickPick ダイアログ
 │               └── rpc/         # Electrobun RPC composable
 ├── packages/
 │   ├── rpc/               # RPC スキーマ型定義（bun ↔ webview）
-│   └── shared/            # 全パッケージ共通ユーティリティ（Result 型 + tryCatch）
+│   ├── shared/            # 全パッケージ共通ユーティリティ（Result 型 + tryCatch）
+│   └── themes/            # ターミナルテーマ（iTerm2-Color-Schemes vendor + 変換ロジック）
 ├── docs/                  # 設計文書
 └── .github/               # CI ワークフロー
 ```
@@ -118,6 +120,7 @@ import { useTerminalStore } from "../terminal/useTerminalStore";
 
 ### ルール
 
+- 別パッケージのファイルを相対パスで参照しない。必ずパッケージ名（`@gozd/themes` 等）で import する
 - feature / shared の外部からは `index.ts` のみ参照可能。内部モジュールを直接 import しない
 - 同一 feature / shared 内のファイル間は自由に参照できる
 - feature は再帰的にネスト可能。子 feature は `features/` サブディレクトリに配置する（例: `sidebar/features/worktree/`、`sidebar/features/todo/`）

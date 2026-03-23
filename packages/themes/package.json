@@ -1,0 +1,23 @@
+{
+  "name": "@gozd/themes",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "prepare": "bun scripts/generateThemeLoaders.ts",
+    "typecheck": "tsgo --noEmit",
+    "lint": "oxlint --type-aware src/",
+    "fix": "oxlint --type-aware --fix src/ && oxfmt src/"
+  },
+  "devDependencies": {
+    "@types/bun": "catalog:",
+    "@types/node": "catalog:",
+    "@typescript/native-preview": "catalog:",
+    "oxfmt": "catalog:",
+    "oxlint": "catalog:",
+    "oxlint-tsgolint": "catalog:"
+  }
+}

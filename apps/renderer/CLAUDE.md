@@ -8,6 +8,11 @@
 - Tailwind ユーティリティ以外のカスタム CSS クラスには `_` プレフィックスを付ける（例: `_markdown-body`, `_line-numbered`）
 - ESLint の `better-tailwindcss/no-unknown-classes` ルールで `_.*` パターンが除外設定されている
 
+## コンポーネント間通信
+
+- `defineExpose` は使わない。親から子の内部メソッドを呼ぶ設計を避ける
+- コンポーネントの機能を外部に公開する場合は composable（module singleton）パターンを使う
+
 ## UI テキスト
 
 - ユーザーに表示するすべてのテキスト（ラベル、placeholder、aria-label、title、alert メッセージ、エラーメッセージ等）は英語で書く

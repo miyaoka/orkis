@@ -12,7 +12,7 @@ import { Terminal, type IMarker } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
 import { onMounted, onBeforeUnmount, ref, watch } from "vue";
 import { useRpc } from "../../shared/rpc";
-import { terminalConfig } from "./terminalConfig";
+import { currentTheme, terminalConfig } from "./terminalConfig";
 import { createFilePathLinkProvider } from "./useFilePathLinkProvider";
 import { useTerminalStore } from "./useTerminalStore";
 
@@ -105,6 +105,7 @@ onMounted(async () => {
 
   terminal = new Terminal({
     ...terminalConfig,
+    theme: currentTheme.value,
     cursorBlink: true,
     allowProposedApi: true,
   });
@@ -148,6 +149,12 @@ onMounted(async () => {
 
   // WebGL レンダラで GPU アクセラレーション（失敗時は DOM フォールバック）
   const term = terminal;
+
+  // テーマ変更を全 xterm インスタンスにリアルタイム反映
+  watch(currentTheme, (theme) => {
+    term.options.theme = theme;
+  });
+
   const webglResult = tryCatch(() => {
     const webglAddon = new WebglAddon();
     webglAddon.onContextLoss(() => {
