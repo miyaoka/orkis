@@ -18,6 +18,7 @@ import { useWindowSize } from "@vueuse/core";
 import { computed, nextTick, onUnmounted, ref, useTemplateRef, watch, watchEffect } from "vue";
 import { useCommandRegistry, useContextKeys } from "../../shared/command";
 import { useRpc } from "../../shared/rpc";
+import { CommandPalette } from "../command-palette";
 import { GitGraphPane } from "../git-graph";
 import { NavigatorPane } from "../navigator";
 import { PreviewPane } from "../preview";
@@ -34,17 +35,23 @@ const navigatorPaneRef = useTemplateRef<InstanceType<typeof NavigatorPane>>("nav
 // レイアウト・ウィンドウスコープのコマンド登録
 const { register } = useCommandRegistry();
 const { send } = useRpc();
-const disposePreviewToggle = register("preview.toggle", () => {
-  if (previewOpen.value) {
-    closePreview();
-  } else {
-    openPreview();
-  }
-  return true;
+const disposePreviewToggle = register("preview.toggle", {
+  label: "Preview: Toggle",
+  handler: () => {
+    if (previewOpen.value) {
+      closePreview();
+    } else {
+      openPreview();
+    }
+    return true;
+  },
 });
-const disposeWindowClose = register("window.close", () => {
-  send.windowClose();
-  return true;
+const disposeWindowClose = register("window.close", {
+  label: "Window: Close",
+  handler: () => {
+    send.windowClose();
+    return true;
+  },
 });
 onUnmounted(disposePreviewToggle);
 onUnmounted(disposeWindowClose);
@@ -239,6 +246,8 @@ watchEffect(() => {
         <PreviewPane @close="closePreview" />
       </div>
     </div>
+
+    <CommandPalette />
   </div>
 </template>
 

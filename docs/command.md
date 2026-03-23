@@ -23,7 +23,7 @@ flowchart TB
     end
 
     KB -->|execute| CR
-    CP -.->|execute| CR
+    CP -->|execute| CR
     MENU -.->|execute| CR
     CR -->|when 評価| CK
     RC -->|register| CR
@@ -39,42 +39,57 @@ flowchart TB
 
 ```typescript
 interface CommandRegistry {
-  register(id: string, handler: CommandHandler): () => void;
+  register(id: string, input: CommandInput): () => void;
   execute(id: string, args?: unknown): boolean;
+  listForPalette(): readonly CommandEntry[];
   reset(): void;
 }
 ```
 
 - `register()` は dispose 関数を返す。同一 ID の二重登録は上書き（HMR 安全）
 - `execute()` は handler を `tryCatch` でラップして実行する。handler 内で例外が発生した場合は `console.error` で記録し `false` を返す。未登録なら `false`
-- dispose 時は `handlers.get(id) === handler` で一致チェックし、他の登録を壊さない
+- `listForPalette()` は label が設定されているコマンドのみを返す。コマンドパレット UI が使用する
+- dispose 時は一致チェックし、他の登録を壊さない
 
-### CommandHandler
+### CommandInput
+
+`register()` の第2引数はハンドラ関数、または label 付き記述子を受け取る。
 
 ```typescript
 type CommandHandler = (args?: unknown) => boolean;
+
+interface CommandDescriptor {
+  label: string; // コマンドパレットに表示する名前
+  handler: CommandHandler;
+}
+
+type CommandInput = CommandHandler | CommandDescriptor;
 ```
 
-処理した場合 `true`、何もしなかった場合 `false` を返す。呼び出し元はこの戻り値で `preventDefault` 等を判断する。
+- `label` 付きで登録したコマンドのみコマンドパレットに表示される
+- `label` なし（関数のみ）のコマンドはパレットに表示されない（引数付きコマンド等）
+- handler は処理した場合 `true`、何もしなかった場合 `false` を返す。呼び出し元はこの戻り値で `preventDefault` 等を判断する
 
 ### コマンド登録の例
 
 ```typescript
-// features/terminal/registerTerminalCommands.ts
-const disposers = [
-  registry.register("terminal.splitHorizontal", () => {
+// label 付き: コマンドパレットに表示される
+registry.register("terminal.splitHorizontal", {
+  label: "Terminal: Split Horizontal",
+  handler: () => {
     const active = getActiveLayout();
     if (active === undefined) return false;
     terminalStore.splitPane(active.dir, "horizontal");
     return true;
-  }),
-  // ...
-];
+  },
+});
 
-// dispose 関数を返す
-return () => {
-  for (const d of disposers) d();
-};
+// label なし: コマンドパレットに表示されない（引数付きコマンド）
+registry.register("workspace.selectWorktree", (args) => {
+  if (typeof args !== "number") return false;
+  // ...
+  return true;
+});
 ```
 
 ## Context Key
@@ -85,13 +100,17 @@ return () => {
 interface ContextMap {
   terminalFocus: boolean;
   previewVisible: boolean;
+  commandPaletteVisible: boolean;
+  inputFocused: boolean;
 }
 ```
 
-| キー名           | source                                                                            |
-| ---------------- | --------------------------------------------------------------------------------- |
-| `terminalFocus`  | xterm の focus/blur + worktree 切替 / closePane / visibilitychange で更新         |
-| `previewVisible` | MainLayout の `watchEffect` で `previewOpen` を同期（Preview popover の開閉状態） |
+| キー名                  | source                                                                            |
+| ----------------------- | --------------------------------------------------------------------------------- |
+| `terminalFocus`         | xterm の focus/blur + worktree 切替 / closePane / visibilitychange で更新         |
+| `previewVisible`        | MainLayout の `watchEffect` で `previewOpen` を同期（Preview popover の開閉状態） |
+| `commandPaletteVisible` | CommandPalette の show/close で更新                                               |
+| `inputFocused`          | useKeyBindings の focusin/focusout で更新。input/textarea/contenteditable を検出  |
 
 ### When 条件
 
