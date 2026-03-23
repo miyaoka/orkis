@@ -9,6 +9,7 @@ const INITIAL_STATE: ContextMap = {
   terminalFocus: false,
   previewVisible: false,
   commandPaletteVisible: false,
+  quickPickVisible: false,
   inputFocused: false,
 };
 

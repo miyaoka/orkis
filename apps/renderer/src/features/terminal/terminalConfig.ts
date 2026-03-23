@@ -1,8 +1,10 @@
 /**
  * ターミナル共通設定。
- * 将来的にユーザー設定で Partial<TerminalConfig> をマージして上書きする。
+ * theme はリアクティブで、QuickPick でのテーマ選択時にリアルタイム反映される。
  */
 
+import type { XtermTheme } from "@gozd/themes";
+import { ref } from "vue";
 import DEFAULT_TERMINAL_CONFIG from "./defaultTerminalConfig.json";
 
 export interface TerminalConfig {
@@ -11,12 +13,13 @@ export interface TerminalConfig {
   // 日本語グリフの幅が英字フォント幅の2倍に合う等幅フォントが必要。
   fontFamily: string;
   scrollback: number;
-  theme: {
-    background: string;
-    foreground: string;
-    cursor: string;
-  };
 }
 
-// TODO: ユーザー設定で上書きできるようにする
+/** フォント・スクロールバック等の静的設定 */
 export const terminalConfig: TerminalConfig = DEFAULT_TERMINAL_CONFIG;
+
+/**
+ * 現在のターミナルテーマ。watch で全 xterm インスタンスに反映される。
+ * 未指定のプロパティは xterm.js のデフォルト値が使われる。
+ */
+export const currentTheme = ref<Partial<XtermTheme>>(DEFAULT_TERMINAL_CONFIG.theme);

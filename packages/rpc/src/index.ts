@@ -92,6 +92,7 @@ export interface VoicevoxConfig {
 /** アプリのグローバル設定 */
 export interface AppConfig {
   voicevox?: VoicevoxConfig;
+  terminalTheme?: string;
 }
 
 /** プロジェクト固有設定の zod スキーマ */

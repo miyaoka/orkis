@@ -17,13 +17,14 @@
 import { useWindowSize } from "@vueuse/core";
 import { computed, nextTick, onUnmounted, ref, useTemplateRef, watch, watchEffect } from "vue";
 import { useCommandRegistry, useContextKeys } from "../../shared/command";
+import { QuickPick } from "../../shared/quick-pick";
 import { useRpc } from "../../shared/rpc";
 import { CommandPalette } from "../command-palette";
 import { GitGraphPane } from "../git-graph";
 import { NavigatorPane } from "../navigator";
 import { PreviewPane } from "../preview";
 import { SidebarPane } from "../sidebar";
-import { TerminalPane } from "../terminal";
+import { registerThemeCommand, TerminalPane } from "../terminal";
 import { useWorktreeStore } from "../worktree";
 import ResizeHandle from "./ResizeHandle.vue";
 
@@ -53,8 +54,10 @@ const disposeWindowClose = register("window.close", {
     return true;
   },
 });
+const disposeThemeCommand = registerThemeCommand();
 onUnmounted(disposePreviewToggle);
 onUnmounted(disposeWindowClose);
+onUnmounted(disposeThemeCommand);
 
 /** ハンドル幅 w-2 = 8px */
 const HANDLE_WIDTH = 8;
@@ -248,6 +251,7 @@ watchEffect(() => {
     </div>
 
     <CommandPalette />
+    <QuickPick />
   </div>
 </template>
 

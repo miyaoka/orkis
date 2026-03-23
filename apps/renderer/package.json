@@ -14,6 +14,7 @@
   "dependencies": {
     "@gozd/rpc": "workspace:*",
     "@gozd/shared": "workspace:*",
+    "@gozd/themes": "workspace:*",
     "@vueuse/core": "14.2.1",
     "@xterm/addon-fit": "0.11.0",
     "@xterm/addon-unicode11": "0.9.0",
