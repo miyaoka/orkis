@@ -176,3 +176,23 @@ import { useTerminalStore } from "../terminal/useTerminalStore";
 - try-catch は使わず、`@gozd/shared` の `tryCatch` を使って Result 型で処理する
 - `tryCatch(() => ...)` で同期処理、`tryCatch(promise)` で非同期処理をラップ
 - 結果は `result.ok` で判定し、`result.value` / `result.error` でアクセスする
+
+## pnpm ワークアラウンド
+
+`pnpm-workspace.yaml` の `overrides` / `packageExtensions` で upstream の依存宣言バグを回避している。upstream が修正されたら解除する。
+
+### overrides
+
+| パッケージ         | 強制バージョン | 理由                                                                                                                                                                        | 解除条件                                                                         |
+| ------------------ | -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| `tailwind-csstree` | `0.2.0`        | `eslint-plugin-better-tailwindcss` が `^0.1.4` を要求するが、0.1.5 は `@eslint/css-tree` を dependency から削除したバグ版。semver `0.x` 系で `^0.1.4` は `0.2.0` を含まない | `eslint-plugin-better-tailwindcss` が `tailwind-csstree@^0.2.0` に対応したら削除 |
+
+### packageExtensions（phantom dependency 補完）
+
+`enableGlobalVirtualStore` により phantom dependency が顕在化するため、upstream が宣言していない依存を補完している。
+
+| パッケージ                 | 補完する依存           | 理由                                                                                                           | 解除条件                                                              |
+| -------------------------- | ---------------------- | -------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| `electrobun@1.16.0`        | `@types/three`         | electrobun が `@types/three` を dependencies に含めていない                                                    | `blackboardsh/electrobun#280` が修正されたら削除                      |
+| `tailwind-csstree@0.2.0`   | `@eslint/css-tree`     | 0.2.0 では peerDep が `@eslint/css` に変更されたが、コード内で `@eslint/css-tree` を直接 import しており未宣言 | `tailwind-csstree` が `@eslint/css-tree` を dependency に含めたら削除 |
+| `@iconify/tailwind4@1.2.3` | `@iconify-json/lucide` | 動的に `require` するが dependencies に含めていない                                                            | `@iconify/tailwind4` が dependency に含めたら削除                     |
