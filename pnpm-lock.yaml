@@ -321,6 +321,12 @@ importers:
         specifier: 'catalog:'
         version: 0.17.1
 
+  packages/themes:
+    devDependencies:
+      '@typescript/native-preview':
+        specifier: 'catalog:'
+        version: 7.0.0-dev.20260320.1
+
 packages:
 
   '@antfu/install-pkg@1.1.0':
