@@ -7,7 +7,6 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "generate": "bun scripts/generateThemeLoaders.ts",
     "prepare": "bun scripts/generateThemeLoaders.ts",
     "typecheck": "tsgo --noEmit",
     "lint": "oxlint --type-aware src/",
