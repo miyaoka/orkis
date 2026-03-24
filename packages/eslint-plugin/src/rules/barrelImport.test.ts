@@ -404,3 +404,58 @@ tester.run("barrel-import (custom scopes)", rule, {
     },
   ],
 });
+
+// ─── 設定バリデーションのテスト ─────────────────
+
+tester.run("barrel-import (invalid config)", rule, {
+  valid: [],
+  invalid: [
+    {
+      name: "NG: scopes が空オブジェクト",
+      code: 'import { foo } from "./bar";',
+      filename: `${BASE}/features/feat-A/CompA.vue`,
+      options: [{ scopes: {} }],
+      errors: [{ messageId: "invalidConfig" }],
+    },
+    {
+      name: "NG: directories が空配列",
+      code: 'import { foo } from "./bar";',
+      filename: `${BASE}/features/feat-A/CompA.vue`,
+      options: [
+        {
+          scopes: {
+            features: { directories: [], dependsOn: [] },
+          },
+        },
+      ],
+      errors: [{ messageId: "invalidConfig" }],
+    },
+    {
+      name: "NG: 同じディレクトリ名が複数スコープに存在",
+      code: 'import { foo } from "./bar";',
+      filename: `${BASE}/features/feat-A/CompA.vue`,
+      options: [
+        {
+          scopes: {
+            scopeA: { directories: ["shared"], dependsOn: [] },
+            scopeB: { directories: ["shared"], dependsOn: [] },
+          },
+        },
+      ],
+      errors: [{ messageId: "invalidConfig" }],
+    },
+    {
+      name: "NG: dependsOn に未定義のスコープ名",
+      code: 'import { foo } from "./bar";',
+      filename: `${BASE}/features/feat-A/CompA.vue`,
+      options: [
+        {
+          scopes: {
+            features: { directories: ["features"], dependsOn: ["nonexistent"] },
+          },
+        },
+      ],
+      errors: [{ messageId: "invalidConfig" }],
+    },
+  ],
+});
