@@ -191,7 +191,7 @@ function handleMenuTodoCreateWorktree(todo: import("@gozd/rpc").Todo) {
             @cancel="cancelEdit"
           />
           <TodoEditor
-            v-if="addingTodoForDir === wt.path"
+            v-if="!wt.todo && addingTodoForDir === wt.path"
             v-model:body="addingTodoBody"
             @save="saveWorktreeTodo(wt)"
             @cancel="cancelWorktreeTodoAdd"

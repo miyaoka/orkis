@@ -128,15 +128,20 @@ export function useTodoActions({ pendingTodos, fetchData }: UseTodoActionsOption
     }
   }
 
+  const isSavingWorktreeTodo = ref(false);
+
   /** worktree の Todo 新規作成を保存する */
   async function saveWorktreeTodo(wt: WorktreeEntry) {
+    if (isSavingWorktreeTodo.value) return;
     if (!addingTodoBody.value.trim()) {
       cancelWorktreeTodoAdd();
       return;
     }
+    isSavingWorktreeTodo.value = true;
     const result = await tryCatch(
       request.todoAdd({ body: addingTodoBody.value, worktreeDir: wt.path }),
     );
+    isSavingWorktreeTodo.value = false;
     if (!result.ok) return;
     addingTodoForDir.value = undefined;
     await fetchData();
