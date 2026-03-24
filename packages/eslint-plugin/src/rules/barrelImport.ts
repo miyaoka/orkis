@@ -38,6 +38,11 @@ function normalizePath(filePath: string): string {
   return filePath.replaceAll("\\", "/");
 }
 
+/** 正規表現のメタ文字をエスケープする */
+function escapeRegExp(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 /**
  * スコープ設定からディレクトリ名のマッチ用正規表現を構築する。
  * 例: { shared: { directories: ["shared"] }, features: { directories: ["features"] } }
@@ -51,25 +56,11 @@ function buildScopePattern(scopes: Record<string, ScopeConfig>): RegExp {
     }
   }
   // アルファベット順にソートして正規表現の決定性を保つ
-  const dirPattern = [...allDirs].sort().join("|");
+  const dirPattern = [...allDirs]
+    .sort()
+    .map((d) => escapeRegExp(d))
+    .join("|");
   return new RegExp(`(?:^|/)((?:${dirPattern})/[^/]+)(?:/|$)`);
-}
-
-/**
- * ディレクトリ名からスコープ名を逆引きするマップを構築する。
- * 例: { shared: { directories: ["shared", "common"] } }
- *     → Map { "shared" => "shared", "common" => "shared" }
- */
-function buildDirToScopeMap(
-  scopes: Record<string, ScopeConfig>,
-): Map<string, string> {
-  const map = new Map<string, string>();
-  for (const [scopeName, config] of Object.entries(scopes)) {
-    for (const dir of config.directories) {
-      map.set(dir, scopeName);
-    }
-  }
-  return map;
 }
 
 /**
@@ -173,6 +164,8 @@ const rule: Rule.RuleModule = {
         "'{{importSource}}' の直接 import は禁止されています。'{{scopeName}}' のバレルファイル経由で import してください。",
       noDependency:
         "'{{fromScope}}' から '{{toScope}}' への依存は禁止されています。",
+      invalidConfig:
+        "barrel-import: {{detail}}",
     },
     schema: [
       {
@@ -217,8 +210,58 @@ const rule: Rule.RuleModule = {
     const barrelFiles = options?.barrelFiles ?? DEFAULT_BARREL_FILES;
     const scopes = options?.scopes ?? DEFAULT_SCOPES;
 
+    // ─── scopes バリデーション ───────────────────
+    const scopeNames = Object.keys(scopes);
+    if (scopeNames.length === 0) {
+      context.report({
+        loc: { line: 1, column: 0 },
+        messageId: "invalidConfig",
+        data: { detail: "scopes は空にできません" },
+      });
+      return {};
+    }
+
+    const dirToScope = new Map<string, string>();
+    for (const [scopeName, config] of Object.entries(scopes)) {
+      if (config.directories.length === 0) {
+        context.report({
+          loc: { line: 1, column: 0 },
+          messageId: "invalidConfig",
+          data: {
+            detail: `scopes.${scopeName}.directories は空にできません`,
+          },
+        });
+        return {};
+      }
+      for (const dir of config.directories) {
+        const existing = dirToScope.get(dir);
+        if (existing) {
+          context.report({
+            loc: { line: 1, column: 0 },
+            messageId: "invalidConfig",
+            data: {
+              detail: `ディレクトリ '${dir}' がスコープ '${existing}' と '${scopeName}' で重複しています`,
+            },
+          });
+          return {};
+        }
+        dirToScope.set(dir, scopeName);
+      }
+      for (const dep of config.dependsOn) {
+        if (!scopeNames.includes(dep)) {
+          context.report({
+            loc: { line: 1, column: 0 },
+            messageId: "invalidConfig",
+            data: {
+              detail: `scopes.${scopeName}.dependsOn に未定義のスコープ '${dep}' が含まれています`,
+            },
+          });
+          return {};
+        }
+      }
+    }
+
     const scopePattern = buildScopePattern(scopes);
-    const dirToScope = buildDirToScopeMap(scopes);
     const filename = normalizePath(context.filename);
 
     function check(sourceNode: Rule.Node, importSource: string) {
