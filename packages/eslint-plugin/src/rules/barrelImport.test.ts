@@ -155,6 +155,23 @@ tester.run("barrel-import", rule, {
       filename: `${BASE}/App.vue`,
     },
 
+    // ─── index.tsx バレル ─────────────────────────────
+    {
+      // feat-A/CompA.vue → feat-B/index.tsx（デフォルトで tsx も許可）
+      name: "OK: feature 間のバレル経由（index.tsx 明示）",
+      code: 'import { CompB } from "../feat-B/index.tsx";',
+      filename: `${BASE}/features/feat-A/CompA.vue`,
+    },
+
+    // ─── barrelFiles オプション ─────────────────────
+    {
+      // barrelFiles に index.js を追加した場合
+      name: "OK: barrelFiles オプションで index.js を許可",
+      code: 'import { CompB } from "../feat-B/index.js";',
+      filename: `${BASE}/features/feat-A/CompA.vue`,
+      options: [{ barrelFiles: ["index.ts", "index.tsx", "index.js"] }],
+    },
+
     // ─── 外部パッケージ ─────────────────────────────
     {
       name: "OK: 外部パッケージはスキップ",
@@ -270,11 +287,18 @@ tester.run("barrel-import", rule, {
       errors: [{ messageId: "noDirectImport" }],
     },
 
-    // ─── index.vue はバレルではない ─────────────────
+    // ─── barrelFiles に含まれないファイルはバレルではない ─
     {
-      // feat-A/CompA.vue → feat-B/index.vue
+      // feat-A/CompA.vue → feat-B/index.vue（デフォルトで非許可）
       name: "NG: index.vue はバレルファイルではない",
       code: 'import FeatBIndex from "../feat-B/index.vue";',
+      filename: `${BASE}/features/feat-A/CompA.vue`,
+      errors: [{ messageId: "noDirectImport" }],
+    },
+    {
+      // feat-A/CompA.vue → feat-B/index.js（デフォルトで非許可）
+      name: "NG: index.js はデフォルトでバレルファイルではない",
+      code: 'import { CompB } from "../feat-B/index.js";',
       filename: `${BASE}/features/feat-A/CompA.vue`,
       errors: [{ messageId: "noDirectImport" }],
     },

@@ -47,23 +47,28 @@ function extractScope(filePath: string): string | undefined {
   return scopes[scopes.length - 1];
 }
 
+const DEFAULT_BARREL_FILES = ["index.ts", "index.tsx"];
+
 /**
- * import 先が許可されたスコープのバレルファイル（index.ts）を指しているかを判定する。
+ * import 先が許可されたスコープのバレルファイルを指しているかを判定する。
  *
- * - 拡張子付き: index.ts かつ直前のセグメントがスコープ名と一致
- * - 拡張子なし: 最後のセグメントがスコープ名と一致（ディレクトリ import → index.ts 暗黙解決）
+ * - 拡張子付き: barrelFiles に含まれ、かつ直前のセグメントがスコープ名と一致
+ * - 拡張子なし: 最後のセグメントがスコープ名と一致（ディレクトリ import → index 暗黙解決）
  */
-function isBarrelImport(importSource: string, allowedScope: string): boolean {
+function isBarrelImport(
+  importSource: string,
+  allowedScope: string,
+  barrelFiles: string[],
+): boolean {
   const segments = importSource.split("/");
   const lastSegment = segments[segments.length - 1];
   if (!lastSegment) return false;
 
   const scopeDirName = allowedScope.split("/").pop();
 
-  // 拡張子付き: index.ts かつ直前のセグメントがスコープ名と一致
-  // （index.vue 等はバレルではない）
+  // 拡張子付き: barrelFiles に含まれ、かつ直前のセグメントがスコープ名と一致
   if (lastSegment.includes(".")) {
-    if (lastSegment !== "index.ts") return false;
+    if (!barrelFiles.includes(lastSegment)) return false;
     const parentSegment = segments[segments.length - 2];
     return parentSegment === scopeDirName;
   }
@@ -99,9 +104,24 @@ const rule: Rule.RuleModule = {
       noSharedToFeature:
         "shared/ から features/ への依存は禁止されています。",
     },
-    schema: [],
+    schema: [
+      {
+        type: "object",
+        properties: {
+          barrelFiles: {
+            type: "array",
+            items: { type: "string" },
+            description:
+              "バレルファイルとして許可するファイル名のリスト（デフォルト: [\"index.ts\", \"index.tsx\"]）",
+          },
+        },
+        additionalProperties: false,
+      },
+    ],
   },
   create(context) {
+    const options = context.options[0] as { barrelFiles?: string[] } | undefined;
+    const barrelFiles = options?.barrelFiles ?? DEFAULT_BARREL_FILES;
     const filename = normalizePath(context.filename);
 
     function check(sourceNode: Rule.Node, importSource: string) {
@@ -148,7 +168,7 @@ const rule: Rule.RuleModule = {
       // 内部にいる → 子 feature のバレル（最深スコープ）経由ならOK
       // 外部にいる → ルートスコープのバレルのみOK（子 feature は親の内部実装）
       const allowedScope = isInsideRootScope ? toScope : toRootScope;
-      if (isBarrelImport(importSource, allowedScope)) return;
+      if (isBarrelImport(importSource, allowedScope, barrelFiles)) return;
 
       // それ以外は禁止
       context.report({
