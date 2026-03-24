@@ -20,23 +20,31 @@ function normalizePath(filePath: string): string {
 const SCOPE_PATTERN = /(?:^|\/)((?:features|shared)\/[^/]+)(?:\/|$)/;
 
 /**
- * import 先の resolved path からスコープを抽出する。
- * 例: "src/features/terminal/useTerminalStore.ts" → "features/terminal"
- * 例: "src/features/sidebar/features/worktree/WorktreeItem.vue" → "features/worktree"
- *     （最も深い features/ セグメントにマッチ）
+ * パス内の全スコープを浅い順に抽出する。
+ * 例: "src/features/sidebar/features/worktree/WorktreeItem.vue"
+ *     → ["features/sidebar", "features/worktree"]
  */
-function extractScope(filePath: string): string | undefined {
-  // 最後にマッチしたスコープを返す（最も深いネストを優先）
-  let lastMatch: string | undefined;
+function extractAllScopes(filePath: string): string[] {
+  const scopes: string[] = [];
   let searchFrom = 0;
   while (searchFrom < filePath.length) {
     const remaining = filePath.slice(searchFrom);
     const match = SCOPE_PATTERN.exec(remaining);
     if (!match) break;
-    lastMatch = match[1];
+    scopes.push(match[1]);
     searchFrom += match.index + match[0].length;
   }
-  return lastMatch;
+  return scopes;
+}
+
+/**
+ * import 先の resolved path から最深スコープを抽出する。
+ * 例: "src/features/terminal/useTerminalStore.ts" → "features/terminal"
+ * 例: "src/features/sidebar/features/worktree/WorktreeItem.vue" → "features/worktree"
+ */
+function extractScope(filePath: string): string | undefined {
+  const scopes = extractAllScopes(filePath);
+  return scopes[scopes.length - 1];
 }
 
 /**
@@ -105,9 +113,12 @@ const rule: Rule.RuleModule = {
         path.resolve(path.dirname(filename), importSource),
       );
 
-      // import 先のスコープを抽出
-      const toScope = extractScope(resolvedPath);
-      if (!toScope) return;
+      // import 先の全スコープを抽出（浅い順）
+      const toScopes = extractAllScopes(resolvedPath);
+      if (toScopes.length === 0) return;
+
+      const toScope = toScopes[toScopes.length - 1]; // 最深スコープ
+      const toRootScope = toScopes[0]; // 最浅スコープ（外部から見える境界）
 
       // shared → features の依存チェック
       if (isInSharedScope(filename) && isInFeaturesScope(resolvedPath)) {
@@ -118,7 +129,7 @@ const rule: Rule.RuleModule = {
         return;
       }
 
-      // import 元のスコープを抽出
+      // import 元の最深スコープを抽出
       const fromScope = extractScope(filename);
 
       // 同じスコープ内のファイル同士は自由
@@ -128,8 +139,16 @@ const rule: Rule.RuleModule = {
       // import 元のパスに to のスコープが含まれている = to は from の祖先スコープ
       if (fromScope && fromScope !== toScope && filename.includes(`/${toScope}/`)) return;
 
-      // バレル（index.ts）経由ならOK
-      if (isBarrelImport(importSource, toScope)) return;
+      // import 元がルートスコープの内部にいるか判定
+      // 内部 = import 元自身がルートスコープ、またはルートスコープの子孫
+      const isInsideRootScope =
+        fromScope === toRootScope || filename.includes(`/${toRootScope}/`);
+
+      // バレル経由のチェック
+      // 内部にいる → 子 feature のバレル（最深スコープ）経由ならOK
+      // 外部にいる → ルートスコープのバレルのみOK（子 feature は親の内部実装）
+      const allowedScope = isInsideRootScope ? toScope : toRootScope;
+      if (isBarrelImport(importSource, allowedScope)) return;
 
       // それ以外は禁止
       context.report({
@@ -137,7 +156,7 @@ const rule: Rule.RuleModule = {
         messageId: "noDirectImport",
         data: {
           importSource,
-          scopeName: toScope,
+          scopeName: allowedScope,
         },
       });
     }
