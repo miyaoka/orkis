@@ -251,13 +251,13 @@ tester.run("barrel-import", rule, {
       errors: [{ messageId: "noDirectImport" }],
     },
 
-    // ─── shared → features ──────────────────────────
+    // ─── スコープ間依存禁止 ────────────────────────
     {
       // shared-B/otherB.ts → feat-A/（バレル経由でも禁止）
-      name: "NG: shared → feature（バレル経由でも禁止）",
+      name: "NG: shared → features（dependsOn に含まれないため禁止）",
       code: 'import { CompA } from "../../features/feat-A";',
       filename: `${BASE}/shared/shared-B/otherB.ts`,
-      errors: [{ messageId: "noSharedToFeature" }],
+      errors: [{ messageId: "noDependency" }],
     },
 
     // ─── shared: 内部ファイル直接 ──────────────────
@@ -317,6 +317,89 @@ tester.run("barrel-import", rule, {
       code: 'import { CompBA } from "../feat-B/features/feat-B-child-A/index.js";',
       filename: `${BASE}/features/feat-A/CompA.vue`,
       options: [{ barrelFiles: ["index.ts", "index.tsx", "index.js"] }],
+      errors: [{ messageId: "noDirectImport" }],
+    },
+  ],
+});
+
+/**
+ * scopes オプションのテスト用ディレクトリ構成:
+ *
+ * src/
+ * ├── modules/
+ * │   ├── mod-A/
+ * │   │   └── CompA.vue
+ * │   └── mod-B/
+ * │       └── storeB.ts
+ * ├── common/
+ * │   └── common-A/
+ * │       └── utilA.ts
+ * └── core/
+ *     └── core-A/
+ *         └── base.ts
+ */
+
+const CUSTOM_SCOPES = {
+  core: { directories: ["core"], dependsOn: [] as string[] },
+  common: { directories: ["common"], dependsOn: ["core"] },
+  modules: { directories: ["modules"], dependsOn: ["common", "core"] },
+};
+
+tester.run("barrel-import (custom scopes)", rule, {
+  valid: [
+    {
+      // modules → common（dependsOn に含まれる）
+      name: "OK: modules → common のバレル経由",
+      code: 'import { utilA } from "../../common/common-A";',
+      filename: `${BASE}/modules/mod-A/CompA.vue`,
+      options: [{ scopes: CUSTOM_SCOPES }],
+    },
+    {
+      // modules → core（dependsOn に含まれる）
+      name: "OK: modules → core のバレル経由",
+      code: 'import { base } from "../../core/core-A";',
+      filename: `${BASE}/modules/mod-A/CompA.vue`,
+      options: [{ scopes: CUSTOM_SCOPES }],
+    },
+    {
+      // common → core（dependsOn に含まれる）
+      name: "OK: common → core のバレル経由",
+      code: 'import { base } from "../../core/core-A";',
+      filename: `${BASE}/common/common-A/utilA.ts`,
+      options: [{ scopes: CUSTOM_SCOPES }],
+    },
+  ],
+  invalid: [
+    {
+      // common → modules（dependsOn に含まれない）
+      name: "NG: common → modules（依存禁止）",
+      code: 'import { CompA } from "../../modules/mod-A";',
+      filename: `${BASE}/common/common-A/utilA.ts`,
+      options: [{ scopes: CUSTOM_SCOPES }],
+      errors: [{ messageId: "noDependency" }],
+    },
+    {
+      // core → modules（dependsOn に含まれない）
+      name: "NG: core → modules（依存禁止）",
+      code: 'import { CompA } from "../../modules/mod-A";',
+      filename: `${BASE}/core/core-A/base.ts`,
+      options: [{ scopes: CUSTOM_SCOPES }],
+      errors: [{ messageId: "noDependency" }],
+    },
+    {
+      // core → common（dependsOn に含まれない）
+      name: "NG: core → common（依存禁止）",
+      code: 'import { utilA } from "../../common/common-A";',
+      filename: `${BASE}/core/core-A/base.ts`,
+      options: [{ scopes: CUSTOM_SCOPES }],
+      errors: [{ messageId: "noDependency" }],
+    },
+    {
+      // modules 間でも内部直接 import は禁止
+      name: "NG: カスタムスコープでも内部モジュール直接 import は禁止",
+      code: 'import { storeB } from "../mod-B/storeB";',
+      filename: `${BASE}/modules/mod-A/CompA.vue`,
+      options: [{ scopes: CUSTOM_SCOPES }],
       errors: [{ messageId: "noDirectImport" }],
     },
   ],
