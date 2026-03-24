@@ -96,7 +96,11 @@ const {
   updateTodoIcon,
   handleTodoRemove,
   editWorktreeTodo,
+  addingTodoForDir,
+  addingTodoBody,
   toggleWorktreeTodoEdit,
+  saveWorktreeTodo,
+  cancelWorktreeTodoAdd,
 } = useTodoActions({ pendingTodos, fetchData });
 
 const { ctrlPressed } = useCtrlBadge();
@@ -126,6 +130,7 @@ const sidebarMenuRef = ref<InstanceType<typeof SidebarMenu>>();
 
 /** worktree クリック: active なら Todo 編集トグル、そうでなければ切り替え */
 function onWorktreeSelect(wt: import("@gozd/rpc").WorktreeEntry) {
+  terminalStore.viewMode = "wt";
   if (isActive(wt)) {
     terminalStore.clearDoneStates(wt.path);
     void toggleWorktreeTodoEdit(wt);
@@ -185,6 +190,12 @@ function handleMenuTodoCreateWorktree(todo: import("@gozd/rpc").Todo) {
             v-model:body="editBody"
             @save="submitEdit"
             @cancel="cancelEdit"
+          />
+          <TodoEditor
+            v-if="addingTodoForDir === wt.path"
+            v-model:body="addingTodoBody"
+            @save="saveWorktreeTodo(wt)"
+            @cancel="cancelWorktreeTodoAdd"
           />
         </template>
       </WorktreeList>

@@ -115,13 +115,48 @@ export function useTodoActions({ pendingTodos, fetchData }: UseTodoActionsOption
     startEditing(result.value);
   }
 
+  // --- worktree の Todo 新規作成（クリックで入力欄を開き、保存時に永続化） ---
+
+  /** Todo 新規作成中の worktree ディレクトリパス */
+  const addingTodoForDir = ref<string>();
+  const addingTodoBody = ref("");
+
   /** worktree クリックで Todo 編集をトグルする */
-  async function toggleWorktreeTodoEdit(wt: WorktreeEntry) {
-    if (wt.todo && editingTodoId.value === wt.todo.id) {
-      cancelEdit();
+  function toggleWorktreeTodoEdit(wt: WorktreeEntry) {
+    // 既存 Todo がある場合: 編集トグル
+    if (wt.todo) {
+      if (editingTodoId.value === wt.todo.id) {
+        cancelEdit();
+      } else {
+        startEditing(wt.todo);
+      }
       return;
     }
-    await editWorktreeTodo(wt);
+    // Todo がない場合: 新規作成入力欄のトグル
+    if (addingTodoForDir.value === wt.path) {
+      cancelWorktreeTodoAdd();
+    } else {
+      addingTodoForDir.value = wt.path;
+      addingTodoBody.value = "";
+    }
+  }
+
+  /** worktree の Todo 新規作成を保存する */
+  async function saveWorktreeTodo(wt: WorktreeEntry) {
+    if (!addingTodoBody.value.trim()) {
+      cancelWorktreeTodoAdd();
+      return;
+    }
+    const result = await tryCatch(
+      request.todoAdd({ body: addingTodoBody.value, worktreeDir: wt.path }),
+    );
+    if (!result.ok) return;
+    addingTodoForDir.value = undefined;
+    await fetchData();
+  }
+
+  function cancelWorktreeTodoAdd() {
+    addingTodoForDir.value = undefined;
   }
 
   return {
@@ -143,6 +178,11 @@ export function useTodoActions({ pendingTodos, fetchData }: UseTodoActionsOption
     // 操作
     handleTodoRemove,
     editWorktreeTodo,
+    // worktree Todo 新規作成
+    addingTodoForDir,
+    addingTodoBody,
     toggleWorktreeTodoEdit,
+    saveWorktreeTodo,
+    cancelWorktreeTodoAdd,
   };
 }
