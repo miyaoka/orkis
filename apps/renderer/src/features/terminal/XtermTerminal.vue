@@ -164,11 +164,14 @@ onMounted(async () => {
   });
 
   // フォント変更をリアルタイム反映（空文字 / 0 なら xterm デフォルトに戻す）
+  // フォントメトリクスが変わるため fit() でセルサイズを再計算する
   watch(terminalFontFamily, (family) => {
     term.options.fontFamily = family !== "" ? family : undefined;
+    fitAddon?.fit();
   });
   watch(terminalFontSize, (size) => {
     term.options.fontSize = size > 0 ? size : undefined;
+    fitAddon?.fit();
   });
 
   const webglResult = tryCatch(() => {

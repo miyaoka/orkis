@@ -3,6 +3,12 @@ boolean 設定用トグルスイッチ。
 </doc>
 
 <script setup lang="ts">
+import type { BooleanSetting } from "../types";
+
+const props = defineProps<{
+  setting: BooleanSetting;
+}>();
+
 const model = defineModel<boolean>({ required: true });
 </script>
 
@@ -11,6 +17,7 @@ const model = defineModel<boolean>({ required: true });
     type="button"
     role="switch"
     :aria-checked="model"
+    :aria-label="props.setting.label"
     class="relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full transition-colors"
     :class="model ? 'bg-blue-500' : 'bg-zinc-600'"
     @click="model = !model"

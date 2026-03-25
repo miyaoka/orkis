@@ -35,12 +35,14 @@ const voicevoxStore = useVoicevoxStore();
 
 const state = reactive({
   activeTab: "global" as TabId,
+  loading: true,
   globalValues: {} as Record<string, unknown>,
   projectValues: {} as Record<string, unknown>,
 });
 
-/** モーダルを開くときに設定を読み込む */
-async function loadSettings() {
+/** モーダルを開くときに設定を読み込む。load 完了後に dialog を表示する */
+async function openWithSettings() {
+  state.loading = true;
   const [globalResult, projectResult] = await Promise.all([
     tryCatch(request.configLoad()),
     tryCatch(request.projectConfigLoad()),
@@ -51,6 +53,8 @@ async function loadSettings() {
   if (projectResult.ok) {
     state.projectValues = { ...projectResult.value };
   }
+  state.loading = false;
+  show();
 }
 
 /** リアクティブ ref との同期マップ */
@@ -79,7 +83,12 @@ function handleGlobalChange(key: string, value: unknown) {
   // VOICEVOX store との同期（store の watch が configSave を発火）
   if (key === "voicevox.enabled") {
     if (value) {
-      void voicevoxStore.activate();
+      void voicevoxStore.activate().then((errorMessage) => {
+        if (errorMessage !== undefined) {
+          // activate 失敗時はトグルを戻す
+          state.globalValues[key] = false;
+        }
+      });
     } else {
       voicevoxStore.deactivate();
     }
@@ -110,8 +119,7 @@ function handleProjectChange(key: string, value: unknown) {
 // modalIsOpen と dialog の isOpen を同期
 watch(modalIsOpen, (open) => {
   if (open) {
-    void loadSettings();
-    show();
+    void openWithSettings();
   } else {
     close();
   }

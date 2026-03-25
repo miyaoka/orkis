@@ -26,7 +26,11 @@ const model = defineModel<unknown>({ required: true });
       </div>
     </div>
     <div class="shrink-0">
-      <BooleanWidget v-if="setting.widget === 'boolean'" v-model="model as boolean" />
+      <BooleanWidget
+        v-if="setting.widget === 'boolean'"
+        v-model="model as boolean"
+        :setting="setting"
+      />
       <NumberWidget
         v-else-if="setting.widget === 'number'"
         v-model="model as number"
