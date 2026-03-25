@@ -65,7 +65,7 @@ export function useWorktreeActions({
       request.createWorktree({ worktreeDir: generateTimestamp(), branch }),
     );
     if (result.ok) {
-      await fetchData();
+      worktrees.value = [...worktrees.value, result.value];
       await handleWorktreeSelect(result.value);
     } else {
       freeBranches.value.push(branch);
@@ -135,7 +135,7 @@ export function useWorktreeActions({
       request.createWorktree({ worktreeDir: timestamp, branch: timestamp }),
     );
     if (result.ok) {
-      await fetchData();
+      worktrees.value = [...worktrees.value, result.value];
       await handleWorktreeSelect(result.value);
     }
     isCreating.value = false;
