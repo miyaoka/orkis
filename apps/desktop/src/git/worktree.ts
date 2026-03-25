@@ -42,10 +42,12 @@ export async function addWorktree({
   await newBranchProc.exited;
 
   if (newBranchProc.exitCode !== 0) {
-    const stderr = await new Response(newBranchProc.stderr).text();
+    // ブランチが既に存在するかをロケール非依存で判定（stderr のメッセージは LANG で変わるため）
+    const branchExists =
+      (await Bun.spawn(["git", "show-ref", "--verify", "--quiet", `refs/heads/${branch}`], { cwd })
+        .exited) === 0;
 
-    // ブランチが既に存在する場合は -b なしでリトライ
-    if (stderr.includes("already exists")) {
+    if (branchExists) {
       const existingProc = Bun.spawn(["git", "worktree", "add", wtPath, branch], {
         cwd,
         stderr: "pipe",
@@ -58,6 +60,7 @@ export async function addWorktree({
         );
       }
     } else {
+      const stderr = await new Response(newBranchProc.stderr).text();
       throw new Error(
         `git worktree add failed: ${stderr.trim() || `exit code ${newBranchProc.exitCode}`}`,
       );
