@@ -6,8 +6,8 @@
 import type { XtermTheme } from "@gozd/themes";
 import { ref } from "vue";
 
-/** xterm.js に未指定時のデフォルトテーマカラー */
-const DEFAULT_THEME: Partial<XtermTheme> = {
+/** xterm.js に未指定時のデフォルトテーマカラー。applyTerminalTheme("") でもこの値に戻す */
+export const DEFAULT_THEME: Partial<XtermTheme> = {
   background: "#18181b",
   foreground: "#e4e4e7",
   cursor: "#e4e4e7",

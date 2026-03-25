@@ -163,16 +163,12 @@ onMounted(async () => {
     term.options.theme = theme;
   });
 
-  // フォント変更をリアルタイム反映（空文字 / 0 ならクリアして xterm デフォルトに戻す）
+  // フォント変更をリアルタイム反映（空文字 / 0 なら xterm デフォルトに戻す）
   watch(terminalFontFamily, (family) => {
-    if (family !== "") {
-      term.options.fontFamily = family;
-    }
+    term.options.fontFamily = family !== "" ? family : undefined;
   });
   watch(terminalFontSize, (size) => {
-    if (size > 0) {
-      term.options.fontSize = size;
-    }
+    term.options.fontSize = size > 0 ? size : undefined;
   });
 
   const webglResult = tryCatch(() => {

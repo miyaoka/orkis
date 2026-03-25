@@ -97,14 +97,14 @@ function handleGlobalChange(key: string, value: unknown) {
   // リアクティブ ref との同期
   REACTIVE_SYNC[key]?.(value);
 
-  // 保存
-  void tryCatch(request.configSave(state.globalValues));
+  // 変更されたキーのみ patch 保存（他 UI で更新された値を巻き戻さない）
+  void tryCatch(request.configSave({ [key]: value }));
 }
 
 /** プロジェクト設定の値変更ハンドラー */
 function handleProjectChange(key: string, value: unknown) {
   state.projectValues[key] = value;
-  void tryCatch(request.projectConfigSave(state.projectValues));
+  void tryCatch(request.projectConfigSave({ [key]: value }));
 }
 
 // modalIsOpen と dialog の isOpen を同期

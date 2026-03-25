@@ -14,6 +14,7 @@ import { useRpc } from "../../shared/rpc";
 import { previewFontFamily, previewFontSize } from "../preview";
 import { globalSettingsDefaults } from "../settings";
 import {
+  DEFAULT_THEME,
   currentTheme,
   currentThemeName,
   terminalFontFamily,
@@ -35,6 +36,7 @@ let generation = 0;
 export async function applyTerminalTheme(themeName: string): Promise<void> {
   const gen = ++generation;
   if (themeName === "") {
+    currentTheme.value = DEFAULT_THEME;
     currentThemeName.value = undefined;
     return;
   }
