@@ -132,10 +132,10 @@ todoList:               undefined → Todo[]
 todoAdd:                { body, icon?, worktreeDir? } → Todo
 todoUpdate:             { id, body, icon? } → Todo
 todoRemove:             { id } → void
-createWorktreeWithTodo: { id, worktreeDir, branch } → { todo: Todo, worktree: WorktreeEntry }
+createWorktreeWithTodo: { id, worktreeDir, branch } → { todo, worktree, dir, fileServerBaseUrl }
 ```
 
 ### 既存変更
 
-- `createWorktree`: worktreeDir と branch を renderer 側から指定する設計に変更
+- `createWorktree`: worktreeDir と branch を renderer 側から指定し、switchDir 相当の処理も統合（worktree + dir + fileServerBaseUrl を返す）
 - `gitWorktreeList`: 各 worktree に紐づく Todo を含める
