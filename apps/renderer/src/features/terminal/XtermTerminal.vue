@@ -12,7 +12,12 @@ import { Terminal, type IMarker } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
 import { onMounted, onBeforeUnmount, ref, watch } from "vue";
 import { useRpc } from "../../shared/rpc";
-import { currentTheme, terminalConfig } from "./terminalConfig";
+import {
+  currentTheme,
+  terminalFontFamily,
+  terminalFontSize,
+  terminalScrollback,
+} from "./terminalConfig";
 import { createFilePathLinkProvider } from "./useFilePathLinkProvider";
 import { useTerminalStore } from "./useTerminalStore";
 
@@ -104,7 +109,10 @@ onMounted(async () => {
   if (!container) return;
 
   terminal = new Terminal({
-    ...terminalConfig,
+    // 空文字 / 0 は未設定 → xterm デフォルトに委ねる
+    ...(terminalFontFamily.value !== "" && { fontFamily: terminalFontFamily.value }),
+    ...(terminalFontSize.value > 0 && { fontSize: terminalFontSize.value }),
+    scrollback: terminalScrollback,
     theme: currentTheme.value,
     cursorBlink: true,
     allowProposedApi: true,
@@ -153,6 +161,18 @@ onMounted(async () => {
   // テーマ変更を全 xterm インスタンスにリアルタイム反映
   watch(currentTheme, (theme) => {
     term.options.theme = theme;
+  });
+
+  // フォント変更をリアルタイム反映（空文字 / 0 ならクリアして xterm デフォルトに戻す）
+  watch(terminalFontFamily, (family) => {
+    if (family !== "") {
+      term.options.fontFamily = family;
+    }
+  });
+  watch(terminalFontSize, (size) => {
+    if (size > 0) {
+      term.options.fontSize = size;
+    }
   });
 
   const webglResult = tryCatch(() => {

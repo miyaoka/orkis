@@ -30,6 +30,13 @@ export interface EnumSetting extends SettingBase {
   options: readonly string[] | (() => readonly string[]);
 }
 
+/** 文字列 → テキスト入力 */
+export interface StringSetting extends SettingBase {
+  widget: "string";
+  defaultValue: string;
+  placeholder?: string;
+}
+
 /** 文字列配列 → テキストエリア（改行区切り） */
 export interface StringArraySetting extends SettingBase {
   widget: "stringArray";
@@ -37,7 +44,12 @@ export interface StringArraySetting extends SettingBase {
   placeholder?: string;
 }
 
-export type SettingDefinition = BooleanSetting | NumberSetting | EnumSetting | StringArraySetting;
+export type SettingDefinition =
+  | BooleanSetting
+  | NumberSetting
+  | EnumSetting
+  | StringSetting
+  | StringArraySetting;
 
 /** 設定セクション（グループ化） */
 export interface SettingSection {
@@ -50,5 +62,6 @@ export interface WidgetValueMap {
   boolean: boolean;
   number: number;
   enum: string;
+  string: string;
   stringArray: string[];
 }

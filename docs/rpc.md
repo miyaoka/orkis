@@ -111,14 +111,16 @@ interface GitCommit {
   refs: string[]; // ブランチ名、タグ、HEAD 等
 }
 
-interface VoicevoxConfig {
-  enabled: boolean;
-  speedScale: number;
-  volumeScale: number;
-}
-
+/** フラットなドット記法。ユーザー設定は config.json にこの形式で保存される */
 interface AppConfig {
-  voicevox?: VoicevoxConfig;
+  "terminal.fontFamily"?: string;
+  "terminal.fontSize"?: number;
+  "terminal.theme"?: string;
+  "preview.fontFamily"?: string;
+  "preview.fontSize"?: number;
+  "voicevox.enabled"?: boolean;
+  "voicevox.speedScale"?: number;
+  "voicevox.volumeScale"?: number;
 }
 ```
 

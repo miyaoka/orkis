@@ -8,6 +8,7 @@ import BooleanWidget from "./widgets/BooleanWidget.vue";
 import EnumWidget from "./widgets/EnumWidget.vue";
 import NumberWidget from "./widgets/NumberWidget.vue";
 import StringArrayWidget from "./widgets/StringArrayWidget.vue";
+import StringWidget from "./widgets/StringWidget.vue";
 
 defineProps<{
   setting: SettingDefinition;
@@ -33,6 +34,11 @@ const model = defineModel<unknown>({ required: true });
       />
       <EnumWidget
         v-else-if="setting.widget === 'enum'"
+        v-model="model as string"
+        :setting="setting"
+      />
+      <StringWidget
+        v-else-if="setting.widget === 'string'"
         v-model="model as string"
         :setting="setting"
       />

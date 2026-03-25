@@ -8,16 +8,60 @@ function getThemeOptions(): readonly string[] {
   return ["", ...darkThemeNames, ...lightThemeNames];
 }
 
+/** セクション配列からキー → デフォルト値のマップを構築する */
+function buildDefaults(sections: readonly SettingSection[]): Record<string, unknown> {
+  const defaults: Record<string, unknown> = {};
+  for (const section of sections) {
+    for (const [key, setting] of Object.entries(section.settings)) {
+      defaults[key] = setting.defaultValue;
+    }
+  }
+  return defaults;
+}
+
 export const globalSettingsSections: readonly SettingSection[] = [
   {
     title: "Terminal",
     settings: {
-      terminalTheme: {
+      "terminal.theme": {
         widget: "enum",
         label: "Theme",
         description: "Color theme for terminal",
         defaultValue: "",
         options: getThemeOptions,
+      },
+      "terminal.fontFamily": {
+        widget: "string",
+        label: "Font Family",
+        defaultValue: "",
+        placeholder: "Menlo, monospace",
+      },
+      "terminal.fontSize": {
+        widget: "number",
+        label: "Font Size",
+        defaultValue: 14,
+        min: 6,
+        max: 32,
+        step: 1,
+      },
+    },
+  },
+  {
+    title: "Preview",
+    settings: {
+      "preview.fontFamily": {
+        widget: "string",
+        label: "Font Family",
+        defaultValue: "",
+        placeholder: "Menlo, monospace",
+      },
+      "preview.fontSize": {
+        widget: "number",
+        label: "Font Size",
+        defaultValue: 14,
+        min: 6,
+        max: 32,
+        step: 1,
       },
     },
   },
@@ -49,3 +93,6 @@ export const globalSettingsSections: readonly SettingSection[] = [
     },
   },
 ];
+
+/** スキーマのデフォルト値マップ。config.json に値がないキーのフォールバックに使う */
+export const globalSettingsDefaults = buildDefaults(globalSettingsSections);

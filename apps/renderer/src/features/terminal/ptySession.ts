@@ -1,5 +1,5 @@
 import { tryCatch } from "@gozd/shared";
-import { terminalConfig } from "./terminalConfig";
+import { terminalScrollback } from "./terminalConfig";
 
 /** PTY セッション。store が所有し、コンポーネントの mount/unmount を跨いで維持される */
 export interface PtySession {
@@ -18,7 +18,7 @@ export interface PaneEntry {
 }
 
 /** ring buffer の容量（チャンク数）。scrollback（行数）とは単位が異なるが、十分な再生データを保持する目安として同じ値を使う */
-const PTY_RING_BUFFER_CAPACITY = terminalConfig.scrollback;
+const PTY_RING_BUFFER_CAPACITY = terminalScrollback;
 
 /** paneRegistry への session 読み書きアクセサ。store が所有する paneRegistry の session フィールドだけを操作する */
 interface PaneSessionAccessor {

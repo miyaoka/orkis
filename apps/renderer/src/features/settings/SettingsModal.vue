@@ -13,13 +13,12 @@ import { tryCatch } from "@gozd/shared";
 import { reactive, watch } from "vue";
 import { useDialog } from "../../shared/quick-pick";
 import { useRpc } from "../../shared/rpc";
-import { applyTerminalTheme } from "../terminal";
+import { previewFontFamily, previewFontSize } from "../preview";
+import { applyTerminalTheme, terminalFontFamily, terminalFontSize } from "../terminal";
 import { useVoicevoxStore } from "../voicevox";
 import { globalSettingsSections } from "./globalSettingsSchema";
-import { getNestedValue, setNestedValue } from "./nestedAccess";
 import { projectSettingsSections } from "./projectSettingsSchema";
 import SettingSection from "./SettingSection.vue";
-import type { SettingSection as SettingSectionType } from "./types";
 import { useSettingsModal } from "./useSettingsModal";
 
 type TabId = "global" | "project";
@@ -40,23 +39,6 @@ const state = reactive({
   projectValues: {} as Record<string, unknown>,
 });
 
-/** スキーマからフラットな値マップを構築する */
-function flattenConfig(
-  sections: readonly SettingSectionType[],
-  config: Record<string, unknown>,
-): Record<string, unknown> {
-  const result: Record<string, unknown> = {};
-  for (const section of sections) {
-    for (const key of Object.keys(section.settings)) {
-      const value = getNestedValue(config, key);
-      if (value !== undefined) {
-        result[key] = value;
-      }
-    }
-  }
-  return result;
-}
-
 /** モーダルを開くときに設定を読み込む */
 async function loadSettings() {
   const [globalResult, projectResult] = await Promise.all([
@@ -64,33 +46,37 @@ async function loadSettings() {
     tryCatch(request.projectConfigLoad()),
   ]);
   if (globalResult.ok) {
-    state.globalValues = flattenConfig(
-      globalSettingsSections,
-      globalResult.value as Record<string, unknown>,
-    );
+    state.globalValues = { ...globalResult.value };
   }
   if (projectResult.ok) {
-    state.projectValues = flattenConfig(
-      projectSettingsSections,
-      projectResult.value as Record<string, unknown>,
-    );
+    state.projectValues = { ...projectResult.value };
   }
 }
 
-/** フラットな値マップからネスト構造に復元する */
-function unflattenValues(values: Record<string, unknown>): Record<string, unknown> {
-  const result: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(values)) {
-    setNestedValue(result, key, value);
-  }
-  return result;
-}
+/** リアクティブ ref との同期マップ */
+const REACTIVE_SYNC: Record<string, (value: unknown) => void> = {
+  "terminal.fontFamily": (v) => {
+    terminalFontFamily.value = typeof v === "string" ? v : "";
+  },
+  "terminal.fontSize": (v) => {
+    terminalFontSize.value = typeof v === "number" ? v : 0;
+  },
+  "terminal.theme": (v) => {
+    if (typeof v === "string") void applyTerminalTheme(v);
+  },
+  "preview.fontFamily": (v) => {
+    previewFontFamily.value = typeof v === "string" ? v : "";
+  },
+  "preview.fontSize": (v) => {
+    previewFontSize.value = typeof v === "number" ? v : 0;
+  },
+};
 
 /** グローバル設定の値変更ハンドラー */
 function handleGlobalChange(key: string, value: unknown) {
   state.globalValues[key] = value;
 
-  // VOICEVOX store との同期
+  // VOICEVOX store との同期（store の watch が configSave を発火）
   if (key === "voicevox.enabled") {
     if (value) {
       void voicevoxStore.activate();
@@ -101,7 +87,6 @@ function handleGlobalChange(key: string, value: unknown) {
   }
   if (key === "voicevox.speedScale" && typeof value === "number") {
     voicevoxStore.speedScale = value;
-    // store の watch が configSave を発火するので、ここでは RPC 呼び出し不要
     return;
   }
   if (key === "voicevox.volumeScale" && typeof value === "number") {
@@ -109,21 +94,17 @@ function handleGlobalChange(key: string, value: unknown) {
     return;
   }
 
-  // テーマ変更
-  if (key === "terminalTheme" && typeof value === "string") {
-    void applyTerminalTheme(value);
-  }
+  // リアクティブ ref との同期
+  REACTIVE_SYNC[key]?.(value);
 
-  // 汎用保存（VOICEVOX 以外）
-  const config = unflattenValues(state.globalValues);
-  void tryCatch(request.configSave(config));
+  // 保存
+  void tryCatch(request.configSave(state.globalValues));
 }
 
 /** プロジェクト設定の値変更ハンドラー */
 function handleProjectChange(key: string, value: unknown) {
   state.projectValues[key] = value;
-  const config = unflattenValues(state.projectValues);
-  void tryCatch(request.projectConfigSave(config));
+  void tryCatch(request.projectConfigSave(state.projectValues));
 }
 
 // modalIsOpen と dialog の isOpen を同期
