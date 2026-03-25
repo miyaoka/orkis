@@ -63,8 +63,9 @@ export function useWorktreeActions({
       request.createWorktree({ worktreeDir: generateTimestamp(), branch }),
     );
     if (result.ok) {
-      worktrees.value = [...worktrees.value, result.value];
-      await handleWorktreeSelect(result.value);
+      worktrees.value = [...worktrees.value, result.value.worktree];
+      terminalStore.viewMode = "wt";
+      worktreeStore.setOpen(result.value.dir, undefined, result.value.fileServerBaseUrl);
     } else {
       freeBranches.value.push(branch);
     }
@@ -118,7 +119,8 @@ export function useWorktreeActions({
     );
     if (result.ok) {
       worktrees.value = [...worktrees.value, result.value.worktree];
-      await handleWorktreeSelect(result.value.worktree);
+      terminalStore.viewMode = "wt";
+      worktreeStore.setOpen(result.value.dir, undefined, result.value.fileServerBaseUrl);
     }
     isCreating.value = false;
   }
@@ -132,8 +134,9 @@ export function useWorktreeActions({
       request.createWorktree({ worktreeDir: timestamp, branch: timestamp }),
     );
     if (result.ok) {
-      worktrees.value = [...worktrees.value, result.value];
-      await handleWorktreeSelect(result.value);
+      worktrees.value = [...worktrees.value, result.value.worktree];
+      terminalStore.viewMode = "wt";
+      worktreeStore.setOpen(result.value.dir, undefined, result.value.fileServerBaseUrl);
     }
     isCreating.value = false;
   }

@@ -674,8 +674,24 @@ function createWindowWithRPC(dir: string, options?: CreateWindowOptions): GozdWi
             branch,
             symlinks: worktreeSymlinks,
           });
+
+          // switchDir 相当: 作成したパスは自明に正当なので検証不要
+          const gen = (windowSwitchGen.get(win) ?? 0) + 1;
+          windowSwitchGen.set(win, gen);
+          currentDir = entry.path;
+          stopWatching(win);
+          startWatching(win, currentDir);
+          const windowId = windowIds.get(win) ?? "";
+          windowDirs.set(win, currentDir);
+          fileServerDirs.set(windowId, currentDir);
+          scheduleGitStatusUpdate(win, currentDir);
           void syncWorktreeWatchers(win, projectDir, currentDir);
-          return entry;
+
+          return {
+            worktree: entry,
+            dir: currentDir,
+            fileServerBaseUrl: `http://localhost:${fileServer.port}/${windowId}`,
+          };
         },
         gitWorktreeRemove: async ({ path: wtPath, force }) => {
           const wtReal = await fsp.realpath(wtPath);
@@ -709,8 +725,25 @@ function createWindowWithRPC(dir: string, options?: CreateWindowOptions): GozdWi
           const todo = loadTodos(projectDir).find((t) => t.id === id);
           if (!todo) throw new Error(`Todo not found after linking: ${id}`);
           entry.todo = todo;
+
+          // switchDir 相当: 作成したパスは自明に正当なので検証不要
+          const gen = (windowSwitchGen.get(win) ?? 0) + 1;
+          windowSwitchGen.set(win, gen);
+          currentDir = entry.path;
+          stopWatching(win);
+          startWatching(win, currentDir);
+          const windowId = windowIds.get(win) ?? "";
+          windowDirs.set(win, currentDir);
+          fileServerDirs.set(windowId, currentDir);
+          scheduleGitStatusUpdate(win, currentDir);
           void syncWorktreeWatchers(win, projectDir, currentDir);
-          return { todo, worktree: entry };
+
+          return {
+            todo,
+            worktree: entry,
+            dir: currentDir,
+            fileServerBaseUrl: `http://localhost:${fileServer.port}/${windowId}`,
+          };
         },
         configLoad: () => loadConfig(),
         configSave: (config) => saveConfig(config),

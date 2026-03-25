@@ -33,21 +33,35 @@ export async function addWorktree({
 
   assertBranchName(branch);
 
-  // ブランチが既存かどうかを判定し、存在しなければ -b で新規作成。
-  // 判定後〜作成前に同名ブランチが作られる競合は理論上あり得るが、
-  // タイムスタンプベースの名前で実質衝突しない。万一衝突しても git がエラーを返す
-  const branchExists =
-    (await Bun.spawn(["git", "rev-parse", "--verify", `refs/heads/${branch}`], { cwd }).exited) ===
-    0;
-  const args = branchExists
-    ? ["git", "worktree", "add", wtPath, branch]
-    : ["git", "worktree", "add", "-b", branch, wtPath];
+  // まず -b で新規ブランチ作成を試み、既存ブランチなら -b なしでリトライ。
+  // タイムスタンプベースの名前では事実上リトライは発生しない
+  const newBranchProc = Bun.spawn(["git", "worktree", "add", "-b", branch, wtPath], {
+    cwd,
+    stderr: "pipe",
+  });
+  await newBranchProc.exited;
 
-  const proc = Bun.spawn(args, { cwd, stderr: "pipe" });
-  await proc.exited;
-  if (proc.exitCode !== 0) {
-    const stderr = await new Response(proc.stderr).text();
-    throw new Error(`git worktree add failed: ${stderr.trim() || `exit code ${proc.exitCode}`}`);
+  if (newBranchProc.exitCode !== 0) {
+    const stderr = await new Response(newBranchProc.stderr).text();
+
+    // ブランチが既に存在する場合は -b なしでリトライ
+    if (stderr.includes("already exists")) {
+      const existingProc = Bun.spawn(["git", "worktree", "add", wtPath, branch], {
+        cwd,
+        stderr: "pipe",
+      });
+      await existingProc.exited;
+      if (existingProc.exitCode !== 0) {
+        const retryStderr = await new Response(existingProc.stderr).text();
+        throw new Error(
+          `git worktree add failed: ${retryStderr.trim() || `exit code ${existingProc.exitCode}`}`,
+        );
+      }
+    } else {
+      throw new Error(
+        `git worktree add failed: ${stderr.trim() || `exit code ${newBranchProc.exitCode}`}`,
+      );
+    }
   }
 
   // メインリポジトリから指定パスをシンボリックリンク
@@ -55,13 +69,8 @@ export async function addWorktree({
     await createWorktreeSymlinks(cwd, wtPath, symlinks);
   }
 
-  // 作成した worktree の情報を取得
-  const headResult = await tryCatch(
-    new Response(Bun.spawn(["git", "rev-parse", "--short", "HEAD"], { cwd: wtPath }).stdout).text(),
-  );
-  const head = headResult.ok ? headResult.value.trim() : "";
-
-  return { path: wtPath, head, branch, isMain: false };
+  // HEAD は後続の gitWorktreeList で取得されるため、作成時は省略
+  return { path: wtPath, head: "", branch, isMain: false };
 }
 
 export async function removeWorktree(cwd: string, wtPath: string, force?: boolean): Promise<void> {

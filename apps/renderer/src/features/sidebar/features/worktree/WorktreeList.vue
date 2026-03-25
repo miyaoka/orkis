@@ -90,11 +90,14 @@ defineSlots<{
     <p v-if="loading" class="py-2 pl-2 text-sm text-zinc-500">Loading...</p>
 
     <button
-      class="mt-1 grid grid-cols-[auto_1fr] gap-x-2 rounded-sm py-1.5 pl-2 text-left text-sm text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300"
+      class="mt-1 grid grid-cols-[auto_1fr] gap-x-2 rounded-sm py-1.5 pl-2 text-left text-sm text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300 disabled:opacity-50"
       :disabled="isCreating"
       @click="$emit('add')"
     >
-      <span class="icon-[lucide--plus] text-base" />
+      <span
+        class="text-base"
+        :class="isCreating ? 'icon-[lucide--loader-circle] animate-spin' : 'icon-[lucide--plus]'"
+      />
       <span>New worktree</span>
     </button>
   </div>

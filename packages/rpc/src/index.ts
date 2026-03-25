@@ -186,10 +186,10 @@ export type GozdRPC = {
         params: undefined;
         response: string[];
       };
-      /** worktree を作成する */
+      /** worktree を作成し、表示対象を切り替える */
       createWorktree: {
         params: { worktreeDir: string; branch: string };
-        response: WorktreeEntry;
+        response: { worktree: WorktreeEntry; dir: string; fileServerBaseUrl: string };
       };
       /** worktree を解除する（ブランチは残る） */
       gitWorktreeRemove: {
@@ -224,7 +224,7 @@ export type GozdRPC = {
       /** Todo に worktree を作成して紐づける */
       createWorktreeWithTodo: {
         params: { id: string; worktreeDir: string; branch: string };
-        response: { todo: Todo; worktree: WorktreeEntry };
+        response: { todo: Todo; worktree: WorktreeEntry; dir: string; fileServerBaseUrl: string };
       };
       /** 表示対象ディレクトリを切り替える（worktree 選択） */
       switchDir: {
