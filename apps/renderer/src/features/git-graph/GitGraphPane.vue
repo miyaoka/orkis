@@ -33,6 +33,15 @@ const firstParentOnly = ref(false);
 /** 変更ファイル数 */
 const uncommittedChangeCount = computed(() => Object.keys(gitStatuses.value).length);
 
+/** コミットリスト全体から HEAD が指すカレントブランチ名を取得 */
+const currentBranch = computed(() => {
+  for (const commit of commits.value) {
+    const branch = findCurrentBranch(commit.refs);
+    if (branch) return branch;
+  }
+  return undefined;
+});
+
 /**
  * コミット一覧の先頭に Uncommitted Changes 仮想行を挿入する。
  * HEAD コミットを親として接続する。
@@ -206,9 +215,13 @@ function hasHead(refs: string[]): boolean {
 
 interface DisplayRef {
   label: string;
-  type: "current" | "default" | "local" | "remote" | "synced" | "tag";
+  type: "local" | "remote" | "synced" | "tag";
   /** origin と同じコミットにあるか */
   isSynced: boolean;
+  /** カレントブランチか */
+  isCurrent: boolean;
+  /** デフォルトブランチか */
+  isDefault: boolean;
 }
 
 /**
@@ -232,8 +245,11 @@ function findCurrentBranch(refs: string[]): string | undefined {
  * - origin/xxx とローカル xxx が一致する場合は統合して synced タイプにする
  * - HEAD が指すブランチは current、defaultBranch と一致するブランチは default タイプにする
  */
-function computeDisplayRefs(refs: string[], defaultBranchName?: string): DisplayRef[] {
-  const currentBranch = findCurrentBranch(refs);
+function computeDisplayRefs(
+  refs: string[],
+  currentBranchName?: string,
+  defaultBranchName?: string,
+): DisplayRef[] {
   const filtered = refs.filter((r) => r !== "HEAD" && r !== "origin/HEAD");
   const locals = new Set(filtered.filter((r) => !r.startsWith("origin/") && !r.startsWith("tag:")));
   const remotes = new Set(
@@ -247,30 +263,34 @@ function computeDisplayRefs(refs: string[], defaultBranchName?: string): Display
   for (const local of locals) {
     const isSynced = remotes.has(local);
     if (isSynced) remotes.delete(local);
-
-    if (local === currentBranch) {
-      result.push({ label: local, type: "current", isSynced });
-    } else if (local === defaultBranchName) {
-      result.push({ label: local, type: "default", isSynced });
-    } else if (isSynced) {
-      result.push({ label: local, type: "synced", isSynced: true });
-    } else {
-      result.push({ label: local, type: "local", isSynced: false });
-    }
+    const type = isSynced ? "synced" : "local";
+    const isCurrent = local === currentBranchName;
+    const isDefault = local === defaultBranchName;
+    result.push({ label: local, type, isSynced, isCurrent, isDefault });
   }
 
   // origin のみ（ローカルに対応がない）
   for (const remote of remotes) {
-    if (remote === defaultBranchName) {
-      result.push({ label: `origin/${remote}`, type: "default", isSynced: false });
-    } else {
-      result.push({ label: `origin/${remote}`, type: "remote", isSynced: false });
-    }
+    const isCurrent = remote === currentBranchName;
+    const isDefault = remote === defaultBranchName;
+    result.push({
+      label: `origin/${remote}`,
+      type: "remote",
+      isSynced: false,
+      isCurrent,
+      isDefault,
+    });
   }
 
   // タグ
   for (const tag of tags) {
-    result.push({ label: tag.slice("tag:".length), type: "tag", isSynced: false });
+    result.push({
+      label: tag.slice("tag:".length),
+      type: "tag",
+      isSynced: false,
+      isCurrent: false,
+      isDefault: false,
+    });
   }
 
   return result;
@@ -278,20 +298,26 @@ function computeDisplayRefs(refs: string[], defaultBranchName?: string): Display
 
 /**
  * ref バッジの色分け。
- * - current（カレントブランチ）: 黄色
- * - local / synced / default（ローカル系）: 青
- * - remote（リモートのみ）: 紫
- * - tag: 青（local と同系）
- * synced は isSynced フラグで判定し、current ならカレント色、それ以外はローカル色になる。
+ * - local / synced（ローカル系）: 緑
+ * - remote（リモートのみ）: 緑 + opacity-50
+ * - tag: 青
+ * isCurrent / isDefault フラグで特別表示を上乗せする。
  */
 const REF_TYPE_CLASS: Record<DisplayRef["type"], string> = {
-  current: "bg-yellow-500 text-black",
-  default: "bg-blue-800 text-blue-200 ring-1 ring-inset ring-blue-400",
-  synced: "bg-blue-800 text-blue-200",
-  local: "bg-blue-800 text-blue-200",
-  remote: "bg-purple-800 text-purple-200",
+  synced: "bg-green-800 text-green-200",
+  local: "bg-green-800 text-green-200",
+  remote: "bg-green-800 text-green-200 opacity-50",
   tag: "bg-blue-800 text-blue-200",
 };
+
+/** current（ローカル）: 黄色背景に黒文字 */
+const CURRENT_LOCAL_CLASS = "bg-yellow-500 text-black";
+
+/** current（リモート）: ローカルと同色 + opacity */
+const CURRENT_REMOTE_CLASS = "bg-yellow-500 text-black opacity-50";
+
+/** default: ring を追加 */
+const DEFAULT_CLASS = "ring-1 ring-inset ring-current";
 
 /** 日付フォーマット（短い形式） */
 function formatDate(timestamp: number): string {
@@ -466,10 +492,21 @@ function isInRange(hash: string): boolean {
               class="icon-[lucide--git-merge] size-3.5 shrink-0 text-zinc-500"
             />
             <span
-              v-for="displayRef in computeDisplayRefs(node.commit.refs, defaultBranch)"
+              v-for="displayRef in computeDisplayRefs(
+                node.commit.refs,
+                currentBranch,
+                defaultBranch,
+              )"
               :key="`${displayRef.type}:${displayRef.label}`"
               class="flex shrink-0 items-center gap-0.5 rounded-sm px-1 py-0.5 text-[10px] leading-none font-medium"
-              :class="REF_TYPE_CLASS[displayRef.type]"
+              :class="[
+                displayRef.isCurrent
+                  ? displayRef.type === 'remote'
+                    ? CURRENT_REMOTE_CLASS
+                    : CURRENT_LOCAL_CLASS
+                  : REF_TYPE_CLASS[displayRef.type],
+                displayRef.isDefault && DEFAULT_CLASS,
+              ]"
             >
               <span v-if="displayRef.isSynced" class="icon-[lucide--refresh-cw] size-2.5" />
               {{ displayRef.label }}
