@@ -164,7 +164,7 @@ watch(
     const updated = await loadLog();
     if (!updated) return;
     await nextTick();
-    scrollToHead();
+    scrollHeadIntoView();
   },
 );
 
@@ -200,7 +200,7 @@ const disposeGitStatus = onGitStatusChange(({ head, upstream }) => {
       const updated = await loadLog();
       if (!updated || !headChanged) return;
       await nextTick();
-      scrollToHead();
+      scrollHeadIntoView();
     })();
   }
   // upstream 変化（push/fetch）時に PR 一覧も再取得
@@ -471,7 +471,7 @@ function selectedIndex(): number {
 }
 
 /** 選択を Uncommitted Changes に戻し、HEAD コミット付近にスクロール */
-function scrollToHead() {
+function scrollHeadIntoView() {
   const index = layout.value.nodes.findIndex((n) => n.commit.refs.includes("HEAD"));
   if (index === -1) return;
   gitGraphStore.resetSelection();
@@ -587,7 +587,7 @@ function isInRange(hash: string): boolean {
       </button>
       <button
         class="rounded-sm px-1.5 py-0.5 text-[10px] text-zinc-500 hover:text-zinc-300"
-        @click="scrollToHead"
+        @click="scrollHeadIntoView"
       >
         Scroll to HEAD
       </button>
