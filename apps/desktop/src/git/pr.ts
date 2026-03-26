@@ -35,11 +35,15 @@ async function execGh({
     return { ok: false, stderr: String(spawnResult.error) };
   }
   const proc = spawnResult.value;
-  const [stdout, stderr] = await Promise.all([
-    new Response(proc.stdout).text(),
-    new Response(proc.stderr).text(),
-  ]);
+  const readResult = await tryCatch(
+    Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text()]),
+  );
+  // ストリーム読み取り失敗でもプロセス終了を保証する
   await proc.exited;
+  if (!readResult.ok) {
+    return { ok: false, stderr: String(readResult.error) };
+  }
+  const [stdout, stderr] = readResult.value;
   if (proc.exitCode !== 0) {
     return { ok: false, stderr: stderr.trim() };
   }
