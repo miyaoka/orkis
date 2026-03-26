@@ -315,9 +315,27 @@ function scheduleGitStatusUpdate(win: GozdWindow, root: string) {
   gitStatusTimers.set(win, timer);
 }
 
+// branchChange デバウンス
+const branchChangeTimers = new Map<GozdWindow, ReturnType<typeof setTimeout>>();
+const BRANCH_CHANGE_DEBOUNCE_MS = 300;
+
+function scheduleBranchChange(win: GozdWindow) {
+  const existing = branchChangeTimers.get(win);
+  if (existing) clearTimeout(existing);
+  const timer = setTimeout(() => {
+    branchChangeTimers.delete(win);
+    win.webview.rpc?.send.branchChange();
+  }, BRANCH_CHANGE_DEBOUNCE_MS);
+  branchChangeTimers.set(win, timer);
+}
+
 // ファイル監視
 const windowFsWatchers = new Map<GozdWindow, fs.FSWatcher>();
+/** refs/heads ディレクトリの fs.watch watcher */
+const windowRefsWatchers = new Map<GozdWindow, fs.FSWatcher>();
 const windowGitWatchedFiles = new Map<GozdWindow, string[]>();
+/** startWatching の世代管理。非同期初期化中に stopWatching が走った場合に stale な watcher 登録を防ぐ */
+const windowWatchGen = new Map<GozdWindow, number>();
 
 /** linked worktree 対応: `.git` がファイル（gitdir: ...）の場合に実際の git ディレクトリを解決 */
 async function resolveGitDir(root: string): Promise<string> {
@@ -330,6 +348,9 @@ async function resolveGitDir(root: string): Promise<string> {
 }
 
 function startWatching(win: GozdWindow, root: string) {
+  const watchGen = (windowWatchGen.get(win) ?? 0) + 1;
+  windowWatchGen.set(win, watchGen);
+
   // ワークスペースのファイル監視（recursive, macOS）
   const watcher = fs.watch(root, { recursive: true }, (_eventType, filename) => {
     if (!filename) return;
@@ -347,7 +368,10 @@ function startWatching(win: GozdWindow, root: string) {
 
   // .git 関連ファイルの監視（linked worktree では .git がファイルなので git rev-parse で解決）
   void (async () => {
+    const isStale = () => windowWatchGen.get(win) !== watchGen;
+
     const gitDir = await resolveGitDir(root);
+    if (isStale()) return;
     const indexPath = path.join(gitDir, "index");
     const headPath = path.join(gitDir, "HEAD");
 
@@ -396,11 +420,17 @@ function startWatching(win: GozdWindow, root: string) {
 
     let currentRefPath = await resolveCurrentRefPath();
     let remoteRefPath = await resolveRemoteRefPath();
+    if (isStale()) return;
+
+    // packed-refs のパスを解決（worktree では commondir にある）
+    const packedRefsPath = await resolveRefPath("packed-refs");
+    if (isStale()) return;
 
     function syncGitWatchedFiles() {
       const files = [indexPath, headPath];
       if (currentRefPath) files.push(currentRefPath);
       if (remoteRefPath) files.push(remoteRefPath);
+      if (packedRefsPath) files.push(packedRefsPath);
       windowGitWatchedFiles.set(win, files);
     }
 
@@ -414,7 +444,7 @@ function startWatching(win: GozdWindow, root: string) {
         resolveRemoteRefPath(),
       ]);
       // 非同期中に別の呼び出しが走っていたらこの結果は stale
-      if (gen !== refWatchGen) return;
+      if (gen !== refWatchGen || isStale()) return;
 
       // ローカル ref の更新
       if (newRefPath !== currentRefPath) {
@@ -461,14 +491,39 @@ function startWatching(win: GozdWindow, root: string) {
       });
     }
     syncGitWatchedFiles();
+
+    // refs/heads ディレクトリの監視（ブランチの作成・削除を検知）
+    const refsHeadsDir = await resolveRefPath("refs/heads");
+    if (isStale()) return;
+    if (refsHeadsDir) {
+      const refsWatcher = fs.watch(refsHeadsDir, { recursive: true }, () => {
+        scheduleBranchChange(win);
+      });
+      windowRefsWatchers.set(win, refsWatcher);
+    }
+
+    // packed-refs の監視（git gc / prune 後のブランチ変更を検知）
+    if (packedRefsPath) {
+      fs.watchFile(packedRefsPath, { interval: GIT_WATCH_POLL_MS }, () => {
+        scheduleBranchChange(win);
+      });
+    }
   })();
 }
 
 function stopWatching(win: GozdWindow) {
+  // 進行中の非同期初期化を無効化（世代を進めて isStale() を true にする）
+  windowWatchGen.set(win, (windowWatchGen.get(win) ?? 0) + 1);
+
   const watcher = windowFsWatchers.get(win);
   if (watcher) {
     watcher.close();
     windowFsWatchers.delete(win);
+  }
+  const refsWatcher = windowRefsWatchers.get(win);
+  if (refsWatcher) {
+    refsWatcher.close();
+    windowRefsWatchers.delete(win);
   }
   const watchedFiles = windowGitWatchedFiles.get(win);
   if (watchedFiles) {
@@ -484,6 +539,11 @@ function stopWatching(win: GozdWindow) {
   }
   gitStatusInFlight.delete(win);
   gitStatusNeedsRerun.delete(win);
+  const branchTimer = branchChangeTimers.get(win);
+  if (branchTimer) {
+    clearTimeout(branchTimer);
+    branchChangeTimers.delete(win);
+  }
 }
 
 // --- 非アクティブ worktree 監視 ---
@@ -606,6 +666,7 @@ function cleanupWindow(win: GozdWindow) {
   windowDirs.delete(win);
   windowProjectDirs.delete(win);
   windowSwitchGen.delete(win);
+  windowWatchGen.delete(win);
   // このウィンドウが所有する PTY をすべて kill
   for (const [id, entry] of ptys) {
     if (entry.win === win) {
