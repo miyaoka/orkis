@@ -195,10 +195,10 @@ export type GozdRPC = {
           defaultBranch?: string;
         };
       };
-      /** GitHub PR 一覧を取得（open のみ、ブランチ名で紐付け） */
+      /** GitHub PR 一覧を取得（open のみ、ブランチ名で紐付け）。gh 失敗時は null */
       gitPrList: {
         params: undefined;
-        response: GitPullRequest[];
+        response: GitPullRequest[] | null;
       };
       /** git worktree list で worktree 一覧を取得 */
       gitWorktreeList: {

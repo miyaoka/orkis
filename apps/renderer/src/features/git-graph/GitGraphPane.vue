@@ -11,6 +11,7 @@ Git commit graph showing the current worktree branch and the default branch.
 <script setup lang="ts">
 import type { GitCommit, GitPullRequest } from "@gozd/rpc";
 import { UNCOMMITTED_HASH } from "@gozd/rpc";
+import { useIntervalFn } from "@vueuse/core";
 import { storeToRefs } from "pinia";
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRpc } from "../../shared/rpc";
@@ -218,10 +219,13 @@ const prByBranch = ref(new Map<string, GitPullRequest>());
 /** loadPrList の世代管理。並行実行で古いレスポンスが後着して上書きするのを防ぐ */
 let loadPrGen = 0;
 
+/** PR 一覧を取得して prByBranch を更新する。gh 失敗時（null）は前回値を保持する */
 async function loadPrList() {
   const gen = ++loadPrGen;
   const prs = await request.gitPrList(undefined);
   if (gen !== loadPrGen) return;
+  // gh 失敗時は null — 前回値を保持してバッジが消えるのを防ぐ
+  if (!prs) return;
   const map = new Map<string, GitPullRequest>();
   for (const pr of prs) {
     map.set(pr.headRefName, pr);
@@ -229,13 +233,27 @@ async function loadPrList() {
   prByBranch.value = map;
 }
 
-// マウント時に非同期取得（グラフ描画をブロックしない）
-onMounted(() => void loadPrList());
+// PR 一覧の定期ポーリング（gh pr create 等でリモートのみ変化するケースに対応）
+const PR_POLL_INTERVAL_MS = 60_000;
+const { pause: pausePrPoll, resume: resumePrPoll } = useIntervalFn(
+  () => void loadPrList(),
+  PR_POLL_INTERVAL_MS,
+  { immediate: false },
+);
 
-// worktree 切り替え時に再取得
+onMounted(() => {
+  void loadPrList();
+  resumePrPoll();
+});
+
+// worktree 切り替え時にポーリングをリセット
 watch(
   () => worktreeStore.dir,
-  () => void loadPrList(),
+  () => {
+    pausePrPoll();
+    void loadPrList();
+    resumePrPoll();
+  },
 );
 
 /** グラフ描画の定数 */

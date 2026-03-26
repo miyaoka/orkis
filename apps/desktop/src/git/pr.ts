@@ -56,13 +56,13 @@ export async function getPrList({
 }: {
   cwd: string;
   env: Record<string, string>;
-}): Promise<GitPullRequest[]> {
+}): Promise<GitPullRequest[] | null> {
   const ownerResult = await execGh({
     args: ["repo", "view", "--json", "owner", "--jq", ".owner.login"],
     cwd,
     env,
   });
-  if (!ownerResult.ok) return [];
+  if (!ownerResult.ok) return null;
   const repoOwner = ownerResult.stdout.trim();
 
   const listResult = await execGh({
@@ -79,10 +79,10 @@ export async function getPrList({
     cwd,
     env,
   });
-  if (!listResult.ok) return [];
+  if (!listResult.ok) return null;
 
   const parsed = tryCatch(() => JSON.parse(listResult.stdout) as GhPrItem[]);
-  if (!parsed.ok) return [];
+  if (!parsed.ok) return null;
 
   // fork 由来の PR を除外（自リポジトリの owner と一致するもののみ）
   return parsed.value
