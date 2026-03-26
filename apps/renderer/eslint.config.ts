@@ -27,9 +27,9 @@ export default defineConfigWithVueTs(
     rules: {
       // unused-imports
       "@typescript-eslint/no-unused-vars": "off",
-      "unused-imports/no-unused-imports": "warn",
+      "unused-imports/no-unused-imports": "error",
       "unused-imports/no-unused-vars": [
-        "warn",
+        "error",
         {
           vars: "all",
           varsIgnorePattern: "^_",
@@ -40,7 +40,7 @@ export default defineConfigWithVueTs(
       ],
 
       // import-x
-      "import-x/no-duplicates": "warn",
+      "import-x/no-duplicates": "error",
       // 保存時の自動 lint で並び替えが発生すると編集中に邪魔なので off
       // lint:fix や pre-commit hook では eslint.config.fix.ts で有効化
       "import-x/order": [
@@ -78,7 +78,7 @@ export default defineConfigWithVueTs(
       // 各ルールは独立したワーカーで Tailwind Design System をロードするため、
       // 有効なルール数に比例して初期化コストが増加する（1ルールあたり約1秒）
       "better-tailwindcss/no-unknown-classes": [
-        "warn",
+        "error",
         {
           ignore: ["_.*", "electrobun-webkit-app-region-.*"],
         },
