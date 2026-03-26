@@ -127,15 +127,15 @@ leafNode
 
 ## OSC ハンドラ
 
-xterm.js の `parser.registerOscHandler()` でエスケープシーケンスを受信し、store に保存する。
+xterm.js のイベントまたは `parser.registerOscHandler()` でエスケープシーケンスを受信し、store に保存する。
 
-| OSC | 用途                | 保存先          | 表示箇所                    |
-| --- | ------------------- | --------------- | --------------------------- |
-| 0   | タイトル+アイコン名 | `titleByLeafId` | TerminalLeaf 左上（CWD 横） |
-| 2   | タイトル            | `titleByLeafId` | TerminalLeaf 左上（CWD 横） |
-| 7   | CWD 通知            | `cwdByLeafId`   | TerminalLeaf 左上           |
+| OSC | 用途                | 受信方法                          | 保存先          | 表示箇所                    |
+| --- | ------------------- | --------------------------------- | --------------- | --------------------------- |
+| 0   | タイトル+アイコン名 | `terminal.onTitleChange` イベント | `titleByLeafId` | TerminalLeaf 左上（CWD 横） |
+| 2   | タイトル            | `terminal.onTitleChange` イベント | `titleByLeafId` | TerminalLeaf 左上（CWD 横） |
+| 7   | CWD 通知            | `registerOscHandler(7, ...)`      | `cwdByLeafId`   | TerminalLeaf 左上           |
 
-- OSC 0 と OSC 2 はどちらもタイトルとして同一に扱う
+- OSC 0/2 は xterm.js に既定ハンドラがあるため `registerOscHandler` ではなく `onTitleChange` イベントを購読する。OSC 7 は既定ハンドラがないため `registerOscHandler` を使う
 - タイトルは Claude Code 等のプログラムが `\x1b]2;タイトル\a` で設定する。Ghostty 等の一般的なターミナルと同じ標準的な仕組み
 - 空文字列が送信された場合はタイトルをクリアする
 
