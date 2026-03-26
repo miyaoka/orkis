@@ -7,6 +7,8 @@ output:
 pre-commit:
   parallel: true
   jobs:
+    - name: knip
+      run: pnpm knip
     - name: typecheck-shared
       root: "packages/shared/"
       glob: "**/*.ts"
