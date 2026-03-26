@@ -444,7 +444,7 @@ function startWatching(win: GozdWindow, root: string) {
         resolveRemoteRefPath(),
       ]);
       // 非同期中に別の呼び出しが走っていたらこの結果は stale
-      if (gen !== refWatchGen) return;
+      if (gen !== refWatchGen || isStale()) return;
 
       // ローカル ref の更新
       if (newRefPath !== currentRefPath) {
