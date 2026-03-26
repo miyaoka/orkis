@@ -66,7 +66,7 @@ interface ResolvedOpenTarget {
 }
 
 /** dir が git リポジトリ内かどうかを同期的に判定する */
-function checkIsGitRepo(dir: string): boolean {
+export function checkIsGitRepo(dir: string): boolean {
   const result = tryCatch(() =>
     Bun.spawnSync(["git", "rev-parse", "--is-inside-work-tree"], {
       cwd: dir,

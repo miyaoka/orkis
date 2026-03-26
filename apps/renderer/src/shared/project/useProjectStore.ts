@@ -8,7 +8,7 @@ export const useProjectStore = defineStore("project", () => {
   const isGitRepo = ref(false);
 
   function setProject(newRepoName?: string, newIsGitRepo?: boolean) {
-    if (newRepoName) {
+    if (newRepoName !== undefined) {
       repoName.value = newRepoName;
     }
     if (newIsGitRepo !== undefined) {

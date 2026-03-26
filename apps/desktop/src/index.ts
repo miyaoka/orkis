@@ -8,6 +8,7 @@ import net from "node:net";
 import { tryCatch } from "@gozd/shared";
 import type { GozdRPC, OpenTargetSelection, FileReadResult } from "@gozd/rpc";
 import {
+  checkIsGitRepo,
   parseOwnerRepo,
   resolveOpenTarget,
   filterIgnored,
@@ -1395,14 +1396,19 @@ if (initialDir) {
       if (!fs.existsSync(ws.dir)) continue;
       // activeDir が存在しなければ dir（project root）にフォールバック
       const activeDir = fs.existsSync(ws.activeDir) ? ws.activeDir : ws.dir;
-      openWindow({ projectDir: ws.dir, activeDir, savedFrame: ws.frame });
+      openWindow({
+        projectDir: ws.dir,
+        activeDir,
+        isGitRepo: checkIsGitRepo(activeDir),
+        savedFrame: ws.frame,
+      });
       restored = true;
     }
     if (!restored) {
-      openWindow({ projectDir: homedir(), activeDir: homedir() });
+      openWindow({ projectDir: homedir(), activeDir: homedir(), isGitRepo: false });
     }
   } else {
-    openWindow({ projectDir: homedir(), activeDir: homedir() });
+    openWindow({ projectDir: homedir(), activeDir: homedir(), isGitRepo: false });
   }
   if (errors.length > 0) {
     void Utils.showMessageBox({
