@@ -207,6 +207,8 @@ function hasHead(refs: string[]): boolean {
 interface DisplayRef {
   label: string;
   type: "current" | "default" | "local" | "remote" | "synced" | "tag";
+  /** origin と同じコミットにあるか */
+  isSynced: boolean;
 }
 
 /**
@@ -247,40 +249,47 @@ function computeDisplayRefs(refs: string[], defaultBranchName?: string): Display
     if (isSynced) remotes.delete(local);
 
     if (local === currentBranch) {
-      result.push({ label: local, type: "current" });
+      result.push({ label: local, type: "current", isSynced });
     } else if (local === defaultBranchName) {
-      result.push({ label: local, type: "default" });
+      result.push({ label: local, type: "default", isSynced });
     } else if (isSynced) {
-      result.push({ label: local, type: "synced" });
+      result.push({ label: local, type: "synced", isSynced: true });
     } else {
-      result.push({ label: local, type: "local" });
+      result.push({ label: local, type: "local", isSynced: false });
     }
   }
 
   // origin のみ（ローカルに対応がない）
   for (const remote of remotes) {
     if (remote === defaultBranchName) {
-      result.push({ label: `origin/${remote}`, type: "default" });
+      result.push({ label: `origin/${remote}`, type: "default", isSynced: false });
     } else {
-      result.push({ label: `origin/${remote}`, type: "remote" });
+      result.push({ label: `origin/${remote}`, type: "remote", isSynced: false });
     }
   }
 
   // タグ
   for (const tag of tags) {
-    result.push({ label: tag.slice("tag:".length), type: "tag" });
+    result.push({ label: tag.slice("tag:".length), type: "tag", isSynced: false });
   }
 
   return result;
 }
 
-/** ref バッジの色分け */
+/**
+ * ref バッジの色分け。
+ * - current（カレントブランチ）: 黄色
+ * - local / synced / default（ローカル系）: 青
+ * - remote（リモートのみ）: 紫
+ * - tag: 青（local と同系）
+ * synced は isSynced フラグで判定し、current ならカレント色、それ以外はローカル色になる。
+ */
 const REF_TYPE_CLASS: Record<DisplayRef["type"], string> = {
-  current: "bg-green-800 text-green-200 ring-1 ring-inset ring-green-400",
-  default: "bg-teal-800 text-teal-200 ring-1 ring-inset ring-teal-400",
-  synced: "bg-teal-800 text-teal-200",
-  local: "bg-green-800 text-green-200",
-  remote: "bg-red-800 text-red-200",
+  current: "bg-yellow-500 text-black",
+  default: "bg-blue-800 text-blue-200 ring-1 ring-inset ring-blue-400",
+  synced: "bg-blue-800 text-blue-200",
+  local: "bg-blue-800 text-blue-200",
+  remote: "bg-purple-800 text-purple-200",
   tag: "bg-blue-800 text-blue-200",
 };
 
@@ -459,9 +468,10 @@ function isInRange(hash: string): boolean {
             <span
               v-for="displayRef in computeDisplayRefs(node.commit.refs, defaultBranch)"
               :key="`${displayRef.type}:${displayRef.label}`"
-              class="shrink-0 rounded-sm px-1 py-0.5 text-[10px] leading-none font-medium"
+              class="flex shrink-0 items-center gap-0.5 rounded-sm px-1 py-0.5 text-[10px] leading-none font-medium"
               :class="REF_TYPE_CLASS[displayRef.type]"
             >
+              <span v-if="displayRef.isSynced" class="icon-[lucide--refresh-cw] size-2.5" />
               {{ displayRef.label }}
             </span>
             <span
