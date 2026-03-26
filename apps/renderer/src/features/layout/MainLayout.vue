@@ -205,16 +205,11 @@ watchEffect(() => {
       />
       <!-- ドラッグ領域 + タイトル表示 -->
       <div
-        class="electrobun-webkit-app-region-drag flex min-w-0 flex-1 items-center justify-center"
+        class="electrobun-webkit-app-region-drag flex min-w-0 flex-1 items-center"
         style="height: 100%"
       >
         <span class="truncate text-sm text-zinc-400">{{ worktreeStore.repoName ?? "gozd" }}</span>
       </div>
-      <!-- 右側の余白（信号機ボタンと対称） -->
-      <div
-        class="electrobun-webkit-app-region-drag shrink-0"
-        :style="{ width: `${TRAFFIC_LIGHTS_WIDTH}px`, height: '100%' }"
-      />
     </div>
     <div class="flex shrink-0 overflow-hidden" :style="{ height: `${mainHeight}px` }">
       <div class="shrink-0 overflow-hidden" :style="{ width: `${sidebarWidth}px` }">
