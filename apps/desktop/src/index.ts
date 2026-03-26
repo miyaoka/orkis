@@ -790,7 +790,7 @@ function createWindowWithRPC(dir: string, options?: CreateWindowOptions): GozdWi
           }
 
           async function readWorkingTree(): Promise<FileReadResult> {
-            const absolutePath = path.resolve(currentDir, relPath);
+            const absolutePath = await resolveExistingFsPath(currentDir, relPath);
             return readFileContent(absolutePath);
           }
 
