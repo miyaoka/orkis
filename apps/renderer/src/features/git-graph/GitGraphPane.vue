@@ -12,7 +12,7 @@ Git commit graph showing the current worktree branch and the default branch.
 import type { GitCommit, GitPullRequest } from "@gozd/rpc";
 import { UNCOMMITTED_HASH } from "@gozd/rpc";
 import { storeToRefs } from "pinia";
-import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRpc } from "../../shared/rpc";
 import { ResizeHandle } from "../layout";
 import { useGitStatusStore, useWorktreeStore } from "../worktree";
@@ -122,13 +122,14 @@ let lastUpstream = "";
 /** loadLog の世代管理。並行実行で古いレスポンスが後着して上書きするのを防ぐ */
 let loadLogGen = 0;
 
-async function loadLog() {
+/** @returns 世代チェックを通過して state を更新した場合 true */
+async function loadLog(): Promise<boolean> {
   const gen = ++loadLogGen;
   const result = await request.gitLog({
     maxCount: 200,
     firstParentOnly: firstParentOnly.value || undefined,
   });
-  if (gen !== loadLogGen) return;
+  if (gen !== loadLogGen) return false;
 
   const merged = mergeCommitStreams({
     headCommits: result.headCommits,
@@ -149,6 +150,7 @@ async function loadLog() {
   if (isStale(selectedHash) || isStale(compareHash)) {
     gitGraphStore.resetSelection();
   }
+  return true;
 }
 
 onMounted(loadLog);
@@ -156,9 +158,12 @@ onMounted(loadLog);
 // worktree 切り替え時に再取得し、HEAD にスクロール
 watch(
   () => worktreeStore.dir,
-  () => {
+  async () => {
     gitGraphStore.resetSelection();
-    void loadLog().then(() => scrollToHead());
+    const updated = await loadLog();
+    if (!updated) return;
+    await nextTick();
+    scrollToHead();
   },
 );
 
@@ -186,9 +191,12 @@ const disposeGitStatus = onGitStatusChange(({ head, upstream }) => {
   if (upstreamChanged) lastUpstream = upstreamKey;
 
   if (headChanged || upstreamChanged) {
-    void loadLog().then(() => {
-      if (headChanged) scrollToHead();
-    });
+    void (async () => {
+      const updated = await loadLog();
+      if (!updated || !headChanged) return;
+      await nextTick();
+      scrollToHead();
+    })();
   }
   // upstream 変化（push/fetch）時に PR 一覧も再取得
   if (upstreamChanged) {
