@@ -1,3 +1,7 @@
+<doc lang="md">
+PR picker の1行分。PR 番号・タイトル・ブランチ・author・更新日時を色分け表示する。
+</doc>
+
 <script setup lang="ts">
 import type { GitPullRequest } from "@gozd/rpc";
 import { computed } from "vue";
