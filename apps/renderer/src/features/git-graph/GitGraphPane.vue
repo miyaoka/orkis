@@ -10,6 +10,7 @@ Git commit graph showing the current worktree branch and the default branch.
 
 <script setup lang="ts">
 import type { GitCommit } from "@gozd/rpc";
+import { UNCOMMITTED_HASH } from "@gozd/rpc";
 import { storeToRefs } from "pinia";
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRpc } from "../../shared/rpc";
@@ -17,7 +18,6 @@ import { useGitStatusStore, useWorktreeStore } from "../worktree";
 import { computeGraphLayout } from "./graphLayout";
 import type { GraphLayout } from "./graphLayout";
 import { useGitGraphStore } from "./useGitGraphStore";
-import { UNCOMMITTED_HASH } from ".";
 
 const { request, onGitStatusChange } = useRpc();
 const worktreeStore = useWorktreeStore();
