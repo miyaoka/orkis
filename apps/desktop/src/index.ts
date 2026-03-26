@@ -790,8 +790,13 @@ function createWindowWithRPC(dir: string, options?: CreateWindowOptions): GozdWi
           }
 
           async function readWorkingTree(): Promise<FileReadResult> {
-            const absolutePath = await resolveExistingFsPath(currentDir, relPath);
-            return readFileContent(absolutePath);
+            // resolveExistingFsPath は存在しないパスで例外を投げるため、
+            // 削除済みファイルの場合は notFound を返す
+            const pathResult = await tryCatch(resolveExistingFsPath(currentDir, relPath));
+            if (!pathResult.ok) {
+              return { content: "", isBinary: false, notFound: true };
+            }
+            return readFileContent(pathResult.value);
           }
 
           const [from, to] = await Promise.all([
