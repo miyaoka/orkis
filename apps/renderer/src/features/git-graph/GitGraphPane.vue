@@ -179,7 +179,7 @@ watch(sortMode, () => {
 });
 
 // git status 変更時は uncommitted 行の件数を再計算し、選択を Uncommitted Changes に戻す
-watch(uncommittedChangeCount, () => {
+watch(gitStatuses, () => {
   recomputeLayout();
   gitGraphStore.resetSelection();
   scrollToIndex(0);
