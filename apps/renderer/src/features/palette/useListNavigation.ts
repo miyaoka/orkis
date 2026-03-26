@@ -92,10 +92,14 @@ export function useListNavigation(options: UseListNavigationOptions): UseListNav
     item?.scrollIntoView({ block: "nearest", container: "nearest" });
   }
 
-  /** 選択アイテムが画面外に出たらスクロール追従する */
-  watch(selectedIndex, () => {
-    scrollToSelected();
-  });
+  /** 選択アイテムが画面外に出たらスクロール追従する（DOM 更新後に実行） */
+  watch(
+    selectedIndex,
+    () => {
+      scrollToSelected();
+    },
+    { flush: "post" },
+  );
 
   return { selectedIndex, move, movePage, reset, scrollToSelected };
 }
