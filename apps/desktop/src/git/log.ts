@@ -29,7 +29,45 @@ async function resolveDefaultBranch(cwd: string): Promise<string | undefined> {
 }
 
 /**
+ * 現在のブランチ名を取得する。detached HEAD の場合は undefined。
+ */
+async function resolveCurrentBranch(cwd: string): Promise<string | undefined> {
+  const result = await tryCatch(
+    new Response(Bun.spawn(["git", "rev-parse", "--abbrev-ref", "HEAD"], { cwd }).stdout).text(),
+  );
+  if (!result.ok) return undefined;
+  const branch = result.value.trim();
+  // detached HEAD の場合 "HEAD" が返る
+  return branch && branch !== "HEAD" ? branch : undefined;
+}
+
+/**
+ * リモートrefが存在するか確認し、存在すれば "origin/{branch}" を返す。
+ */
+async function resolveRemoteRef({
+  cwd,
+  branch,
+}: {
+  cwd: string;
+  branch: string;
+}): Promise<string | undefined> {
+  const ref = `origin/${branch}`;
+  const result = await tryCatch(
+    new Response(
+      Bun.spawn(["git", "rev-parse", "--verify", `refs/remotes/${ref}`], {
+        cwd,
+      }).stdout,
+    ).text(),
+  );
+  // コマンド失敗時も stdout 読み取りは成功するため、出力内容で判定する
+  if (!result.ok || !result.value.trim()) return undefined;
+  return ref;
+}
+
+/**
  * 現在のブランチとデフォルトブランチのコミット履歴を取得する。
+ * current ブランチとデフォルトブランチのリモートrefも対象に含め、
+ * リモートが先行している場合もグラフに表示する。
  * date-order で時系列ソートして返す。
  */
 export async function getGitLog({
@@ -43,8 +81,23 @@ export async function getGitLog({
 }): Promise<{ commits: GitCommit[]; defaultBranch?: string }> {
   const count = Math.min(maxCount ?? DEFAULT_MAX_COUNT, DEFAULT_MAX_COUNT);
   const format = ["%H", "%P", "%aN", "%at", "%s", "%D"].join(FIELD_SEPARATOR);
-  const defaultBranch = await resolveDefaultBranch(cwd);
-  const refs = defaultBranch ? ["HEAD", defaultBranch] : ["HEAD"];
+  const [defaultBranch, currentBranch] = await Promise.all([
+    resolveDefaultBranch(cwd),
+    resolveCurrentBranch(cwd),
+  ]);
+  // current と default のリモートrefを並列で解決
+  const branchesToCheck = new Set(
+    [currentBranch, defaultBranch].filter((b): b is string => b !== undefined),
+  );
+  const remoteRefs = await Promise.all(
+    [...branchesToCheck].map((branch) => resolveRemoteRef({ cwd, branch })),
+  );
+
+  const refs = ["HEAD"];
+  if (defaultBranch) refs.push(defaultBranch);
+  for (const remoteRef of remoteRefs) {
+    if (remoteRef) refs.push(remoteRef);
+  }
 
   const args = [
     "git",
