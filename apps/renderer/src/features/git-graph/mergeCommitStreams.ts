@@ -18,15 +18,17 @@ export function mergeCommitStreams({
 
   const headHashSet = new Set(headCommits.map((c) => c.hash));
 
-  // defaultBranchCommits を先頭から走査し、headHashSet に含まれるコミットに当たったら「繋がる」
-  let connected = false;
+  // defaultBranchCommits 全体を走査し、head 側にないコミットを収集する。
+  // date-order ではマージにより共有コミットが途中に混在するため、
+  // 最初の共有コミットで打ち切ると必要な祖先を落とす。
   const defaultOnly: GitCommit[] = [];
+  let connected = false;
   for (const commit of defaultBranchCommits) {
     if (headHashSet.has(commit.hash)) {
       connected = true;
-      break;
+    } else {
+      defaultOnly.push(commit);
     }
-    defaultOnly.push(commit);
   }
 
   // 繋がらない場合は headCommits のみ
