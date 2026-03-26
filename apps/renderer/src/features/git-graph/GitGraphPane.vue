@@ -12,7 +12,7 @@ Git commit graph showing the current worktree branch and the default branch.
 import type { GitCommit, GitPullRequest } from "@gozd/rpc";
 import { UNCOMMITTED_HASH } from "@gozd/rpc";
 import { storeToRefs } from "pinia";
-import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRpc } from "../../shared/rpc";
 import { ResizeHandle } from "../layout";
 import { useGitStatusStore, useWorktreeStore } from "../worktree";
@@ -122,13 +122,14 @@ let lastUpstream = "";
 /** loadLog の世代管理。並行実行で古いレスポンスが後着して上書きするのを防ぐ */
 let loadLogGen = 0;
 
-async function loadLog() {
+/** @returns 世代チェックを通過して state を更新した場合 true */
+async function loadLog(): Promise<boolean> {
   const gen = ++loadLogGen;
   const result = await request.gitLog({
     maxCount: 200,
     firstParentOnly: firstParentOnly.value || undefined,
   });
-  if (gen !== loadLogGen) return;
+  if (gen !== loadLogGen) return false;
 
   const merged = mergeCommitStreams({
     headCommits: result.headCommits,
@@ -149,16 +150,20 @@ async function loadLog() {
   if (isStale(selectedHash) || isStale(compareHash)) {
     gitGraphStore.resetSelection();
   }
+  return true;
 }
 
 onMounted(loadLog);
 
-// worktree 切り替え時に再取得し、選択をクリア
+// worktree 切り替え時に再取得し、HEAD にスクロール
 watch(
   () => worktreeStore.dir,
-  () => {
+  async () => {
     gitGraphStore.resetSelection();
-    void loadLog();
+    const updated = await loadLog();
+    if (!updated) return;
+    await nextTick();
+    scrollToHead();
   },
 );
 
@@ -186,7 +191,12 @@ const disposeGitStatus = onGitStatusChange(({ head, upstream }) => {
   if (upstreamChanged) lastUpstream = upstreamKey;
 
   if (headChanged || upstreamChanged) {
-    void loadLog();
+    void (async () => {
+      const updated = await loadLog();
+      if (!updated || !headChanged) return;
+      await nextTick();
+      scrollToHead();
+    })();
   }
   // upstream 変化（push/fetch）時に PR 一覧も再取得
   if (upstreamChanged) {
@@ -432,12 +442,20 @@ function selectedIndex(): number {
   return hashToIndex.value.get(gitGraphStore.selectedHash) ?? -1;
 }
 
-/** HEAD コミットを選択してスクロール */
+/** HEAD コミットを選択してビューポート中央にスクロール */
 function scrollToHead() {
   const index = layout.value.nodes.findIndex((n) => n.commit.refs.includes("HEAD"));
   if (index === -1) return;
   gitGraphStore.select(layout.value.nodes[index].commit.hash);
-  scrollToIndex(index);
+  scrollToCenter(index);
+}
+
+/** 指定行をビューポート中央にスクロール */
+function scrollToCenter(index: number) {
+  const container = scrollContainer.value;
+  if (!container) return;
+  const rowCenter = index * ROW_HEIGHT + ROW_HEIGHT / 2;
+  container.scrollTop = rowCenter - container.clientHeight / 2;
 }
 
 /** 選択行をビューポート内にスクロール */
