@@ -65,13 +65,14 @@ export function useListNavigation(options: UseListNavigationOptions): UseListNav
     selectedIndex.value = indices[nextPos];
   }
 
-  /** リスト表示領域に収まる行数を算出する */
+  /** リスト表示領域に収まる行数を算出する。selectable な行の高さを基準にする */
   function getPageSize(): number {
     const list = listRef.value;
     if (list === null) return 1;
-    const firstRow = list.children[0] as HTMLElement | undefined;
-    if (firstRow === undefined) return 1;
-    return Math.max(1, Math.floor(list.clientHeight / firstRow.offsetHeight));
+    const baseIndex = selectableIndices !== undefined ? (selectableIndices.value[0] ?? 0) : 0;
+    const row = list.children[baseIndex] as HTMLElement | undefined;
+    if (row === undefined) return 1;
+    return Math.max(1, Math.floor(list.clientHeight / row.offsetHeight));
   }
 
   function reset(index?: number) {
