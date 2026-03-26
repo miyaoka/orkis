@@ -153,12 +153,12 @@ async function loadLog() {
 
 onMounted(loadLog);
 
-// worktree 切り替え時に再取得し、選択をクリア
+// worktree 切り替え時に再取得し、HEAD にスクロール
 watch(
   () => worktreeStore.dir,
   () => {
     gitGraphStore.resetSelection();
-    void loadLog();
+    void loadLog().then(() => scrollToHead());
   },
 );
 
@@ -186,7 +186,9 @@ const disposeGitStatus = onGitStatusChange(({ head, upstream }) => {
   if (upstreamChanged) lastUpstream = upstreamKey;
 
   if (headChanged || upstreamChanged) {
-    void loadLog();
+    void loadLog().then(() => {
+      if (headChanged) scrollToHead();
+    });
   }
   // upstream 変化（push/fetch）時に PR 一覧も再取得
   if (upstreamChanged) {
@@ -432,12 +434,20 @@ function selectedIndex(): number {
   return hashToIndex.value.get(gitGraphStore.selectedHash) ?? -1;
 }
 
-/** HEAD コミットを選択してスクロール */
+/** HEAD コミットを選択してビューポート中央にスクロール */
 function scrollToHead() {
   const index = layout.value.nodes.findIndex((n) => n.commit.refs.includes("HEAD"));
   if (index === -1) return;
   gitGraphStore.select(layout.value.nodes[index].commit.hash);
-  scrollToIndex(index);
+  scrollToCenter(index);
+}
+
+/** 指定行をビューポート中央にスクロール */
+function scrollToCenter(index: number) {
+  const container = scrollContainer.value;
+  if (!container) return;
+  const rowCenter = index * ROW_HEIGHT + ROW_HEIGHT / 2;
+  container.scrollTop = rowCenter - container.clientHeight / 2;
 }
 
 /** 選択行をビューポート内にスクロール */
