@@ -173,7 +173,7 @@ export type GozdRPC = {
       /** git log でコミット履歴を取得（現在ブランチ + main） */
       gitLog: {
         params: { maxCount?: number; firstParentOnly?: boolean };
-        response: GitCommit[];
+        response: { commits: GitCommit[]; defaultBranch?: string };
       };
       /** git worktree list で worktree 一覧を取得 */
       gitWorktreeList: {
@@ -281,7 +281,11 @@ export type GozdRPC = {
       ptyData: { id: number; data: string };
       ptyExit: { id: number; exitCode: number };
       fsChange: { relDir: string };
-      gitStatusChange: { statuses: Record<string, string>; head: string };
+      gitStatusChange: {
+        statuses: Record<string, string>;
+        head: string;
+        upstream?: { ahead: number; behind: number };
+      };
       /** 非アクティブ worktree でファイル変更が検知された通知 */
       worktreeChange: void;
       gozdOpen: {

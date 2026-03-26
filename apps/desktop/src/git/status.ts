@@ -16,6 +16,8 @@ export interface GitStatusResult {
   statuses: Record<string, string>;
   /** HEAD のフルコミットハッシュ。取得できない場合は空文字列 */
   head: string;
+  /** upstream に対する ahead/behind。push/fetch の検知に使用 */
+  upstream?: { ahead: number; behind: number };
 }
 
 /**
@@ -35,6 +37,7 @@ export async function getGitStatus(cwd: string): Promise<GitStatusResult> {
   const stdout = result.value;
   const statuses: Record<string, string> = {};
   let head = "";
+  let upstream: { ahead: number; behind: number } | undefined;
   const parts = stdout.split("\0");
   let i = 0;
   while (i < parts.length) {
@@ -49,6 +52,15 @@ export async function getGitStatus(cwd: string): Promise<GitStatusResult> {
       const oid = entry.slice("# branch.oid ".length);
       if (oid !== "(initial)") {
         head = oid;
+      }
+      i++;
+      continue;
+    }
+    // branch ahead/behind（# branch.ab +N -M）
+    if (entry.startsWith("# branch.ab ")) {
+      const abMatch = entry.match(/^# branch\.ab \+(\d+) -(\d+)$/);
+      if (abMatch) {
+        upstream = { ahead: Number(abMatch[1]), behind: Number(abMatch[2]) };
       }
       i++;
       continue;
@@ -106,7 +118,7 @@ export async function getGitStatus(cwd: string): Promise<GitStatusResult> {
 
     i++;
   }
-  return { statuses, head };
+  return { statuses, head, upstream };
 }
 
 /** 文字列中の n 番目の char の位置を返す。見つからなければ -1 */

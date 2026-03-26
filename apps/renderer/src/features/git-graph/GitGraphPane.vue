@@ -26,6 +26,7 @@ const gitGraphStore = useGitGraphStore();
 const { gitStatuses } = storeToRefs(gitStatusStore);
 
 const commits = ref<GitCommit[]>([]);
+const defaultBranch = ref<string | undefined>();
 const layout = ref<GraphLayout>({ nodes: [], lines: [], maxLanes: 1 });
 const firstParentOnly = ref(false);
 
@@ -67,6 +68,8 @@ function recomputeLayout() {
 
 /** 前回の HEAD ハッシュ。gitStatusChange で変化を検知するために使用 */
 let lastHead = "";
+/** 前回の upstream ahead/behind。push/fetch による ref 変化を検知するために使用 */
+let lastUpstream = "";
 /** loadLog の世代管理。並行実行で古いレスポンスが後着して上書きするのを防ぐ */
 let loadLogGen = 0;
 
@@ -77,14 +80,15 @@ async function loadLog() {
     firstParentOnly: firstParentOnly.value || undefined,
   });
   if (gen !== loadLogGen) return;
-  commits.value = result;
-  lastHead = findHeadCommit(result)?.hash ?? "";
+  commits.value = result.commits;
+  defaultBranch.value = result.defaultBranch;
+  lastHead = findHeadCommit(result.commits)?.hash ?? "";
   recomputeLayout();
 
   // 選択中・比較中のコミットが一覧から消えた場合はクリア
   const { selectedHash, compareHash } = gitGraphStore;
   const isStale = (hash: string | null): boolean =>
-    hash !== null && hash !== UNCOMMITTED_HASH && !result.some((c) => c.hash === hash);
+    hash !== null && hash !== UNCOMMITTED_HASH && !result.commits.some((c) => c.hash === hash);
 
   if (isStale(selectedHash) || isStale(compareHash)) {
     gitGraphStore.resetSelection();
@@ -111,12 +115,17 @@ watch(firstParentOnly, () => {
 // git status 変更時は uncommitted 行の件数を再計算
 watch(uncommittedChangeCount, recomputeLayout);
 
-// HEAD 変更（コミット、リベース等）を検知して git log を再取得する。
-// gitStatusChange の payload に含まれる head ハッシュを前回と比較し、
-// 変化があった場合のみ git log を再取得する（ファイル保存では走らない）。
-const disposeGitStatus = onGitStatusChange(({ head }) => {
-  if (head && head !== lastHead) {
-    lastHead = head;
+// HEAD 変更（コミット、リベース等）や upstream 変更（push、fetch）を検知して git log を再取得する。
+// head ハッシュまたは ahead/behind の変化があった場合のみ再取得する（ファイル保存では走らない）。
+const disposeGitStatus = onGitStatusChange(({ head, upstream }) => {
+  const upstreamKey = upstream ? `${upstream.ahead}/${upstream.behind}` : "";
+  const headChanged = head && head !== lastHead;
+  const upstreamChanged = upstreamKey !== lastUpstream;
+
+  if (headChanged) lastHead = head;
+  if (upstreamChanged) lastUpstream = upstreamKey;
+
+  if (headChanged || upstreamChanged) {
     void loadLog();
   }
 });
@@ -190,13 +199,99 @@ function isMergeCommit(commit: GitCommit): boolean {
   return commit.parents.length > 1;
 }
 
-/** ref バッジの色分け */
-function refClass(refName: string): string {
-  if (refName === "HEAD") return "bg-yellow-600 text-yellow-100";
-  if (refName.startsWith("origin/")) return "bg-red-800 text-red-200";
-  if (refName.startsWith("tag:")) return "bg-blue-800 text-blue-200";
-  return "bg-green-800 text-green-200";
+/** HEAD を含むかどうか */
+function hasHead(refs: string[]): boolean {
+  return refs.includes("HEAD");
 }
+
+interface DisplayRef {
+  label: string;
+  type: "current" | "default" | "local" | "remote" | "synced" | "tag";
+  /** origin と同じコミットにあるか */
+  isSynced: boolean;
+}
+
+/**
+ * refs 配列から HEAD が指すカレントブランチ名を取得する。
+ * git log の %D は "HEAD -> branch" をパース後 ["HEAD", "branch", ...] の順になるため、
+ * HEAD の直後の非 origin/非 tag エントリがカレントブランチ。
+ */
+function findCurrentBranch(refs: string[]): string | undefined {
+  const headIdx = refs.indexOf("HEAD");
+  if (headIdx === -1) return undefined;
+  const next = refs[headIdx + 1];
+  if (next && !next.startsWith("origin/") && !next.startsWith("tag:")) {
+    return next;
+  }
+  return undefined;
+}
+
+/**
+ * refs 配列を表示用に整理する。
+ * - HEAD / origin/HEAD は除外（HEAD は → マーカーで別途表示）
+ * - origin/xxx とローカル xxx が一致する場合は統合して synced タイプにする
+ * - HEAD が指すブランチは current、defaultBranch と一致するブランチは default タイプにする
+ */
+function computeDisplayRefs(refs: string[], defaultBranchName?: string): DisplayRef[] {
+  const currentBranch = findCurrentBranch(refs);
+  const filtered = refs.filter((r) => r !== "HEAD" && r !== "origin/HEAD");
+  const locals = new Set(filtered.filter((r) => !r.startsWith("origin/") && !r.startsWith("tag:")));
+  const remotes = new Set(
+    filtered.filter((r) => r.startsWith("origin/")).map((r) => r.slice("origin/".length)),
+  );
+  const tags = filtered.filter((r) => r.startsWith("tag:"));
+
+  const result: DisplayRef[] = [];
+
+  // ローカルブランチ
+  for (const local of locals) {
+    const isSynced = remotes.has(local);
+    if (isSynced) remotes.delete(local);
+
+    if (local === currentBranch) {
+      result.push({ label: local, type: "current", isSynced });
+    } else if (local === defaultBranchName) {
+      result.push({ label: local, type: "default", isSynced });
+    } else if (isSynced) {
+      result.push({ label: local, type: "synced", isSynced: true });
+    } else {
+      result.push({ label: local, type: "local", isSynced: false });
+    }
+  }
+
+  // origin のみ（ローカルに対応がない）
+  for (const remote of remotes) {
+    if (remote === defaultBranchName) {
+      result.push({ label: `origin/${remote}`, type: "default", isSynced: false });
+    } else {
+      result.push({ label: `origin/${remote}`, type: "remote", isSynced: false });
+    }
+  }
+
+  // タグ
+  for (const tag of tags) {
+    result.push({ label: tag.slice("tag:".length), type: "tag", isSynced: false });
+  }
+
+  return result;
+}
+
+/**
+ * ref バッジの色分け。
+ * - current（カレントブランチ）: 黄色
+ * - local / synced / default（ローカル系）: 青
+ * - remote（リモートのみ）: 紫
+ * - tag: 青（local と同系）
+ * synced は isSynced フラグで判定し、current ならカレント色、それ以外はローカル色になる。
+ */
+const REF_TYPE_CLASS: Record<DisplayRef["type"], string> = {
+  current: "bg-yellow-500 text-black",
+  default: "bg-blue-800 text-blue-200 ring-1 ring-inset ring-blue-400",
+  synced: "bg-blue-800 text-blue-200",
+  local: "bg-blue-800 text-blue-200",
+  remote: "bg-purple-800 text-purple-200",
+  tag: "bg-blue-800 text-blue-200",
+};
 
 /** 日付フォーマット（短い形式） */
 function formatDate(timestamp: number): string {
@@ -346,13 +441,23 @@ function isInRange(hash: string): boolean {
         <div
           v-for="node in layout.nodes"
           :key="node.commit.hash"
-          class="_graph-row flex cursor-pointer items-center text-xs"
+          class="_graph-row relative flex cursor-pointer items-center text-xs"
           :class="rowHighlightClass(node.commit.hash)"
           :style="{ height: `${ROW_HEIGHT}px` }"
           @click="onRowClick(node.commit.hash, $event)"
         >
           <!-- Graph spacer -->
           <div class="shrink-0" :style="{ width: `${graphColumnWidth}px` }" />
+
+          <!-- HEAD marker: グラフ列の右端に absolute 配置。レイアウトに影響しない -->
+          <span
+            v-if="hasHead(node.commit.refs)"
+            class="absolute text-yellow-500"
+            :style="{ left: `${graphColumnWidth}px`, transform: 'translateX(calc(-100% - 4px))' }"
+            title="HEAD"
+          >
+            →
+          </span>
 
           <!-- Description -->
           <div class="flex min-w-0 flex-1 items-center gap-1 truncate pr-2">
@@ -361,12 +466,13 @@ function isInRange(hash: string): boolean {
               class="icon-[lucide--git-merge] size-3.5 shrink-0 text-zinc-500"
             />
             <span
-              v-for="ref in node.commit.refs"
-              :key="ref"
-              class="shrink-0 rounded-sm px-1 py-0.5 text-[10px] leading-none font-medium"
-              :class="refClass(ref)"
+              v-for="displayRef in computeDisplayRefs(node.commit.refs, defaultBranch)"
+              :key="`${displayRef.type}:${displayRef.label}`"
+              class="flex shrink-0 items-center gap-0.5 rounded-sm px-1 py-0.5 text-[10px] leading-none font-medium"
+              :class="REF_TYPE_CLASS[displayRef.type]"
             >
-              {{ ref.startsWith("tag:") ? ref.slice(4) : ref }}
+              <span v-if="displayRef.isSynced" class="icon-[lucide--refresh-cw] size-2.5" />
+              {{ displayRef.label }}
             </span>
             <span
               class="truncate"

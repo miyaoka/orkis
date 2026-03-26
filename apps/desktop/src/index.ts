@@ -341,31 +341,56 @@ function startWatching(win: GozdWindow, root: string) {
     const indexPath = path.join(gitDir, "index");
     const headPath = path.join(gitDir, "HEAD");
 
+    /** git rev-parse --git-path で ref 名を実ファイルパスに解決する */
+    async function resolveRefPath(refName: string): Promise<string | undefined> {
+      const result = await tryCatch(
+        new Response(
+          Bun.spawn(["git", "rev-parse", "--git-path", refName], { cwd: root }).stdout,
+        ).text(),
+      );
+      if (!result.ok) return undefined;
+      const resolved = result.value.trim();
+      return path.isAbsolute(resolved) ? resolved : path.resolve(root, resolved);
+    }
+
     /** HEAD が指す ref の実ファイルパスを解決する。worktree では refs は commondir にあるため git に解決させる */
     async function resolveCurrentRefPath(): Promise<string | undefined> {
       try {
         const headContent = fs.readFileSync(headPath, "utf-8").trim();
         if (!headContent.startsWith("ref: ")) return undefined;
         const refName = headContent.slice(5);
-        const result = await tryCatch(
-          new Response(
-            Bun.spawn(["git", "rev-parse", "--git-path", refName], { cwd: root }).stdout,
-          ).text(),
-        );
-        if (!result.ok) return undefined;
-        const resolved = result.value.trim();
-        return path.isAbsolute(resolved) ? resolved : path.resolve(root, resolved);
+        return await resolveRefPath(refName);
       } catch {
         // detached HEAD 等
       }
       return undefined;
     }
 
+    /**
+     * 現在のブランチに対応するリモート追跡 ref のパスを解決する。
+     * refs/heads/foo → refs/remotes/origin/foo
+     */
+    async function resolveRemoteRefPath(): Promise<string | undefined> {
+      try {
+        const headContent = fs.readFileSync(headPath, "utf-8").trim();
+        if (!headContent.startsWith("ref: ")) return undefined;
+        const refName = headContent.slice(5);
+        // refs/heads/foo → refs/remotes/origin/foo
+        if (!refName.startsWith("refs/heads/")) return undefined;
+        const branchName = refName.slice("refs/heads/".length);
+        return await resolveRefPath(`refs/remotes/origin/${branchName}`);
+      } catch {
+        return undefined;
+      }
+    }
+
     let currentRefPath = await resolveCurrentRefPath();
+    let remoteRefPath = await resolveRemoteRefPath();
 
     function syncGitWatchedFiles() {
       const files = [indexPath, headPath];
       if (currentRefPath) files.push(currentRefPath);
+      if (remoteRefPath) files.push(remoteRefPath);
       windowGitWatchedFiles.set(win, files);
     }
 
@@ -374,20 +399,35 @@ function startWatching(win: GozdWindow, root: string) {
 
     async function updateRefWatch() {
       const gen = ++refWatchGen;
-      const newRefPath = await resolveCurrentRefPath();
+      const [newRefPath, newRemoteRefPath] = await Promise.all([
+        resolveCurrentRefPath(),
+        resolveRemoteRefPath(),
+      ]);
       // 非同期中に別の呼び出しが走っていたらこの結果は stale
       if (gen !== refWatchGen) return;
-      if (newRefPath === currentRefPath) return;
 
-      if (currentRefPath) {
-        fs.unwatchFile(currentRefPath);
+      // ローカル ref の更新
+      if (newRefPath !== currentRefPath) {
+        if (currentRefPath) fs.unwatchFile(currentRefPath);
+        currentRefPath = newRefPath;
+        if (currentRefPath) {
+          fs.watchFile(currentRefPath, { interval: GIT_WATCH_POLL_MS }, () => {
+            scheduleGitStatusUpdate(win, root);
+          });
+        }
       }
-      currentRefPath = newRefPath;
-      if (currentRefPath) {
-        fs.watchFile(currentRefPath, { interval: GIT_WATCH_POLL_MS }, () => {
-          scheduleGitStatusUpdate(win, root);
-        });
+
+      // リモート追跡 ref の更新
+      if (newRemoteRefPath !== remoteRefPath) {
+        if (remoteRefPath) fs.unwatchFile(remoteRefPath);
+        remoteRefPath = newRemoteRefPath;
+        if (remoteRefPath) {
+          fs.watchFile(remoteRefPath, { interval: GIT_WATCH_POLL_MS }, () => {
+            scheduleGitStatusUpdate(win, root);
+          });
+        }
       }
+
       syncGitWatchedFiles();
     }
 
@@ -402,6 +442,11 @@ function startWatching(win: GozdWindow, root: string) {
 
     if (currentRefPath) {
       fs.watchFile(currentRefPath, { interval: GIT_WATCH_POLL_MS }, () => {
+        scheduleGitStatusUpdate(win, root);
+      });
+    }
+    if (remoteRefPath) {
+      fs.watchFile(remoteRefPath, { interval: GIT_WATCH_POLL_MS }, () => {
         scheduleGitStatusUpdate(win, root);
       });
     }
