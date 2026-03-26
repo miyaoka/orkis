@@ -68,6 +68,8 @@ function recomputeLayout() {
 
 /** 前回の HEAD ハッシュ。gitStatusChange で変化を検知するために使用 */
 let lastHead = "";
+/** 前回の upstream ahead/behind。push/fetch による ref 変化を検知するために使用 */
+let lastUpstream = "";
 /** loadLog の世代管理。並行実行で古いレスポンスが後着して上書きするのを防ぐ */
 let loadLogGen = 0;
 
@@ -113,12 +115,17 @@ watch(firstParentOnly, () => {
 // git status 変更時は uncommitted 行の件数を再計算
 watch(uncommittedChangeCount, recomputeLayout);
 
-// HEAD 変更（コミット、リベース等）を検知して git log を再取得する。
-// gitStatusChange の payload に含まれる head ハッシュを前回と比較し、
-// 変化があった場合のみ git log を再取得する（ファイル保存では走らない）。
-const disposeGitStatus = onGitStatusChange(({ head }) => {
-  if (head && head !== lastHead) {
-    lastHead = head;
+// HEAD 変更（コミット、リベース等）や upstream 変更（push、fetch）を検知して git log を再取得する。
+// head ハッシュまたは ahead/behind の変化があった場合のみ再取得する（ファイル保存では走らない）。
+const disposeGitStatus = onGitStatusChange(({ head, upstream }) => {
+  const upstreamKey = upstream ? `${upstream.ahead}/${upstream.behind}` : "";
+  const headChanged = head && head !== lastHead;
+  const upstreamChanged = upstreamKey !== lastUpstream;
+
+  if (headChanged) lastHead = head;
+  if (upstreamChanged) lastUpstream = upstreamKey;
+
+  if (headChanged || upstreamChanged) {
     void loadLog();
   }
 });
