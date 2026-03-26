@@ -37,6 +37,12 @@ describe("mergeCommitStreams", () => {
     expect(hashes(result)).toEqual(["a", "b"]);
   });
 
+  test("headCommits が空の場合は空配列を返す", () => {
+    const def = [commit({ hash: "x", date: 5 })];
+    const result = mergeCommitStreams({ headCommits: [], defaultBranchCommits: def });
+    expect(hashes(result)).toEqual([]);
+  });
+
   test("共有コミットがない場合は headCommits のみ返す", () => {
     const head = [commit({ hash: "a", date: 3 }), commit({ hash: "b", date: 2 })];
     const def = [commit({ hash: "x", date: 5 }), commit({ hash: "y", date: 4 })];
