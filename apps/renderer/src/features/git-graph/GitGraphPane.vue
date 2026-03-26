@@ -603,7 +603,7 @@ function isInRange(hash: string): boolean {
           <div
             v-for="node in layout.nodes"
             :key="node.commit.hash"
-            class="_graph-row relative flex cursor-pointer items-center text-xs"
+            class="_graph-row relative flex items-center text-xs"
             :class="rowHighlightClass(node.commit.hash)"
             :style="{ height: `${ROW_HEIGHT}px` }"
             @click="onRowClick(node.commit.hash, $event)"

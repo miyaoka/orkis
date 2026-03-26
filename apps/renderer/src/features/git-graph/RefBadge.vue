@@ -14,7 +14,7 @@ const props = defineProps<{
 
 /** DisplayRef からブランチ名を抽出し、対応する PR を返す */
 const pr = computed(() => {
-  if (props.displayRef.type === "tag") return undefined;
+  if (props.displayRef.type === "tag" || props.displayRef.type === "local") return undefined;
   const branchName =
     props.displayRef.type === "remote"
       ? props.displayRef.label.slice("origin/".length)
@@ -32,22 +32,24 @@ const REF_TYPE_CLASS: Record<DisplayRef["type"], string> = {
 const CURRENT_LOCAL_CLASS = "bg-yellow-500 text-black";
 const CURRENT_REMOTE_CLASS = "bg-yellow-500 text-black opacity-50";
 const DEFAULT_CLASS = "ring-1 ring-inset ring-current";
+
+function openPrUrl(url: string) {
+  window.open(url);
+}
 </script>
 
 <template>
   <!-- PR number badge (left of branch label) -->
-  <a
+  <span
     v-if="pr"
-    class="flex shrink-0 cursor-pointer items-center gap-0.5 rounded-sm px-1 py-0.5 text-[10px] leading-none font-medium no-underline"
+    class="flex shrink-0 cursor-pointer items-center gap-0.5 rounded-sm px-1 py-0.5 text-[10px] leading-none font-medium"
     :class="pr.isDraft ? 'bg-zinc-700 text-zinc-300' : 'bg-purple-800 text-purple-200'"
-    :href="pr.url"
-    target="_blank"
     :title="`PR #${pr.number}${pr.isDraft ? ' (draft)' : ''}`"
-    @click.stop
+    @click.stop="openPrUrl(pr.url)"
   >
     <span class="icon-[lucide--git-pull-request] size-3" />
     #{{ pr.number }}
-  </a>
+  </span>
   <!-- Branch label -->
   <span
     class="flex shrink-0 items-center gap-0.5 rounded-sm px-1 py-0.5 text-[10px] leading-none font-medium"

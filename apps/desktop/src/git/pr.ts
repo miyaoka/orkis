@@ -7,9 +7,11 @@ import { tryCatch } from "@gozd/shared";
  */
 export async function getPrList(cwd: string): Promise<GitPullRequest[]> {
   const result = await tryCatch(
-    Bun.$`gh pr list --state open --json number,url,headRefName,state,isDraft --limit 100`
-      .cwd(cwd)
-      .text(),
+    Promise.resolve(
+      Bun.$`gh pr list --state open --json number,url,headRefName,state,isDraft --limit 100`
+        .cwd(cwd)
+        .text(),
+    ),
   );
   if (!result.ok) return [];
 
