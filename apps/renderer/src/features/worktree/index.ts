@@ -6,4 +6,3 @@ export {
   resolveGitChangeKind,
 } from "./gitStatusUtils";
 export type { GitChangeKind } from "./gitStatusUtils";
-export { normalizePath } from "./pathUtils";

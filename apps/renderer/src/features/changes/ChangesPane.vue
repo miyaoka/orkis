@@ -11,11 +11,12 @@ Changed files list. Shows HEAD vs working directory by default, or a selected co
 
 <script setup lang="ts">
 import type { GitFileChange } from "@gozd/rpc";
+import { UNCOMMITTED_HASH } from "@gozd/rpc";
 import { tryCatch } from "@gozd/shared";
 import { computed, ref, watch } from "vue";
 import { useRpc } from "../../shared/rpc";
 import { getFileIconName, getIconUrl } from "../filer";
-import { UNCOMMITTED_HASH, useGitGraphStore } from "../git-graph";
+import { useGitGraphStore } from "../git-graph";
 import { useGitStatusStore, resolveGitChangeKind } from "../worktree";
 import type { GitChangeKind } from "../worktree";
 
