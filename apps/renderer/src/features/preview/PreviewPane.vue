@@ -31,6 +31,7 @@ import CodePreview from "./CodePreview.vue";
 import DiffPreview from "./DiffPreview.vue";
 import ImagePreview from "./ImagePreview.vue";
 import MarkdownPreview from "./MarkdownPreview.vue";
+import { previewFontFamily, previewFontSize } from "./previewConfig";
 
 type PreviewMode = "current" | "diff" | "original";
 
@@ -354,7 +355,13 @@ const headerIconUrl = computed(() => {
       </div>
 
       <!-- コンテンツ -->
-      <div class="flex-1 overflow-auto">
+      <div
+        class="flex-1 overflow-auto"
+        :style="{
+          fontFamily: previewFontFamily || undefined,
+          fontSize: previewFontSize > 0 ? `${previewFontSize}px` : undefined,
+        }"
+      >
         <div v-if="loading" class="p-4 text-sm text-zinc-500">Loading...</div>
 
         <div v-else-if="isDirectory" class="p-4 text-sm text-zinc-500">Directory</div>

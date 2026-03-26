@@ -82,17 +82,16 @@ export interface OpenTargetSelection {
   relPath: string;
 }
 
-/** VOICEVOX 音声合成の設定 */
-export interface VoicevoxConfig {
-  enabled: boolean;
-  speedScale: number;
-  volumeScale: number;
-}
-
-/** アプリのグローバル設定 */
+/** アプリのグローバル設定（フラットなドット記法） */
 export interface AppConfig {
-  voicevox?: VoicevoxConfig;
-  terminalTheme?: string;
+  "terminal.fontFamily"?: string;
+  "terminal.fontSize"?: number;
+  "terminal.theme"?: string;
+  "preview.fontFamily"?: string;
+  "preview.fontSize"?: number;
+  "voicevox.enabled"?: boolean;
+  "voicevox.speedScale"?: number;
+  "voicevox.volumeScale"?: number;
 }
 
 /** プロジェクト固有設定の zod スキーマ */

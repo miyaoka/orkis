@@ -1,0 +1,98 @@
+/** グローバル設定（AppConfig）のスキーマ定義 */
+
+import { darkThemeNames, lightThemeNames } from "@gozd/themes";
+import type { SettingSection } from "./types";
+
+/** テーマ名の一覧を返す（空文字列 = デフォルト） */
+function getThemeOptions(): readonly string[] {
+  return ["", ...darkThemeNames, ...lightThemeNames];
+}
+
+/** セクション配列からキー → デフォルト値のマップを構築する */
+function buildDefaults(sections: readonly SettingSection[]): Record<string, unknown> {
+  const defaults: Record<string, unknown> = {};
+  for (const section of sections) {
+    for (const [key, setting] of Object.entries(section.settings)) {
+      defaults[key] = setting.defaultValue;
+    }
+  }
+  return defaults;
+}
+
+export const globalSettingsSections: readonly SettingSection[] = [
+  {
+    title: "Terminal",
+    settings: {
+      "terminal.theme": {
+        widget: "enum",
+        label: "Theme",
+        description: "Color theme for terminal",
+        defaultValue: "",
+        options: getThemeOptions,
+      },
+      "terminal.fontFamily": {
+        widget: "string",
+        label: "Font Family",
+        defaultValue: "",
+        placeholder: "Menlo, monospace",
+      },
+      "terminal.fontSize": {
+        widget: "number",
+        label: "Font Size",
+        defaultValue: 14,
+        min: 6,
+        max: 32,
+        step: 1,
+      },
+    },
+  },
+  {
+    title: "Preview",
+    settings: {
+      "preview.fontFamily": {
+        widget: "string",
+        label: "Font Family",
+        defaultValue: "",
+        placeholder: "Menlo, monospace",
+      },
+      "preview.fontSize": {
+        widget: "number",
+        label: "Font Size",
+        defaultValue: 14,
+        min: 6,
+        max: 32,
+        step: 1,
+      },
+    },
+  },
+  {
+    title: "VOICEVOX",
+    settings: {
+      "voicevox.enabled": {
+        widget: "boolean",
+        label: "Enabled",
+        description: "Enable VOICEVOX text-to-speech for Claude responses",
+        defaultValue: false,
+      },
+      "voicevox.speedScale": {
+        widget: "number",
+        label: "Speed",
+        defaultValue: 1.5,
+        min: 0.5,
+        max: 3.0,
+        step: 0.1,
+      },
+      "voicevox.volumeScale": {
+        widget: "number",
+        label: "Volume",
+        defaultValue: 1.0,
+        min: 0.0,
+        max: 2.0,
+        step: 0.1,
+      },
+    },
+  },
+];
+
+/** スキーマのデフォルト値マップ。config.json に値がないキーのフォールバックに使う */
+export const globalSettingsDefaults = buildDefaults(globalSettingsSections);

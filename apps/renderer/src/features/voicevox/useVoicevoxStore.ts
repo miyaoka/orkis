@@ -146,11 +146,12 @@ export const useVoicevoxStore = defineStore("voicevox", () => {
   // 起動時に設定を読み込み、enabled なら Engine の起動も試みる
   void tryCatch(request.configLoad()).then(async (result) => {
     if (!result.ok) return;
-    const voicevox = result.value.voicevox;
-    if (!voicevox) return;
-    if (typeof voicevox.speedScale === "number") speedScale.value = voicevox.speedScale;
-    if (typeof voicevox.volumeScale === "number") volumeScale.value = voicevox.volumeScale;
-    if (voicevox.enabled) {
+    const config = result.value;
+    if (typeof config["voicevox.speedScale"] === "number")
+      speedScale.value = config["voicevox.speedScale"];
+    if (typeof config["voicevox.volumeScale"] === "number")
+      volumeScale.value = config["voicevox.volumeScale"];
+    if (config["voicevox.enabled"]) {
       enabled.value = true;
       // Engine が起動していなければバックグラウンドで起動だけ試みる（ポーリングしない）
       if (!(await checkEngineRunning())) {
@@ -162,11 +163,9 @@ export const useVoicevoxStore = defineStore("voicevox", () => {
   function saveSettings() {
     void tryCatch(
       request.configSave({
-        voicevox: {
-          enabled: enabled.value,
-          speedScale: speedScale.value,
-          volumeScale: volumeScale.value,
-        },
+        "voicevox.enabled": enabled.value,
+        "voicevox.speedScale": speedScale.value,
+        "voicevox.volumeScale": volumeScale.value,
       }),
     );
   }
