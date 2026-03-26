@@ -15,12 +15,14 @@
     "fix:all": "pnpm -r --include-workspace-root --if-present --no-bail --aggregate-output --reporter=append-only fix",
     "test:all": "pnpm -r --if-present --no-bail --aggregate-output --reporter=append-only test",
     "typecheck:all": "pnpm -r --include-workspace-root --if-present typecheck",
+    "knip": "knip",
     "prepare": "lefthook install"
   },
   "devDependencies": {
     "@types/node": "catalog:",
     "@typescript/native-preview": "catalog:",
     "concurrently": "9.2.1",
+    "knip": "^6.0.3",
     "lefthook": "catalog:",
     "oxfmt": "catalog:",
     "oxlint": "catalog:",
