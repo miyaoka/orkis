@@ -1,4 +1,5 @@
 import type { Todo, WorktreeEntry } from "@gozd/rpc";
+import { tryCatch } from "@gozd/shared";
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRpc } from "../../shared/rpc";
 import { useTerminalStore } from "../terminal";
@@ -68,6 +69,67 @@ export function useSidebarData() {
       }
     },
     { immediate: true },
+  );
+
+  // --- ターミナルタイトル → worktree Todo タイトル同期 ---
+  // RPC 処理中に来た更新は pendingTitle に退避し、完了後に再実行する
+
+  let titleSyncing = false;
+  let pendingSync: { dir: string; title: string } | undefined;
+
+  async function syncTodoTitle(dir: string, title: string) {
+    const wt = worktrees.value.find((w) => w.path === dir);
+    if (!wt) return;
+    if (!wt.todo) {
+      const addResult = await tryCatch(request.todoAdd({ body: title, worktreeDir: dir }));
+      if (addResult.ok) {
+        const freshWt = worktrees.value.find((w) => w.path === dir);
+        if (freshWt) freshWt.todo = addResult.value;
+      }
+      return;
+    }
+    const [firstLine, ...rest] = wt.todo.body.split("\n");
+    if (firstLine === title) return;
+    const newBody = [title, ...rest].join("\n");
+    const result = await tryCatch(
+      request.todoUpdate({ id: wt.todo.id, body: newBody, icon: wt.todo.icon }),
+    );
+    if (result.ok) {
+      const freshWt = worktrees.value.find((w) => w.path === dir);
+      if (freshWt) freshWt.todo = result.value;
+    }
+  }
+
+  async function drainTitleSync(dir: string, title: string) {
+    if (titleSyncing) {
+      pendingSync = { dir, title };
+      return;
+    }
+    titleSyncing = true;
+    try {
+      await syncTodoTitle(dir, title);
+      while (pendingSync !== undefined) {
+        const next = pendingSync;
+        pendingSync = undefined;
+        await syncTodoTitle(next.dir, next.title);
+      }
+    } finally {
+      titleSyncing = false;
+    }
+  }
+
+  watch(
+    () => terminalStore.lastTitleUpdate,
+    (update) => {
+      if (!update?.title) return;
+      const dir = worktreeStore.dir;
+      if (!dir) return;
+      if (terminalStore.getPaneDir(update.leafId) !== dir) return;
+      // Claude Code のステータスプレフィックス（✳ + Braille dots）を除去
+      const title = update.title.replace(/^[\u2733\u2800-\u28FF] /, "");
+      if (!title) return;
+      void drainTitleSync(dir, title);
+    },
   );
 
   const cleanups: Array<() => void> = [];
