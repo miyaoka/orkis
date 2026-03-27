@@ -63,13 +63,16 @@ export function registerPrCommand(): () => void {
               return;
             }
             // PR タイトルを task として作成し、worktree に紐づける
-            await tryCatch(
+            const taskResult = await tryCatch(
               request.taskAdd({
                 body: pr.title,
                 worktreeDir: result.value.dir,
                 prNumber: pr.number,
               }),
             );
+            if (!taskResult.ok) {
+              console.error("Failed to create task for worktree:", taskResult.error);
+            }
             terminalStore.viewMode = "wt";
             worktreeStore.setOpen(result.value.dir, undefined, result.value.fileServerBaseUrl);
           })();
