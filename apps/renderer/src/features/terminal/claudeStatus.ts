@@ -194,10 +194,24 @@ export function createClaudeStatusManager(deps: ClaudeStatusManagerDeps) {
    * PTY の data は任意境界で分割されるため、tail バッファと結合してマッチする。
    */
   function detectInterrupt(ptyId: number, data: string) {
-    if (claudeStatusByPtyId.value[ptyId]?.state !== "working") return;
-
+    const currentState = claudeStatusByPtyId.value[ptyId]?.state;
     const tail = ptyTailBuffers.get(ptyId) ?? "";
-    if ((tail + data).includes(INTERRUPT_MARKER)) {
+    const combined = tail + data;
+
+    // "Interrupted" を含む場合のみログ出力（combined で判定し、チャンク分割にも対応）
+    if (combined.includes("Interrupted")) {
+      const markerMatched = combined.includes(INTERRUPT_MARKER);
+      const idx = combined.indexOf("Interrupted");
+      const preview = combined.slice(Math.max(0, idx - 20), idx + 30);
+      console.debug(
+        `[claude-status] detectInterrupt: ptyId=${ptyId} state=${currentState ?? "undefined"} markerMatched=${markerMatched} tailLen=${tail.length} dataLen=${data.length}`,
+        JSON.stringify(preview),
+      );
+    }
+
+    if (currentState !== "working") return;
+
+    if (combined.includes(INTERRUPT_MARKER)) {
       cancelAskTimer(ptyId);
       claudeStatusByPtyId.value[ptyId] = { state: "idle" };
     }
