@@ -177,7 +177,11 @@ const statusIcons = computed(() => {
         class="text-left text-sm text-zinc-200 after:absolute after:inset-0"
         @click="emit('select', wt)"
       >
-        <span class="line-clamp-2">{{ worktreeDisplayName(wt) }}</span>
+        <span class="line-clamp-2"
+          ><span v-if="wt.task?.prNumber !== undefined" class="mr-1 text-xs text-zinc-400"
+            >#{{ wt.task.prNumber }}</span
+          >{{ worktreeDisplayName(wt) }}</span
+        >
       </button>
       <!-- ⋮ メニューボタン: z-10 で擬似要素の上に出す -->
       <button

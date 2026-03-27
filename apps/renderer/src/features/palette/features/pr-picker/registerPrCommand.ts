@@ -62,6 +62,14 @@ export function registerPrCommand(): () => void {
               console.error("Failed to create worktree:", result.error);
               return;
             }
+            // PR タイトルを task として作成し、worktree に紐づける
+            await tryCatch(
+              request.taskAdd({
+                body: pr.title,
+                worktreeDir: result.value.dir,
+                prNumber: pr.number,
+              }),
+            );
             terminalStore.viewMode = "wt";
             worktreeStore.setOpen(result.value.dir, undefined, result.value.fileServerBaseUrl);
           })();
