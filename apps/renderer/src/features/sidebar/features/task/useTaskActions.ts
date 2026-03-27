@@ -7,10 +7,7 @@ interface UseTaskActionsOptions {
   fetchData: () => Promise<void>;
 }
 
-/**
- * Task の CRUD とインライン編集。
- * worktree に紐づく Task の編集・新規作成を管理する。
- */
+/** worktree に紐づく Task の編集・新規作成を管理する */
 export function useTaskActions({ fetchData }: UseTaskActionsOptions) {
   const { request } = useRpc();
 
