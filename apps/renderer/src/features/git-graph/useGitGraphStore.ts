@@ -23,7 +23,7 @@ export const useGitGraphStore = defineStore("gitGraph", () => {
   /** ユーザー操作による選択のバージョン。select / selectCompare でのみインクリメント */
   const selectionVersion = ref(0);
 
-  /** git log で取得したコミット一覧。GitGraphPane が loadLog() で更新する */
+  /** git log で取得したコミット一覧。GitGraphPane が loadLog() で更新し、ChangesPane が選択状態経由で参照する */
   const commits = ref<GitCommit[]>([]);
 
   /** hash → コミットインデックスのルックアップ */

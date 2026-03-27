@@ -16,7 +16,7 @@
 
 <script setup lang="ts">
 import { useWindowSize } from "@vueuse/core";
-import { computed, nextTick, onUnmounted, ref, useTemplateRef, watch, watchEffect } from "vue";
+import { computed, onUnmounted, ref, useTemplateRef, watch, watchEffect } from "vue";
 import { useAppStore } from "../../shared/app";
 import { useCommandRegistry, useContextKeys } from "../../shared/command";
 import { useProjectStore } from "../../shared/project";
@@ -44,7 +44,6 @@ const appStore = useAppStore();
 const projectStore = useProjectStore();
 const contextKeys = useContextKeys();
 const previewPopoverRef = useTemplateRef<HTMLElement>("previewPopover");
-const navigatorPaneRef = useTemplateRef<InstanceType<typeof NavigatorPane>>("navigatorPane");
 
 // レイアウト・ウィンドウスコープのコマンド登録
 const { register } = useCommandRegistry();
@@ -167,26 +166,21 @@ function onPreviewToggle(e: ToggleEvent) {
   previewOpen.value = e.newState === "open";
 }
 
-// ファイル選択時に Preview を自動オープンし、ツリーを対象パスまで展開する
+// ファイル選択時に Preview を自動オープン
 watch(
   () => worktreeStore.selectedPath,
-  async (path) => {
+  (path) => {
     if (!path) return;
     openPreview();
-    await nextTick();
-    void navigatorPaneRef.value?.reveal(path);
   },
 );
 
-// gozdOpen で同一パスが指定された場合にも Preview を開いてツリーを展開する
+// gozdOpen で同一パスが指定された場合にも Preview を開く
 watch(
   () => worktreeStore.revealVersion,
-  async () => {
-    const path = worktreeStore.selectedPath;
-    if (!path) return;
+  () => {
+    if (!worktreeStore.selectedPath) return;
     openPreview();
-    await nextTick();
-    void navigatorPaneRef.value?.reveal(path);
   },
 );
 
@@ -286,7 +280,10 @@ watchEffect(() => {
       </button>
 
       <div class="shrink-0 overflow-hidden" :style="{ width: `${navigatorWidth}px` }">
-        <NavigatorPane ref="navigatorPane" />
+        <NavigatorPane
+          :reveal-path="worktreeStore.selectedPath"
+          :reveal-version="worktreeStore.revealVersion"
+        />
       </div>
     </div>
 

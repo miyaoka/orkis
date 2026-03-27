@@ -6,18 +6,25 @@ Filer（上）と Changes（下）を垂直分割で表示するコンテナ。
 - Filer が flex-1 で残りスペースを取り、Changes が固定高さ
 - ResizeHandle で上下の比率をリサイズ可能
 - git リポジトリでない場合は Filer のみ表示
-- FilerPane の `reveal()` を親に再公開
+- `revealPath` / `revealVersion` props の変化で FilerPane のツリーを自動展開
 - ChangesPane の `select` emit を `worktreeStore.selectPath()` に接続
 </doc>
 
 <script setup lang="ts">
 import { useElementSize } from "@vueuse/core";
-import { ref, useTemplateRef, watchEffect } from "vue";
+import { nextTick, ref, useTemplateRef, watch, watchEffect } from "vue";
 import { useProjectStore } from "../../shared/project";
 import { ChangesPane } from "../changes";
 import { FilerPane } from "../filer";
 import { ResizeHandle } from "../layout";
 import { useWorktreeStore } from "../worktree";
+
+interface Props {
+  revealPath?: string;
+  revealVersion?: number;
+}
+
+const props = defineProps<Props>();
 
 const HANDLE_HEIGHT = 8;
 const FILER_MIN_HEIGHT = 100;
@@ -49,12 +56,12 @@ function onChangesSelect(relPath: string) {
   worktreeStore.selectPath(relPath);
 }
 
-/** ツリーを展開する */
-async function reveal(targetPath: string): Promise<void> {
-  await filerPaneRef.value?.reveal(targetPath);
-}
-
-defineExpose({ reveal });
+// revealPath / revealVersion の変化で FilerPane のツリーを展開する
+watch([() => props.revealPath, () => props.revealVersion], async ([path]) => {
+  if (!path) return;
+  await nextTick();
+  await filerPaneRef.value?.reveal(path);
+});
 </script>
 
 <template>

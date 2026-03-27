@@ -648,6 +648,7 @@ function isInRange(hash: string): boolean {
         class="ml-auto rounded-sm px-1.5 py-0.5 text-[10px]"
         :class="detailOpen ? 'bg-blue-800 text-blue-200' : 'text-zinc-500 hover:text-zinc-300'"
         title="Toggle commit detail"
+        aria-label="Toggle commit detail"
         @click="detailOpen = !detailOpen"
       >
         <span class="icon-[lucide--panel-right] size-3.5" />
