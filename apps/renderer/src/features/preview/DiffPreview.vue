@@ -1,15 +1,23 @@
 <doc lang="md">
 jsdiff の `diffLines` による行単位の unified diff ビュー。
 追加行（緑）/ 削除行（赤）/ 変更なし行を旧行番号・新行番号付きで表示する。
+
+## シンタックスハイライト
+
+Shiki の `codeToTokens` で original / current それぞれのトークン配列を取得し、
+diff の各行に対応するトークンをマッピングして色付き表示する。
+removed 行は original のトークン、added / unchanged 行は current のトークンを使用する。
 </doc>
 
 <script setup lang="ts">
 import { diffLines } from "diff";
-import { computed } from "vue";
+import { computed, ref, watch } from "vue";
+import { type ThemedToken, highlightTokens } from "./useHighlight";
 
 const props = defineProps<{
   original: string;
   current: string;
+  filePath: string;
   wordWrap: boolean;
 }>();
 
@@ -47,25 +55,97 @@ const lineNoWidth = computed(() => {
   return `${String(maxLine).length}ch`;
 });
 
-const LINE_TYPE_CLASSES: Record<DiffLine["type"], string> = {
+/** diff 行の背景色（テキスト色はトークンに任せる） */
+const LINE_BG_CLASSES: Record<DiffLine["type"], string> = {
+  added: "bg-green-400/10",
+  removed: "bg-red-400/10",
+  unchanged: "",
+};
+
+/** ハイライト未対応時のフォールバック色 */
+const LINE_FALLBACK_CLASSES: Record<DiffLine["type"], string> = {
   added: "text-green-400 bg-green-400/10",
   removed: "text-red-400 bg-red-400/10",
   unchanged: "text-zinc-300",
 };
+
+/** original / current それぞれの行トークン配列 */
+const originalTokens = ref<ThemedToken[][]>();
+const currentTokens = ref<ThemedToken[][]>();
+
+/** 非同期レース防止用のバージョンカウンター */
+let tokenVersion = 0;
+
+watch(
+  () => [props.original, props.current, props.filePath],
+  () => {
+    const version = ++tokenVersion;
+    Promise.all([
+      highlightTokens(props.original, props.filePath),
+      highlightTokens(props.current, props.filePath),
+    ]).then(([origTokens, currTokens]) => {
+      if (version !== tokenVersion) return;
+      originalTokens.value = origTokens;
+      currentTokens.value = currTokens;
+    });
+  },
+  { immediate: true },
+);
+
+/** diff 行に対応するトークン配列を返す。行番号は 1-based */
+function getLineTokens(line: DiffLine): ThemedToken[] | undefined {
+  if (line.type === "removed" && line.oldLineNo !== undefined) {
+    return originalTokens.value?.[line.oldLineNo - 1];
+  }
+  if (line.newLineNo !== undefined) {
+    return currentTokens.value?.[line.newLineNo - 1];
+  }
+  return undefined;
+}
+
+const hasTokens = computed(
+  () => originalTokens.value !== undefined && currentTokens.value !== undefined,
+);
 </script>
 
 <template>
   <div class="p-4 text-sm/tight" :style="{ '--line-no-width': lineNoWidth }">
-    <div
-      v-for="(line, i) in diffResult"
-      :key="i"
-      class="_diff-line"
-      :class="LINE_TYPE_CLASSES[line.type]"
-    >
-      <span class="_line-no">{{ line.oldLineNo ?? "" }}</span>
-      <span class="_line-no">{{ line.newLineNo ?? "" }}</span>
-      <span class="_line-text" :class="wordWrap ? '_word-wrap' : ''">{{ line.text }}</span>
-    </div>
+    <!-- ハイライト付き表示 -->
+    <template v-if="hasTokens">
+      <div
+        v-for="(line, i) in diffResult"
+        :key="i"
+        class="_diff-line"
+        :class="LINE_BG_CLASSES[line.type]"
+      >
+        <span class="_line-no">{{ line.oldLineNo ?? "" }}</span>
+        <span class="_line-no">{{ line.newLineNo ?? "" }}</span>
+        <span class="_line-text" :class="wordWrap ? '_word-wrap' : ''">
+          <span
+            v-for="(token, j) in getLineTokens(line)"
+            :key="j"
+            :style="token.color ? { color: token.color } : undefined"
+            >{{ token.content }}</span
+          >
+          <!-- トークンがない場合（空行等）はプレーンテキスト -->
+          <template v-if="!getLineTokens(line)">{{ line.text }}</template>
+        </span>
+      </div>
+    </template>
+
+    <!-- フォールバック: ハイライトなし -->
+    <template v-else>
+      <div
+        v-for="(line, i) in diffResult"
+        :key="i"
+        class="_diff-line"
+        :class="LINE_FALLBACK_CLASSES[line.type]"
+      >
+        <span class="_line-no">{{ line.oldLineNo ?? "" }}</span>
+        <span class="_line-no">{{ line.newLineNo ?? "" }}</span>
+        <span class="_line-text" :class="wordWrap ? '_word-wrap' : ''">{{ line.text }}</span>
+      </div>
+    </template>
   </div>
 </template>
 
