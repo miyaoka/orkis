@@ -8,21 +8,25 @@ Filer と Changes をタブで切り替えるコンテナ。
 - FilerPane の `reveal()` を親に再公開
 - ChangesPane の `select` emit を `worktreeStore.selectPath()` に接続
 - git-graph でコミットを選択すると自動的に Changes タブをアクティブにする
+- changes の内容変化、または changes にあるファイルの変化で自動的に Changes タブをアクティブにする
 </doc>
 
 <script setup lang="ts">
-import { ref, useTemplateRef, watch } from "vue";
+import { onUnmounted, ref, useTemplateRef, watch } from "vue";
 import { useProjectStore } from "../../shared/project";
+import { useRpc } from "../../shared/rpc";
 import { ChangesPane } from "../changes";
 import { FilerPane } from "../filer";
 import { useGitGraphStore } from "../git-graph";
-import { useWorktreeStore } from "../worktree";
+import { useGitStatusStore, useWorktreeStore } from "../worktree";
 
 type NavigatorView = "files" | "changes";
 
 const gitGraphStore = useGitGraphStore();
+const gitStatusStore = useGitStatusStore();
 const projectStore = useProjectStore();
 const worktreeStore = useWorktreeStore();
+const { onGitStatusChange } = useRpc();
 const filerPaneRef = useTemplateRef<InstanceType<typeof FilerPane>>("filerPane");
 const activeView = ref<NavigatorView>("files");
 
@@ -35,6 +39,28 @@ watch(
     activeView.value = "changes";
   },
 );
+
+/** changes の内容変化で切り替える（git clean, commit, worktree 切り替え等） */
+watch(
+  () =>
+    Object.entries(gitStatusStore.gitStatuses)
+      .map(([filePath, status]) => `${filePath}\0${status}`)
+      .sort()
+      .join("\0\0"),
+  () => {
+    activeView.value = "changes";
+  },
+);
+
+/** changes にあるファイルの変化で切り替える（statuses 内容は同じだがイベントは発火する） */
+const unsubscribeGitStatus = onGitStatusChange(({ statuses }) => {
+  if (Object.keys(statuses).length > 0) {
+    activeView.value = "changes";
+  }
+});
+onUnmounted(() => {
+  unsubscribeGitStatus();
+});
 
 function onChangesSelect(relPath: string) {
   worktreeStore.selectPath(relPath);
