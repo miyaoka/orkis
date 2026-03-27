@@ -8,11 +8,13 @@ Filer と Changes をタブで切り替えるコンテナ。
 - FilerPane の `reveal()` を親に再公開
 - ChangesPane の `select` emit を `worktreeStore.selectPath()` に接続
 - git-graph でコミットを選択すると自動的に Changes タブをアクティブにする
+- git status が更新されると自動的に Changes タブをアクティブにする
 </doc>
 
 <script setup lang="ts">
-import { ref, useTemplateRef, watch } from "vue";
+import { onUnmounted, ref, useTemplateRef, watch } from "vue";
 import { useProjectStore } from "../../shared/project";
+import { useRpc } from "../../shared/rpc";
 import { ChangesPane } from "../changes";
 import { FilerPane } from "../filer";
 import { useGitGraphStore } from "../git-graph";
@@ -23,6 +25,7 @@ type NavigatorView = "files" | "changes";
 const gitGraphStore = useGitGraphStore();
 const projectStore = useProjectStore();
 const worktreeStore = useWorktreeStore();
+const { onGitStatusChange } = useRpc();
 const filerPaneRef = useTemplateRef<InstanceType<typeof FilerPane>>("filerPane");
 const activeView = ref<NavigatorView>("files");
 
@@ -35,6 +38,14 @@ watch(
     activeView.value = "changes";
   },
 );
+
+/** git status が更新されたら Changes タブをアクティブにする */
+const unsubscribeGitStatus = onGitStatusChange(() => {
+  activeView.value = "changes";
+});
+onUnmounted(() => {
+  unsubscribeGitStatus();
+});
 
 function onChangesSelect(relPath: string) {
   worktreeStore.selectPath(relPath);
