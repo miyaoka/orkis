@@ -194,10 +194,17 @@ export function createClaudeStatusManager(deps: ClaudeStatusManagerDeps) {
    * PTY の data は任意境界で分割されるため、tail バッファと結合してマッチする。
    */
   function detectInterrupt(ptyId: number, data: string) {
-    if (claudeStatusByPtyId.value[ptyId]?.state !== "working") return;
-
+    const currentState = claudeStatusByPtyId.value[ptyId]?.state;
     const tail = ptyTailBuffers.get(ptyId) ?? "";
-    if ((tail + data).includes(INTERRUPT_MARKER)) {
+    const combined = tail + data;
+
+    console.debug(
+      `[claude-status] detectInterrupt: ptyId=${ptyId} state=${currentState} combined=${JSON.stringify(combined)}`,
+    );
+
+    if (currentState !== "working") return;
+
+    if (combined.includes(INTERRUPT_MARKER)) {
       cancelAskTimer(ptyId);
       claudeStatusByPtyId.value[ptyId] = { state: "idle" };
     }
