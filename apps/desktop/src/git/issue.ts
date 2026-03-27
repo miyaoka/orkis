@@ -1,6 +1,6 @@
 import type { GitIssue } from "@gozd/rpc";
 import { tryCatch } from "@gozd/shared";
-import { execGh } from "./pr";
+import { execGh, getOwnerRepo } from "./pr";
 
 /**
  * gh api graphql で open な issue 一覧を取得する。
@@ -50,15 +50,9 @@ export async function getIssueList({
   cwd: string;
   env: Record<string, string>;
 }): Promise<GitIssue[] | null> {
-  // owner/repo を取得
-  const nameResult = await execGh({
-    args: ["repo", "view", "--json", "owner,name", "--jq", '.owner.login + "/" + .name'],
-    cwd,
-    env,
-  });
-  if (!nameResult.ok) return null;
-  const [owner, repo] = nameResult.stdout.trim().split("/");
-  if (!owner || !repo) return null;
+  const ownerRepo = await getOwnerRepo({ cwd, env });
+  if (!ownerRepo) return null;
+  const { owner, repo } = ownerRepo;
 
   const ISSUE_LIMIT = 100;
   const result = await execGh({
