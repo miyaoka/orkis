@@ -449,8 +449,9 @@ const detailWidth = ref(320);
 const detailOpen = ref(true);
 
 // コンテナ幅縮小時に detailWidth をクランプし、収まらなければ自動で閉じる
+// rootWidth が 0（マウント前）のときはスキップ
 watchEffect(() => {
-  if (!detailOpen.value) return;
+  if (!detailOpen.value || rootWidth.value === 0) return;
   const available = rootWidth.value - GRAPH_LIST_MIN_WIDTH - DETAIL_HANDLE_WIDTH;
   if (available < DETAIL_MIN_WIDTH) {
     detailOpen.value = false;
