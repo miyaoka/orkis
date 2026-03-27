@@ -1284,7 +1284,7 @@ function setupSocketServer(): net.Server {
         if (line.trim() === "") continue;
         const result = tryCatch(() => JSON.parse(line) as GozdMessage);
         if (!result.ok) {
-          notify("error", "socket", `invalid JSON: ${line}`);
+          notify("error", "socket", `invalid JSON: ${line}`, result.error);
           continue;
         }
         handleSocketMessage(result.value);
