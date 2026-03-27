@@ -9,6 +9,7 @@ interface Task {
   id: string; // UUID (crypto.randomUUID)
   body: string; // git commit 形式: 一行目=タイトル、残り=本文
   worktreeDir?: string; // 紐づいた worktree のパス（未着手なら undefined）
+  prNumber?: number; // 紐づく PR 番号（PR から worktree を作成した場合に設定）
   createdAt: string; // ISO 8601
 }
 ```
@@ -46,6 +47,14 @@ Task の [⋮] → "Worktree 化" → worktree 作成 + worktreeDir 紐づけ
 ```text
 [New worktree] → Task 入力パネル表示（デフォルトでタイムスタンプ入力済み） → Task 作成 + worktree 作成・紐づけ
 ```
+
+### PR から worktree 作成
+
+```text
+"Workspace: Open Pull Request" → PR 選択 → worktree 作成 + Task 作成（body=PR タイトル、prNumber=PR 番号）
+```
+
+- `prNumber` が設定された Task は、サイドバーで `#番号` をタイトルの前にプレフィックス表示する
 
 ### 削除・クリーンアップ
 
@@ -123,7 +132,7 @@ WORKTREES
 
 ```text
 taskList:               undefined → Task[]
-taskAdd:                { body, worktreeDir? } → Task
+taskAdd:                { body, worktreeDir?, prNumber? } → Task
 taskUpdate:             { id, body } → Task
 taskRemove:             { id } → void
 createWorktreeWithTask: { id, worktreeDir, branch } → { task, worktree, dir, fileServerBaseUrl }

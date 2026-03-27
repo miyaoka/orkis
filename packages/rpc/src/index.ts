@@ -38,6 +38,8 @@ export const taskSchema = z.object({
   id: z.string(),
   body: z.string(),
   worktreeDir: z.string().optional(),
+  /** 紐づく PR 番号（PR から worktree を作成した場合に設定） */
+  prNumber: z.number().optional(),
   createdAt: z.string(),
 });
 
@@ -227,7 +229,7 @@ export type GozdRPC = {
       };
       /** Task を追加（worktreeDir 指定で worktree に紐づけ可能） */
       taskAdd: {
-        params: { body: string; worktreeDir?: string };
+        params: { body: string; worktreeDir?: string; prNumber?: number };
         response: Task;
       };
       /** Task の body を更新 */

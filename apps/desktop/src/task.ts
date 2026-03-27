@@ -60,7 +60,10 @@ function parseTask(v: unknown): Task | undefined {
 }
 
 /** Task を追加する */
-export function addTask(projectDir: string, body: string, worktreeDir?: string): Task {
+export function addTask(
+  projectDir: string,
+  { body, worktreeDir, prNumber }: { body: string; worktreeDir?: string; prNumber?: number },
+): Task {
   const tasks = loadTasks(projectDir);
   // worktreeDir が指定されている場合、既に紐づいている Task がないか検証
   if (worktreeDir && tasks.some((t) => t.worktreeDir === worktreeDir)) {
@@ -70,6 +73,7 @@ export function addTask(projectDir: string, body: string, worktreeDir?: string):
     id: crypto.randomUUID(),
     body,
     worktreeDir,
+    prNumber,
     createdAt: new Date().toISOString(),
   };
   tasks.push(task);
