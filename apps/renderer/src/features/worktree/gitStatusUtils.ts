@@ -81,12 +81,7 @@ type GitStatusIconKind =
   | "untracked"
   | "conflict";
 
-interface SplitStatusCounts {
-  staging: Partial<Record<GitStatusIconKind, number>>;
-  working: Partial<Record<GitStatusIconKind, number>>;
-}
-
-const INDEX_KIND_MAP: Record<string, GitStatusIconKind> = {
+const STATUS_KIND_MAP: Record<string, GitStatusIconKind> = {
   A: "added",
   M: "modified",
   D: "deleted",
@@ -94,47 +89,18 @@ const INDEX_KIND_MAP: Record<string, GitStatusIconKind> = {
   C: "copied",
 };
 
-const WORKTREE_KIND_MAP: Record<string, GitStatusIconKind> = {
-  M: "modified",
-  D: "deleted",
-};
-
 /**
- * git status の XY コードを staging（index）と working tree に分離してカウントする。
- * conflict（unmerged）は working 側にまとめる。
+ * XY コードからファイル単位で1つの変更種別を解決する。
+ * worktree 側 (Y) を優先し、なければ index 側 (X) を使う。
  */
-function countSplitChanges(statuses: Record<string, string>): SplitStatusCounts {
-  const staging: Partial<Record<GitStatusIconKind, number>> = {};
-  const working: Partial<Record<GitStatusIconKind, number>> = {};
-
-  for (const status of Object.values(statuses)) {
-    if (status === "??") {
-      working.untracked = (working.untracked ?? 0) + 1;
-      continue;
-    }
-
-    const [x, y] = status;
-
-    // Unmerged: U in either position, or AA/DD (both-added / both-deleted)
-    if (x === "U" || y === "U" || status === "AA" || status === "DD") {
-      working.conflict = (working.conflict ?? 0) + 1;
-      continue;
-    }
-
-    // Index side
-    if (!isUnchanged(x)) {
-      const kind = INDEX_KIND_MAP[x] ?? "modified";
-      staging[kind] = (staging[kind] ?? 0) + 1;
-    }
-
-    // Worktree side
-    if (!isUnchanged(y)) {
-      const kind = WORKTREE_KIND_MAP[y] ?? "modified";
-      working[kind] = (working[kind] ?? 0) + 1;
-    }
-  }
-
-  return { staging, working };
+function resolveStatusIconKind(status: string): GitStatusIconKind {
+  if (status === "??") return "untracked";
+  const [x, y] = status;
+  // Unmerged: U in either position, or AA/DD (both-added / both-deleted)
+  if (x === "U" || y === "U" || status === "AA" || status === "DD") return "conflict";
+  if (!isUnchanged(y)) return STATUS_KIND_MAP[y] ?? "modified";
+  if (!isUnchanged(x)) return STATUS_KIND_MAP[x] ?? "modified";
+  return "modified";
 }
 
 /** ステータスアイコン定義 */
@@ -181,17 +147,14 @@ function toStatusIconEntries(
   return result;
 }
 
-/** git status の生データから staging + working をまとめたアイコン付きエントリを生成する */
+/** git status の生データからファイル単位で変更種別をカウントし、アイコン付きエントリを生成する */
 function computeStatusIcons(statuses: Record<string, string>): StatusIconEntry[] {
-  const { staging, working } = countSplitChanges(statuses);
-  const merged: Partial<Record<GitStatusIconKind, number>> = {};
-  for (const counts of [staging, working]) {
-    for (const [kind, count] of Object.entries(counts)) {
-      const k = kind as GitStatusIconKind;
-      merged[k] = (merged[k] ?? 0) + (count ?? 0);
-    }
+  const counts: Partial<Record<GitStatusIconKind, number>> = {};
+  for (const status of Object.values(statuses)) {
+    const kind = resolveStatusIconKind(status);
+    counts[kind] = (counts[kind] ?? 0) + 1;
   }
-  return toStatusIconEntries(merged);
+  return toStatusIconEntries(counts);
 }
 
 export {
