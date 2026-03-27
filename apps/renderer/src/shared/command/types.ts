@@ -49,6 +49,7 @@ export interface ContextMap {
   commandPaletteVisible: boolean;
   quickPickVisible: boolean;
   prPickerVisible: boolean;
+  issuePickerVisible: boolean;
   inputFocused: boolean;
   isGitRepo: boolean;
 }

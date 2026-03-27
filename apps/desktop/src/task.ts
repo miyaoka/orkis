@@ -62,7 +62,12 @@ function parseTask(v: unknown): Task | undefined {
 /** Task を追加する */
 export function addTask(
   projectDir: string,
-  { body, worktreeDir, prNumber }: { body: string; worktreeDir?: string; prNumber?: number },
+  {
+    body,
+    worktreeDir,
+    prNumber,
+    issueNumber,
+  }: { body: string; worktreeDir?: string; prNumber?: number; issueNumber?: number },
 ): Task {
   const tasks = loadTasks(projectDir);
   // worktreeDir が指定されている場合、既に紐づいている Task がないか検証
@@ -74,6 +79,7 @@ export function addTask(
     body,
     worktreeDir,
     prNumber,
+    issueNumber,
     createdAt: new Date().toISOString(),
   };
   tasks.push(task);

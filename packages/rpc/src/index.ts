@@ -40,6 +40,8 @@ export const taskSchema = z.object({
   worktreeDir: z.string().optional(),
   /** 紐づく PR 番号（PR から worktree を作成した場合に設定） */
   prNumber: z.number().optional(),
+  /** 紐づく issue 番号（issue から worktree を作成した場合に設定） */
+  issueNumber: z.number().optional(),
   createdAt: z.string(),
 });
 
@@ -102,6 +104,24 @@ export interface GitPullRequest {
   assignees: string[];
   /** レビューリクエストされたユーザーのログイン名一覧 */
   reviewers: string[];
+}
+
+/** GitHub issue の情報 */
+export interface GitIssue {
+  /** issue 番号 */
+  number: number;
+  /** issue タイトル */
+  title: string;
+  /** issue の URL */
+  url: string;
+  /** 作成者のログイン名 */
+  author: string;
+  /** 作成者のアバター URL */
+  authorAvatarUrl: string;
+  /** 最終更新日時（ISO 8601） */
+  updatedAt: string;
+  /** assignee のログイン名一覧 */
+  assignees: string[];
 }
 
 /** git diff の変更ファイル情報 */
@@ -192,6 +212,11 @@ export type GozdRPC = {
         params: undefined;
         response: GitPullRequest[] | null;
       };
+      /** GitHub issue 一覧を取得（open のみ）。gh 失敗時は null */
+      gitIssueList: {
+        params: undefined;
+        response: GitIssue[] | null;
+      };
       /** gh 認証済みユーザーのログイン名を取得。失敗時は null */
       gitViewer: {
         params: undefined;
@@ -229,7 +254,7 @@ export type GozdRPC = {
       };
       /** Task を追加（worktreeDir 指定で worktree に紐づけ可能） */
       taskAdd: {
-        params: { body: string; worktreeDir?: string; prNumber?: number };
+        params: { body: string; worktreeDir?: string; prNumber?: number; issueNumber?: number };
         response: Task;
       };
       /** Task の body を更新 */

@@ -59,7 +59,7 @@ query($owner: String!, $repo: String!, $limit: Int!) {
  * Bun.$ は .env() で渡した PATH をコマンド解決に使わない（process.env.PATH を参照する）ため、
  * build 版で gh が見つからない問題がある。Bun.spawn なら env.PATH でコマンド解決される。
  */
-async function execGh({
+export async function execGh({
   args,
   cwd,
   env,
