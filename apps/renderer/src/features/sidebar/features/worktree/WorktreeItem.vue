@@ -3,7 +3,7 @@
 
 ## Claude メッセージ吹き出し
 
-done / asking 時に Claude のメッセージ一行目を吹き出しで表示する。
+done / asking 時に Claude のメッセージ（一行目の最初の句点まで）を吹き出しで表示する。
 worktree 行の下に吹き出し風のテキストとして出す。
 </doc>
 
@@ -11,6 +11,7 @@ worktree 行の下に吹き出し風のテキストとして出す。
 import type { WorktreeEntry } from "@gozd/rpc";
 import { computed } from "vue";
 import type { ClaudeState, ClaudeStatus } from "../../../terminal";
+import { extractAskingText, extractFirstSentence } from "../../../voicevox";
 import { computeStatusIcons, StatusIcons } from "../../../worktree";
 import { hasChanges, worktreeDisplayName } from "../../utils";
 
@@ -77,43 +78,15 @@ const sortedStatuses = computed(() =>
   ),
 );
 
-/** マークダウン記法を除去してテキストの一行目を取得する */
-function extractFirstLine(message: string): string {
-  for (const line of message.split("\n")) {
-    const trimmed = line.trim();
-    if (trimmed === "") continue;
-    return trimmed.replace(/[*_`#]/g, "");
-  }
-  return "";
-}
-
-/** AskUserQuestion の tool_input から質問テキストを抽出する */
-function extractAskQuestion(toolInput: Record<string, unknown>): string | undefined {
-  if (!Array.isArray(toolInput.questions)) return undefined;
-  const [first] = toolInput.questions;
-  if (typeof first === "object" && first !== null && typeof first.question === "string") {
-    return first.question;
-  }
-  return undefined;
-}
-
-/** asking 時の表示テキスト: AskUserQuestion なら質問内容、それ以外はツール名 */
-function extractAskingText(status: ClaudeStatus & { state: "asking" }): string | undefined {
-  if (status.toolName === "AskUserQuestion" && status.toolInput) {
-    return extractAskQuestion(status.toolInput);
-  }
-  return status.toolName;
-}
-
 /** done/asking の最優先ステータスから吹き出しテキストを取得 */
 const bubbleText = computed(() => {
   const [first] = sortedStatuses.value;
   if (first === undefined) return undefined;
   if (first.state === "done" && first.message) {
-    return extractFirstLine(first.message);
+    return extractFirstSentence(first.message);
   }
   if (first.state === "asking") {
-    return extractAskingText(first);
+    return extractAskingText(first.toolName, first.toolInput);
   }
   return undefined;
 });
