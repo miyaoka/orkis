@@ -13,7 +13,8 @@ import { onMounted, onUnmounted } from "vue";
 import { MainLayout } from "./features/layout";
 import { useWorktreeStore } from "./features/worktree";
 import { useAppStore } from "./shared/app";
-import { useContextKeys, useKeyBindings } from "./shared/command";
+import { useCommandRegistry, useContextKeys, useKeyBindings } from "./shared/command";
+import { useNotificationStore } from "./shared/notification";
 import { useProjectStore } from "./shared/project";
 import { useRpc } from "./shared/rpc";
 
@@ -23,10 +24,13 @@ const worktreeStore = useWorktreeStore();
 const appStore = useAppStore();
 const projectStore = useProjectStore();
 const contextKeys = useContextKeys();
+const notify = useNotificationStore();
+const { setErrorHandler } = useCommandRegistry();
+setErrorHandler(notify.error);
 const { request, send, onGozdOpen, onErrorNotify } = useRpc();
 
 const disposeErrorNotify = onErrorNotify(({ source, message, detail }) => {
-  console.error(`[${source}]`, message, ...(detail ? [detail] : []));
+  notify.error(`[${source}] ${message}${detail ? `: ${detail}` : ""}`);
 });
 
 let cleanup: (() => void) | undefined;
@@ -45,7 +49,7 @@ onMounted(() => {
         if (result.ok) {
           worktreeStore.setOpen(result.value.dir, selection, result.value.fileServerBaseUrl);
         } else {
-          console.error("Failed to switch worktree:", switchToDir, result.error);
+          notify.error(`Failed to switch worktree: ${switchToDir}`);
         }
       } else {
         worktreeStore.setOpen(dir, selection, fileServerBaseUrl);

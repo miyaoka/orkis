@@ -16,6 +16,13 @@ function isDescriptor(
 
 const entries = new Map<string, CommandEntry>();
 
+/** エラー通知コールバック。feature 層から注入して shared 間の依存を回避する */
+let onError: ((message: string) => void) | undefined;
+
+function setErrorHandler(handler: (message: string) => void) {
+  onError = handler;
+}
+
 /**
  * コマンドを登録する。同一 ID の二重登録は上書き（HMR 安全）。
  * label 付き記述子で登録したコマンドのみパレットに表示される。
@@ -54,7 +61,7 @@ function execute(id: string, args?: unknown): boolean {
   if (!contextKeys.evaluate(entry.precondition)) return false;
   const result = tryCatch(() => entry.handler(args));
   if (!result.ok) {
-    console.error(`Command "${id}" threw:`, result.error);
+    onError?.(`Command "${id}" threw: ${result.error}`);
     return false;
   }
   return result.value;
@@ -81,5 +88,5 @@ function reset(): void {
 }
 
 export function useCommandRegistry() {
-  return { register, execute, listForPalette, reset };
+  return { register, execute, listForPalette, reset, setErrorHandler };
 }

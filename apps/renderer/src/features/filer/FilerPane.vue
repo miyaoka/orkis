@@ -12,6 +12,7 @@
 <script setup lang="ts">
 import { storeToRefs } from "pinia";
 import { nextTick, onUnmounted, ref, watch } from "vue";
+import { useNotificationStore } from "../../shared/notification";
 import { useRpc } from "../../shared/rpc";
 import { resolveGitChangeKind, useGitStatusStore, useWorktreeStore } from "../worktree";
 import { getDeletedEntries, sortEntries } from "./filerUtils";
@@ -22,6 +23,7 @@ const worktreeStore = useWorktreeStore();
 const { dir, selectedPath } = storeToRefs(worktreeStore);
 const gitStatusStore = useGitStatusStore();
 const { gitStatuses } = storeToRefs(gitStatusStore);
+const notify = useNotificationStore();
 const { request, onFsChange, onGitStatusChange } = useRpc();
 
 const rootEntries = ref<FileEntry[]>();
@@ -59,8 +61,8 @@ async function loadRoot() {
       gitStatusStore.loadGitStatus(),
     ]);
     rootEntries.value = mergeWithGitStatus(entries, "");
-  } catch (e) {
-    console.error("Failed to read root directory", e);
+  } catch {
+    notify.error("Failed to read root directory");
     rootEntries.value = [];
   } finally {
     loading.value = false;
@@ -132,8 +134,8 @@ async function handleGitStatusChange(statuses: Record<string, string>) {
   try {
     const entries = await request.fsReadDir({ relPath: "." });
     rootEntries.value = mergeWithGitStatus(entries, "");
-  } catch (e) {
-    console.error("Failed to rebuild root entries", e);
+  } catch {
+    notify.error("Failed to rebuild root entries");
   }
   // 展開中の子ディレクトリにも通知して children を再構築させる
   for (const item of treeItemRefs.value) {
