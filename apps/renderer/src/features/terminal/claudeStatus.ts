@@ -209,11 +209,7 @@ export function createClaudeStatusManager(deps: ClaudeStatusManagerDeps) {
       );
     }
 
-    if (currentState !== "working") {
-      // tail バッファは state に関わらず更新する（次チャンクの combined に必要）
-      ptyTailBuffers.set(ptyId, data.slice(-PTY_TAIL_BUFFER_SIZE));
-      return;
-    }
+    if (currentState !== "working") return;
 
     if (combined.includes(INTERRUPT_MARKER)) {
       cancelAskTimer(ptyId);
