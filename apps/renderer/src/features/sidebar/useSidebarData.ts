@@ -72,47 +72,65 @@ export function useSidebarData() {
   );
 
   // --- ターミナルタイトル → worktree Todo タイトル同期 ---
+  // RPC 処理中に来た更新は pendingTitle に退避し、完了後に再実行する
 
-  /** todoAdd / todoUpdate の処理中フラグ（多重発行防止） */
   let titleSyncing = false;
+  let pendingTitle: string | undefined;
+
+  async function syncTodoTitle(title: string) {
+    const dir = worktreeStore.dir;
+    if (!dir) return;
+    const wt = worktrees.value.find((w) => w.path === dir);
+    if (!wt) return;
+    if (!wt.todo) {
+      const addResult = await tryCatch(request.todoAdd({ body: title, worktreeDir: dir }));
+      if (addResult.ok) {
+        const freshWt = worktrees.value.find((w) => w.path === dir);
+        if (freshWt) freshWt.todo = addResult.value;
+      }
+      return;
+    }
+    const [firstLine, ...rest] = wt.todo.body.split("\n");
+    if (firstLine === title) return;
+    const newBody = [title, ...rest].join("\n");
+    const result = await tryCatch(
+      request.todoUpdate({ id: wt.todo.id, body: newBody, icon: wt.todo.icon }),
+    );
+    if (result.ok) {
+      const freshWt = worktrees.value.find((w) => w.path === dir);
+      if (freshWt) freshWt.todo = result.value;
+    }
+  }
+
+  async function drainTitleSync(title: string) {
+    if (titleSyncing) {
+      pendingTitle = title;
+      return;
+    }
+    titleSyncing = true;
+    try {
+      await syncTodoTitle(title);
+      while (pendingTitle !== undefined) {
+        const next = pendingTitle;
+        pendingTitle = undefined;
+        await syncTodoTitle(next);
+      }
+    } finally {
+      titleSyncing = false;
+    }
+  }
 
   watch(
     () => terminalStore.lastTitleUpdate,
-    async (update) => {
+    (update) => {
       if (!update?.title) return;
-      if (titleSyncing) return;
       const dir = worktreeStore.dir;
       if (!dir) return;
       if (terminalStore.getPaneDir(update.leafId) !== dir) return;
       // Claude Code のステータスプレフィックス（✳ + Braille dots）を除去
       const title = update.title.replace(/^[\u2733\u2800-\u28FF] /, "");
       if (!title) return;
-      const wt = worktrees.value.find((w) => w.path === dir);
-      if (!wt) return;
-      titleSyncing = true;
-      if (!wt.todo) {
-        const addResult = await tryCatch(request.todoAdd({ body: title, worktreeDir: dir }));
-        if (addResult.ok) {
-          const freshWt = worktrees.value.find((w) => w.path === dir);
-          if (freshWt) freshWt.todo = addResult.value;
-        }
-        titleSyncing = false;
-        return;
-      }
-      const [firstLine, ...rest] = wt.todo.body.split("\n");
-      if (firstLine === title) {
-        titleSyncing = false;
-        return;
-      }
-      const newBody = [title, ...rest].join("\n");
-      const result = await tryCatch(
-        request.todoUpdate({ id: wt.todo.id, body: newBody, icon: wt.todo.icon }),
-      );
-      if (result.ok) {
-        const freshWt = worktrees.value.find((w) => w.path === dir);
-        if (freshWt) freshWt.todo = result.value;
-      }
-      titleSyncing = false;
+      void drainTitleSync(title);
     },
   );
 
