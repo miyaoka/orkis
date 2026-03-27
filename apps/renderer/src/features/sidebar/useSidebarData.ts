@@ -27,11 +27,11 @@ export function useSidebarData() {
   /** root（main）worktree */
   const rootWorktree = computed(() => worktrees.value.find((wt) => wt.isMain));
 
-  /** main 以外の worktree をディレクトリ名のアルファベット順で */
+  /** main 以外の worktree をディレクトリ名の降順で（新しい worktree が上） */
   const nonMainWorktrees = computed(() =>
     worktrees.value
       .filter((wt) => !wt.isMain)
-      .sort((a, b) => dirName(a.path).localeCompare(dirName(b.path))),
+      .sort((a, b) => dirName(b.path).localeCompare(dirName(a.path))),
   );
 
   const sortedBranches = computed(() => [...freeBranches.value].sort((a, b) => a.localeCompare(b)));
