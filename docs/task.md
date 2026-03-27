@@ -35,19 +35,9 @@ interface Task {
 
 ## ライフサイクル
 
-### Task 作成 → worktree 化
+### worktree 作成時の Task 自動生成
 
-```text
-[+ New task] → body 入力 → Task 保存（worktreeDir なし）
-     ↓
-Task の [⋮] → "Worktree 化" → worktree 作成 + worktreeDir 紐づけ
-```
-
-### 直接 worktree 作成
-
-```text
-[New worktree] → Task 入力パネル表示（デフォルトでタイムスタンプ入力済み） → Task 作成 + worktree 作成・紐づけ
-```
+worktree を作成すると、Task が自動的に作成・紐づけられる。
 
 ### PR から worktree 作成
 
@@ -71,7 +61,6 @@ Task の [⋮] → "Worktree 化" → worktree 作成 + worktreeDir 紐づけ
 | トリガー                                         | 挙動                                                                         |
 | ------------------------------------------------ | ---------------------------------------------------------------------------- |
 | WORKTREES `[⋮]` → "wt を削除"                    | worktree 削除 + Task 削除                                                    |
-| TASKS `[⋮]` → "Task を削除"                      | Task 削除（worktree なし）                                                   |
 | 外部で worktree 消失（`git worktree remove` 等） | `gitWorktreeList` 取得時に存在しない `worktreeDir` を検出し、Task を自動削除 |
 
 ## サイドバー UI
@@ -83,10 +72,6 @@ ROOT
 WORKTREES
   ● feature-aの実装    [M2 A1]   [⋮]
   ● (無題)                        [⋮]
-
-TASKS
-  □ バグ修正                      [⋮]
-  [+ New task]
 
 BRANCHES
   ○ feature-old                   [⋮]
