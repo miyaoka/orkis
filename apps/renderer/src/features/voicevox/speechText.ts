@@ -11,8 +11,11 @@ export function extractFirstSentence(message: string): string | undefined {
   return undefined;
 }
 
-/** asking 時の読み上げテキストを抽出する */
-function extractAskingText(toolName: string | undefined, toolInput: unknown): string | undefined {
+/** asking 時のテキストを抽出する: AskUserQuestion なら質問内容、それ以外はツール名 */
+export function extractAskingText(
+  toolName: string | undefined,
+  toolInput: unknown,
+): string | undefined {
   if (
     toolName === "AskUserQuestion" &&
     typeof toolInput === "object" &&
