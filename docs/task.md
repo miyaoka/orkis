@@ -10,6 +10,7 @@ interface Task {
   body: string; // git commit 形式: 一行目=タイトル、残り=本文
   worktreeDir?: string; // 紐づいた worktree のパス（未着手なら undefined）
   prNumber?: number; // 紐づく PR 番号（PR から worktree を作成した場合に設定）
+  issueNumber?: number; // 紐づく issue 番号（issue から worktree を作成した場合に設定）
   createdAt: string; // ISO 8601
 }
 ```
@@ -55,6 +56,15 @@ Task の [⋮] → "Worktree 化" → worktree 作成 + worktreeDir 紐づけ
 ```
 
 - `prNumber` が設定された Task は、サイドバーで `#番号` をタイトルの前にプレフィックス表示する
+
+### Issue から worktree 作成
+
+```text
+"Workspace: Open Issue" → issue 選択 → worktree 作成（タイムスタンプブランチ） + Task 作成（body=issue タイトル、issueNumber=issue 番号）
+```
+
+- PR と異なり既存ブランチがないため、タイムスタンプ名で新規ブランチを作成する
+- `issueNumber` が設定された Task は、`prNumber` と同様にサイドバーで `#番号` をプレフィックス表示する
 
 ### 削除・クリーンアップ
 
@@ -132,7 +142,7 @@ WORKTREES
 
 ```text
 taskList:               undefined → Task[]
-taskAdd:                { body, worktreeDir?, prNumber? } → Task
+taskAdd:                { body, worktreeDir?, prNumber?, issueNumber? } → Task
 taskUpdate:             { id, body } → Task
 taskRemove:             { id } → void
 createWorktreeWithTask: { id, worktreeDir, branch } → { task, worktree, dir, fileServerBaseUrl }

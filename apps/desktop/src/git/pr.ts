@@ -59,7 +59,7 @@ query($owner: String!, $repo: String!, $limit: Int!) {
  * Bun.$ は .env() で渡した PATH をコマンド解決に使わない（process.env.PATH を参照する）ため、
  * build 版で gh が見つからない問題がある。Bun.spawn なら env.PATH でコマンド解決される。
  */
-async function execGh({
+export async function execGh({
   args,
   cwd,
   env,
@@ -108,14 +108,14 @@ export async function getViewer({
   return login;
 }
 
-export async function getPrList({
+/** リポジトリの owner/repo を取得する。gh 失敗時は null */
+export async function getOwnerRepo({
   cwd,
   env,
 }: {
   cwd: string;
   env: Record<string, string>;
-}): Promise<GitPullRequest[] | null> {
-  // owner/repo を取得
+}): Promise<{ owner: string; repo: string } | null> {
   const nameResult = await execGh({
     args: ["repo", "view", "--json", "owner,name", "--jq", '.owner.login + "/" + .name'],
     cwd,
@@ -124,6 +124,19 @@ export async function getPrList({
   if (!nameResult.ok) return null;
   const [owner, repo] = nameResult.stdout.trim().split("/");
   if (!owner || !repo) return null;
+  return { owner, repo };
+}
+
+export async function getPrList({
+  cwd,
+  env,
+}: {
+  cwd: string;
+  env: Record<string, string>;
+}): Promise<GitPullRequest[] | null> {
+  const ownerRepo = await getOwnerRepo({ cwd, env });
+  if (!ownerRepo) return null;
+  const { owner, repo } = ownerRepo;
 
   const PR_LIMIT = 100;
   const result = await execGh({

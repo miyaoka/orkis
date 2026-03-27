@@ -15,6 +15,7 @@ import {
   getGitCommitFiles,
   getGitLog,
   getGitStatus,
+  getIssueList,
   getPrList,
   getViewer,
   getWorktreeList,
@@ -824,6 +825,7 @@ function createWindowWithRPC(dir: string, options?: CreateWindowOptions): GozdWi
         gitLog: ({ maxCount, firstParentOnly }) =>
           getGitLog({ cwd: currentDir, maxCount, firstParentOnly }),
         gitPrList: () => getPrList({ cwd: projectDir, env: shellEnv }),
+        gitIssueList: () => getIssueList({ cwd: projectDir, env: shellEnv }),
         gitViewer: () => getViewer({ cwd: projectDir, env: shellEnv }),
         gitWorktreeList: async () => {
           const entries = await attachGitStatuses(await getWorktreeList(projectDir));
@@ -883,8 +885,8 @@ function createWindowWithRPC(dir: string, options?: CreateWindowOptions): GozdWi
         },
         gitBranchDelete: ({ branch }) => deleteBranch(projectDir, branch),
         taskList: () => loadTasks(projectDir),
-        taskAdd: ({ body, worktreeDir, prNumber }) =>
-          addTask(projectDir, { body, worktreeDir, prNumber }),
+        taskAdd: ({ body, worktreeDir, prNumber, issueNumber }) =>
+          addTask(projectDir, { body, worktreeDir, prNumber, issueNumber }),
         taskUpdate: ({ id, body }) => updateTask(projectDir, id, body),
         taskRemove: ({ id }) => removeTask(projectDir, id),
         createWorktreeWithTask: async ({ id, worktreeDir, branch }) => {

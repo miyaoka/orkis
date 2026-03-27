@@ -22,7 +22,14 @@ import { useProjectStore } from "../../shared/project";
 import { useRpc } from "../../shared/rpc";
 import { GitGraphPane } from "../git-graph";
 import { NavigatorPane } from "../navigator";
-import { CommandPalette, PrPickerDialog, QuickPick, registerPrCommand } from "../palette";
+import {
+  CommandPalette,
+  IssuePickerDialog,
+  PrPickerDialog,
+  QuickPick,
+  registerIssueCommand,
+  registerPrCommand,
+} from "../palette";
 import { PreviewPane } from "../preview";
 import { registerSettingsCommand, SettingsModal } from "../settings";
 import { SidebarPane } from "../sidebar";
@@ -61,11 +68,13 @@ const disposeWindowClose = register("window.close", {
 const disposeThemeCommand = registerThemeCommand();
 const disposeSettingsCommand = registerSettingsCommand();
 const disposePrCommand = registerPrCommand();
+const disposeIssueCommand = registerIssueCommand();
 onUnmounted(disposePreviewToggle);
 onUnmounted(disposeWindowClose);
 onUnmounted(disposeThemeCommand);
 onUnmounted(disposeSettingsCommand);
 onUnmounted(disposePrCommand);
+onUnmounted(disposeIssueCommand);
 
 /** ハンドル幅 w-2 = 8px */
 const HANDLE_WIDTH = 8;
@@ -291,6 +300,7 @@ watchEffect(() => {
     <CommandPalette />
     <QuickPick />
     <PrPickerDialog />
+    <IssuePickerDialog />
     <SettingsModal />
   </div>
 </template>

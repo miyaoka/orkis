@@ -180,6 +180,8 @@ const statusIcons = computed(() => {
         <span class="line-clamp-2"
           ><span v-if="wt.task?.prNumber !== undefined" class="mr-1 text-xs text-zinc-400"
             >#{{ wt.task.prNumber }}</span
+          ><span v-else-if="wt.task?.issueNumber !== undefined" class="mr-1 text-xs text-zinc-400"
+            >#{{ wt.task.issueNumber }}</span
           >{{ worktreeDisplayName(wt) }}</span
         >
       </button>
