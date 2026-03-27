@@ -80,23 +80,28 @@ export function useSidebarData() {
       const dir = worktreeStore.dir;
       if (!dir) return;
       if (terminalStore.getPaneDir(update.leafId) !== dir) return;
+      // Claude Code のステータスプレフィックス（✳, ⠂ 等の非ASCII文字 + スペース）を除去
+      const title = update.title.replace(/^[^\x20-\x7E] /, "");
+      if (!title) return;
       const wt = worktrees.value.find((w) => w.path === dir);
       if (!wt) return;
       if (!wt.todo) {
-        const addResult = await tryCatch(request.todoAdd({ body: update.title, worktreeDir: dir }));
+        const addResult = await tryCatch(request.todoAdd({ body: title, worktreeDir: dir }));
         if (addResult.ok) {
-          wt.todo = addResult.value;
+          const freshWt = worktrees.value.find((w) => w.path === dir);
+          if (freshWt) freshWt.todo = addResult.value;
         }
         return;
       }
       const [firstLine, ...rest] = wt.todo.body.split("\n");
-      if (firstLine === update.title) return;
-      const newBody = [update.title, ...rest].join("\n");
+      if (firstLine === title) return;
+      const newBody = [title, ...rest].join("\n");
       const result = await tryCatch(
         request.todoUpdate({ id: wt.todo.id, body: newBody, icon: wt.todo.icon }),
       );
       if (result.ok) {
-        wt.todo = result.value;
+        const freshWt = worktrees.value.find((w) => w.path === dir);
+        if (freshWt) freshWt.todo = result.value;
       }
     },
   );
