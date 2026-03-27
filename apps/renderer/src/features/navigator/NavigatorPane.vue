@@ -46,7 +46,7 @@ watch(
     Object.entries(gitStatusStore.gitStatuses)
       .map(([filePath, status]) => `${filePath}\0${status}`)
       .sort()
-      .join("\n"),
+      .join("\0\0"),
   () => {
     activeView.value = "changes";
   },
