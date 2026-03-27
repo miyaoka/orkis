@@ -1,4 +1,4 @@
-import type { WorktreeChangeCounts, WorktreeEntry } from "@gozd/rpc";
+import type { WorktreeEntry } from "@gozd/rpc";
 
 /** Task の body 一行目をタイトルとして取得 */
 export function taskTitle(body: string): string {
@@ -22,9 +22,9 @@ export function worktreeDisplayName(wt: WorktreeEntry): string {
 }
 
 /** 変更ファイルがあるかどうか */
-export function hasChanges(counts: WorktreeChangeCounts | undefined): boolean {
-  if (!counts) return false;
-  return counts.modified + counts.added + counts.deleted + counts.untracked > 0;
+export function hasChanges(gitStatuses: Record<string, string> | undefined): boolean {
+  if (!gitStatuses) return false;
+  return Object.keys(gitStatuses).length > 0;
 }
 
 /** パスから末尾のディレクトリ名を取得 */

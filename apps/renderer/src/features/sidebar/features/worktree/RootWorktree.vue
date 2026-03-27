@@ -4,9 +4,11 @@
 
 <script setup lang="ts">
 import type { WorktreeEntry } from "@gozd/rpc";
+import { computed } from "vue";
+import { computeStatusIcons, StatusIcons } from "../../../worktree";
 import { hasChanges } from "../../utils";
 
-defineProps<{
+const props = defineProps<{
   worktree: WorktreeEntry | undefined;
   active: boolean;
 }>();
@@ -14,6 +16,11 @@ defineProps<{
 const emit = defineEmits<{
   select: [wt: WorktreeEntry];
 }>();
+
+const statusIcons = computed(() => {
+  if (!props.worktree?.gitStatuses) return [];
+  return computeStatusIcons(props.worktree.gitStatuses);
+});
 </script>
 
 <template>
@@ -31,32 +38,11 @@ const emit = defineEmits<{
       >
         {{ worktree.branch ?? "(detached)" }}
       </span>
-      <span class="flex min-h-5 items-center gap-2 text-xs">
-        <span
-          v-if="worktree.changeCounts && hasChanges(worktree.changeCounts)"
-          class="flex items-center gap-1.5"
-        >
-          <span v-if="worktree.changeCounts.modified > 0" class="text-yellow-500">
-            <span class="mr-0.5 icon-[lucide--pencil] align-middle text-[10px]" />{{
-              worktree.changeCounts.modified
-            }}
-          </span>
-          <span v-if="worktree.changeCounts.added > 0" class="text-green-500">
-            <span class="mr-0.5 icon-[lucide--plus] align-middle text-[10px]" />{{
-              worktree.changeCounts.added
-            }}
-          </span>
-          <span v-if="worktree.changeCounts.deleted > 0" class="text-red-500">
-            <span class="mr-0.5 icon-[lucide--minus] align-middle text-[10px]" />{{
-              worktree.changeCounts.deleted
-            }}
-          </span>
-          <span v-if="worktree.changeCounts.untracked > 0" class="text-zinc-400">
-            <span class="mr-0.5 icon-[lucide--help-circle] align-middle text-[10px]" />{{
-              worktree.changeCounts.untracked
-            }}
-          </span>
-        </span>
+      <span
+        v-if="worktree.gitStatuses && hasChanges(worktree.gitStatuses)"
+        class="flex min-h-5 items-center gap-1 text-xs"
+      >
+        <StatusIcons :entries="statusIcons" />
       </span>
     </button>
   </div>

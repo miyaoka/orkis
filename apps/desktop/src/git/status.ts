@@ -1,6 +1,6 @@
 import { tryCatch } from "@gozd/shared";
 import { UNCOMMITTED_HASH } from "@gozd/rpc";
-import type { GitFileChange, WorktreeChangeCounts } from "@gozd/rpc";
+import type { GitFileChange } from "@gozd/rpc";
 
 export async function filterIgnored(entries: string[], cwd: string): Promise<Set<string>> {
   if (entries.length === 0) return new Set();
@@ -266,40 +266,4 @@ function parseDiffNameStatus(stdout: string): GitFileChange[] {
     }
   }
   return changes;
-}
-
-/** XY コードで「未変更」を表す文字か判定する（v1: " ", v2: "."） */
-function isUnchanged(char: string | undefined): boolean {
-  return char === " " || char === "." || char === undefined;
-}
-
-/** git status の2文字コードから変更種別ごとのファイル数を算出 */
-export function countChanges(statuses: Record<string, string>): WorktreeChangeCounts {
-  let modified = 0;
-  let added = 0;
-  let deleted = 0;
-  let untracked = 0;
-
-  for (const status of Object.values(statuses)) {
-    if (status === "??") {
-      untracked++;
-      continue;
-    }
-    // worktree 側 (Y) を優先、なければ index 側 (X) を使う
-    const code = isUnchanged(status[1]) ? status[0] : status[1];
-    switch (code) {
-      case "A":
-        added++;
-        break;
-      case "D":
-        deleted++;
-        break;
-      default:
-        // M, R, C, T, U 等はすべて modified 扱い
-        modified++;
-        break;
-    }
-  }
-
-  return { modified, added, deleted, untracked };
 }

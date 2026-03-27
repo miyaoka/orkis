@@ -11,6 +11,7 @@ worktree 行の下に吹き出し風のテキストとして出す。
 import type { Task, WorktreeEntry } from "@gozd/rpc";
 import { computed } from "vue";
 import type { ClaudeState, ClaudeStatus } from "../../../terminal";
+import { computeStatusIcons, StatusIcons } from "../../../worktree";
 import { hasChanges, hasTaskTitle, worktreeDisplayName } from "../../utils";
 import { TaskIconButton } from "../task";
 
@@ -127,6 +128,12 @@ const bubbleColorClass = computed(() => {
   if (first.state === "asking") return "text-orange-400/70";
   return "";
 });
+
+/** 変更をアイコン付きカウントに変換 */
+const statusIcons = computed(() => {
+  if (!props.wt.gitStatuses) return [];
+  return computeStatusIcons(props.wt.gitStatuses);
+});
 </script>
 
 <template>
@@ -198,48 +205,11 @@ const bubbleColorClass = computed(() => {
       >
         <span class="icon-[lucide--ellipsis-vertical] text-sm" />
       </button>
-      <span class="flex min-h-5 items-center gap-2 text-xs">
-        <span
-          v-if="wt.changeCounts && hasChanges(wt.changeCounts)"
-          class="flex items-center gap-1.5"
-        >
-          <span
-            v-if="wt.changeCounts.modified > 0"
-            class="text-yellow-500"
-            :title="`${wt.changeCounts.modified} modified`"
-          >
-            <span class="mr-0.5 icon-[lucide--pencil] align-middle text-[10px]" />{{
-              wt.changeCounts.modified
-            }}
-          </span>
-          <span
-            v-if="wt.changeCounts.added > 0"
-            class="text-green-500"
-            :title="`${wt.changeCounts.added} added`"
-          >
-            <span class="mr-0.5 icon-[lucide--plus] align-middle text-[10px]" />{{
-              wt.changeCounts.added
-            }}
-          </span>
-          <span
-            v-if="wt.changeCounts.deleted > 0"
-            class="text-red-500"
-            :title="`${wt.changeCounts.deleted} deleted`"
-          >
-            <span class="mr-0.5 icon-[lucide--minus] align-middle text-[10px]" />{{
-              wt.changeCounts.deleted
-            }}
-          </span>
-          <span
-            v-if="wt.changeCounts.untracked > 0"
-            class="text-zinc-400"
-            :title="`${wt.changeCounts.untracked} untracked`"
-          >
-            <span class="mr-0.5 icon-[lucide--help-circle] align-middle text-[10px]" />{{
-              wt.changeCounts.untracked
-            }}
-          </span>
-        </span>
+      <span
+        v-if="wt.gitStatuses && hasChanges(wt.gitStatuses)"
+        class="flex min-h-5 items-center gap-1 text-xs"
+      >
+        <StatusIcons :entries="statusIcons" />
       </span>
     </div>
 

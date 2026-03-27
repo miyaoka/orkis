@@ -16,7 +16,7 @@ import { storeToRefs } from "pinia";
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRpc } from "../../shared/rpc";
 import { ResizeHandle } from "../layout";
-import { useGitStatusStore, useWorktreeStore } from "../worktree";
+import { computeStatusIcons, StatusIcons, useGitStatusStore, useWorktreeStore } from "../worktree";
 import CommitDetailPane from "./CommitDetailPane.vue";
 import type { DisplayRef } from "./displayRef";
 import { computeGraphLayout } from "./graphLayout";
@@ -40,6 +40,9 @@ const sortMode = ref<SortMode>("date");
 
 /** 変更ファイル数 */
 const uncommittedChangeCount = computed(() => Object.keys(gitStatuses.value).length);
+
+/** 変更をアイコン付きカウントに変換 */
+const statusIcons = computed(() => computeStatusIcons(gitStatuses.value));
 
 /** コミットリスト全体から HEAD が指すカレントブランチ名を取得 */
 const currentBranch = computed(() => {
@@ -101,7 +104,7 @@ function prependUncommitted(rawCommits: GitCommit[]): GitCommit[] {
     parents: headHash ? [headHash] : [],
     author: "*",
     date: Math.floor(Date.now() / 1000),
-    message: count > 0 ? `Uncommitted Changes (${count})` : "Working Tree (Clean)",
+    message: count > 0 ? `Working Tree (${count})` : "Working Tree (Clean)",
     body: "",
     refs: [],
   };
@@ -688,10 +691,19 @@ function isInRange(hash: string): boolean {
                 :display-ref="displayRef"
                 :pr-by-branch="prByBranch"
               />
-              <span
-                class="truncate"
-                :class="isUncommitted(node.commit.hash) ? 'font-semibold text-zinc-400 italic' : ''"
-              >
+              <!-- Uncommitted Changes 行: ステータスアイコン付き -->
+              <template v-if="isUncommitted(node.commit.hash)">
+                <!-- clean 時はメッセージのみ表示 -->
+                <span
+                  v-if="uncommittedChangeCount === 0"
+                  class="truncate font-semibold text-zinc-400 italic"
+                >
+                  {{ node.commit.message }}
+                </span>
+                <StatusIcons v-else :entries="statusIcons" icon-size="size-4" />
+              </template>
+              <!-- 通常コミット行 -->
+              <span v-else class="truncate">
                 {{ node.commit.message }}
               </span>
             </div>

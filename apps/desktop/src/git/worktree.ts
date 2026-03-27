@@ -5,7 +5,7 @@ import { tryCatch } from "@gozd/shared";
 import type { WorktreeEntry } from "@gozd/rpc";
 import { projectKey } from "../projectKey";
 import { resolveCreatableFsPath, resolveExistingFsPath, resolveGitPath } from "../security";
-import { getGitStatus, countChanges } from "./status";
+import { getGitStatus } from "./status";
 import { assertBranchName } from "./branch";
 
 const WORKTREE_BASE = path.join(homedir(), ".local", "share", "gozd", "worktrees");
@@ -209,12 +209,12 @@ async function createWorktreeSymlinks(
   );
 }
 
-/** 各 worktree の git status を並列取得して changeCounts を付与する */
-export async function attachChangeCounts(entries: WorktreeEntry[]): Promise<WorktreeEntry[]> {
+/** 各 worktree の git status を並列取得して生データを付与する */
+export async function attachGitStatuses(entries: WorktreeEntry[]): Promise<WorktreeEntry[]> {
   await Promise.all(
     entries.map(async (entry) => {
       const { statuses } = await getGitStatus(entry.path);
-      entry.changeCounts = countChanges(statuses);
+      entry.gitStatuses = statuses;
     }),
   );
   return entries;
