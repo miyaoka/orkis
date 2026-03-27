@@ -35,10 +35,6 @@ interface Task {
 
 ## ライフサイクル
 
-### worktree 作成時の Task 自動生成
-
-worktree を作成すると、Task が自動的に作成・紐づけられる。
-
 ### PR から worktree 作成
 
 ```text
