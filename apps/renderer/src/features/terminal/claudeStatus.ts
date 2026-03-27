@@ -195,20 +195,24 @@ export function createClaudeStatusManager(deps: ClaudeStatusManagerDeps) {
    */
   function detectInterrupt(ptyId: number, data: string) {
     const currentState = claudeStatusByPtyId.value[ptyId]?.state;
-    if (currentState !== "working") return;
-
     const tail = ptyTailBuffers.get(ptyId) ?? "";
     const combined = tail + data;
 
-    // "Interrupted" を含むチャンクのみログ出力（全チャンクに出すとノイズになるため）
-    if (data.includes("Interrupted")) {
+    // "Interrupted" を含む場合のみログ出力（combined で判定し、チャンク分割にも対応）
+    if (combined.includes("Interrupted")) {
       const markerMatched = combined.includes(INTERRUPT_MARKER);
       const idx = combined.indexOf("Interrupted");
       const preview = combined.slice(Math.max(0, idx - 20), idx + 30);
       console.debug(
-        `[claude-status] detectInterrupt: ptyId=${ptyId} markerMatched=${markerMatched} tailLen=${tail.length} dataLen=${data.length}`,
+        `[claude-status] detectInterrupt: ptyId=${ptyId} state=${currentState ?? "undefined"} markerMatched=${markerMatched} tailLen=${tail.length} dataLen=${data.length}`,
         JSON.stringify(preview),
       );
+    }
+
+    if (currentState !== "working") {
+      // tail バッファは state に関わらず更新する（次チャンクの combined に必要）
+      ptyTailBuffers.set(ptyId, data.slice(-PTY_TAIL_BUFFER_SIZE));
+      return;
     }
 
     if (combined.includes(INTERRUPT_MARKER)) {
