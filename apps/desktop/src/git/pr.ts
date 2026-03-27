@@ -24,8 +24,8 @@ interface GqlPrNode {
 }
 
 interface GqlPrResponse {
-  data: {
-    repository: {
+  data?: {
+    repository?: {
       owner: { login: string };
       pullRequests: { nodes: GqlPrNode[] };
     };
@@ -90,8 +90,8 @@ async function execGh({
   return { ok: true, stdout };
 }
 
-/** 自アカウントのログイン名キャッシュ */
-let cachedViewer: string | null | undefined;
+/** 自アカウントのログイン名キャッシュ（成功時のみ保持） */
+let cachedViewer: string | undefined;
 
 export async function getViewer({
   cwd,
@@ -102,10 +102,7 @@ export async function getViewer({
 }): Promise<string | null> {
   if (cachedViewer !== undefined) return cachedViewer;
   const result = await execGh({ args: ["api", "user", "--jq", ".login"], cwd, env });
-  if (!result.ok) {
-    cachedViewer = null;
-    return null;
-  }
+  if (!result.ok) return null;
   const login = result.stdout.trim();
   cachedViewer = login;
   return login;
@@ -150,7 +147,10 @@ export async function getPrList({
   const parsed = tryCatch(() => JSON.parse(result.stdout) as GqlPrResponse);
   if (!parsed.ok) return null;
 
-  const { owner: repoOwner, pullRequests } = parsed.value.data.repository;
+  // GraphQL の partial error や null レスポンスをガード
+  const repository = parsed.value.data?.repository;
+  if (!repository) return null;
+  const { owner: repoOwner, pullRequests } = repository;
 
   // fork 由来の PR を除外（自リポジトリの owner と一致するもののみ）
   return pullRequests.nodes

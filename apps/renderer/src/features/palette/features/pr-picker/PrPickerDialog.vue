@@ -120,6 +120,8 @@ function handleKeydown(e: KeyboardEvent) {
       movePage(-1);
       break;
     case "Enter":
+      // ボタンにフォーカスがある場合はボタン自身のクリックに任せる
+      if (e.target instanceof HTMLButtonElement) break;
       e.preventDefault();
       acceptSelected();
       break;
@@ -154,6 +156,7 @@ useEventListener(dialogRef, "click", (e: MouseEvent) => {
         <button
           v-if="viewer !== ''"
           type="button"
+          :aria-pressed="filterAssignee"
           class="shrink-0 rounded-sm px-2 py-0.5 text-xs"
           :class="
             filterAssignee
@@ -167,6 +170,7 @@ useEventListener(dialogRef, "click", (e: MouseEvent) => {
         <button
           v-if="viewer !== ''"
           type="button"
+          :aria-pressed="filterReviewer"
           class="shrink-0 rounded-sm px-2 py-0.5 text-xs"
           :class="
             filterReviewer
