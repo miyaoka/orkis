@@ -672,15 +672,7 @@ function isInRange(hash: string): boolean {
     <div class="flex min-h-0 flex-1">
       <!-- Graph list -->
       <div
-        v-if="layout.nodes.length === 0"
         ref="graphListRef"
-        class="min-w-0 flex-1 overflow-y-auto p-2"
-      >
-        <div class="text-xs text-zinc-500">No commits</div>
-      </div>
-
-      <div
-        v-else
         class="flex min-w-0 flex-1 flex-col outline-none"
         tabindex="0"
         @keydown="onKeydown"
