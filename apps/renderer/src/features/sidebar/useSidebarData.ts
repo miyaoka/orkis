@@ -1,4 +1,4 @@
-import type { Task, WorktreeEntry } from "@gozd/rpc";
+import type { WorktreeEntry } from "@gozd/rpc";
 import { tryCatch } from "@gozd/shared";
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRpc } from "../../shared/rpc";
@@ -19,8 +19,6 @@ export function useSidebarData() {
   const worktrees = ref<WorktreeEntry[]>([]);
   /** worktree 化されていないローカルブランチ */
   const freeBranches = ref<string[]>([]);
-  /** 未着手の Task（worktreeDir なし） */
-  const pendingTasks = ref<Task[]>([]);
   /** fetchData の世代管理（並行実行で stale なレスポンスを破棄するため） */
   let fetchGen = 0;
 
@@ -39,17 +37,15 @@ export function useSidebarData() {
   async function fetchData() {
     if (!worktreeStore.dir) return;
     const gen = ++fetchGen;
-    const [wtList, branchList, taskList] = await Promise.all([
+    const [wtList, branchList] = await Promise.all([
       request.gitWorktreeList(),
       request.gitBranchList(),
-      request.taskList(),
     ]);
     // 並行実行された新しい fetchData が先に完了していたら、この結果は stale なので破棄
     if (gen !== fetchGen) return;
     worktrees.value = wtList;
     const wtBranches = new Set(wtList.map((wt) => wt.branch).filter(Boolean));
     freeBranches.value = branchList.filter((b) => !wtBranches.has(b));
-    pendingTasks.value = taskList.filter((t) => !t.worktreeDir);
 
     // 外部で削除された worktree のターミナルをクリーンアップ
     const wtPaths = new Set(wtList.map((wt) => wt.path));
@@ -147,7 +143,6 @@ export function useSidebarData() {
   return {
     worktrees,
     freeBranches,
-    pendingTasks,
     rootWorktree,
     nonMainWorktrees,
     sortedBranches,
