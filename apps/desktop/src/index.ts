@@ -20,7 +20,7 @@ import {
   getWorktreeList,
   addWorktree,
   removeWorktree,
-  attachChangeCounts,
+  attachGitStatuses,
   getBranchList,
   deleteBranch,
   resolveCommitDiffRefs,
@@ -826,7 +826,7 @@ function createWindowWithRPC(dir: string, options?: CreateWindowOptions): GozdWi
         gitPrList: () => getPrList({ cwd: projectDir, env: shellEnv }),
         gitViewer: () => getViewer({ cwd: projectDir, env: shellEnv }),
         gitWorktreeList: async () => {
-          const entries = await attachChangeCounts(await getWorktreeList(projectDir));
+          const entries = await attachGitStatuses(await getWorktreeList(projectDir));
           // 各 worktree に紐づく Task を付与
           const tasks = loadTasks(projectDir);
           const taskByDir = new Map(

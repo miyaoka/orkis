@@ -18,13 +18,6 @@ export interface FileReadResult {
 }
 
 /** git status の変更種別ごとのファイル数 */
-export interface WorktreeChangeCounts {
-  modified: number;
-  added: number;
-  deleted: number;
-  untracked: number;
-}
-
 /** git worktree の情報 */
 export interface WorktreeEntry {
   /** worktree のディレクトリパス */
@@ -35,8 +28,8 @@ export interface WorktreeEntry {
   branch?: string;
   /** メインの worktree（clone 元）かどうか */
   isMain: boolean;
-  /** git status の変更ファイル数サマリー */
-  changeCounts?: WorktreeChangeCounts;
+  /** git status の生データ（ファイルパス → XY ステータスコード） */
+  gitStatuses?: Record<string, string>;
   /** 紐づく Task */
   task?: Task;
 }
