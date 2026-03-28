@@ -1,6 +1,20 @@
 import SwiftUI
 import WebKit
 
+/// スレッドセーフなワークスペースルート管理
+final class WorkspaceRoot: @unchecked Sendable {
+    private var _value: String?
+    private let lock = NSLock()
+
+    var value: String? {
+        get { lock.withLock { _value } }
+        set { lock.withLock { _value = newValue } }
+    }
+
+    /// 値を返す。nil の場合はホームディレクトリにフォールバック
+    var dir: String { value ?? NSHomeDirectory() }
+}
+
 struct ContentView: View {
     @State private var bridge = RPCBridge()
     @State private var page: WebPage?
@@ -8,18 +22,17 @@ struct ContentView: View {
     @State private var fileWatcher: FileWatcher?
     @State private var server: SocketServer?
 
-    /// 現在のワークスペースルート
-    @State private var currentRoot: String?
+    /// 現在のワークスペースルート（スレッドセーフ）
+    private let workspaceRoot = WorkspaceRoot()
 
     /// チャンネル（dev / stable のパス分離用）
     private let channel = "dev"
 
     var body: some View {
-        NavigationSplitView {
-            SidebarView()
-        } detail: {
+        Group {
             if let page {
                 WebView(page)
+                    .ignoresSafeArea()
             }
         }
         .onAppear {
@@ -42,9 +55,9 @@ struct ContentView: View {
 
         // WebPage をカスタムスキーム付きで作成
         let rpcSchemeHandler = RPCSchemeHandler(bridge: bridge)
-        let rootRef = _currentRoot
+        let root = workspaceRoot
         let fileSchemeHandler = FileSchemeHandler(rootProvider: {
-            MainActor.assumeIsolated { rootRef.wrappedValue }
+            root.value
         })
 
         var configuration = WebPage.Configuration()
@@ -57,10 +70,13 @@ struct ContentView: View {
         // PTY Manager を作成（data/exit を WebView に送信）
         let manager = PTYManager(callbacks: PTYManager.Callbacks(
             onData: { id, bytes in
-                // UInt8 バイト列を Base64 エンコードして WebView に送信
-                let base64 = Data(bytes).base64EncodedString()
+                // UTF-8 文字列に変換し、JSON エンコードで特殊文字をエスケープ
+                let text = String(decoding: Data(bytes), as: UTF8.self)
+                guard let jsonData = try? JSONEncoder().encode(text),
+                    let jsonStr = String(data: jsonData, encoding: .utf8)
+                else { return }
                 Task { @MainActor in
-                    let js = "window.__gozdReceive?.('ptyData', {id: \(id), data: '\(base64)'})"
+                    let js = "window.__gozdReceive?.('ptyData', {id: \(id), data: \(jsonStr)})"
                     _ = try? await webPage.callJavaScript(js)
                 }
             },
@@ -83,9 +99,14 @@ struct ContentView: View {
                     _ = try? await webPage.callJavaScript(js)
                 }
             },
-            onGitStatusChange: {
+            onGitStatusChange: { [root = workspaceRoot] in
+                let dir = root.dir
+                let status = GitStatus.getStatus(cwd: dir)
+                guard let jsonData = try? JSONEncoder().encode(status),
+                    let jsonStr = String(data: jsonData, encoding: .utf8)
+                else { return }
                 Task { @MainActor in
-                    let js = "window.__gozdReceive?.('gitStatusChange', {})"
+                    let js = "window.__gozdReceive?.('gitStatusChange', \(jsonStr))"
                     _ = try? await webPage.callJavaScript(js)
                 }
             },
@@ -100,12 +121,15 @@ struct ContentView: View {
 
         // RPC ハンドラー登録
         registerPTYHandlers(manager: manager, socketPath: socketServerPath, settingsPath: settingsPath)
+        registerFsHandlers()
         registerGitHandlers()
         registerPersistenceHandlers()
+        registerRendererHandlers(webPage: webPage, watcher: watcher)
         registerTestHandlers()
 
-        // テスト用 HTML をロード
-        webPage.load(html: bridgeTestHTML, baseURL: URL(string: "about:blank")!)
+        // Vite dev server の URL をロード
+        let devServerUrl = URL(string: "http://localhost:5173")!
+        webPage.load(URLRequest(url: devServerUrl))
     }
 
     private func registerPTYHandlers(manager: PTYManager, socketPath: String, settingsPath: String) {
@@ -140,19 +164,157 @@ struct ContentView: View {
         }
     }
 
-    // MARK: - Git RPC ハンドラー
+    // MARK: - ファイルシステム RPC ハンドラー
+
+    private func registerFsHandlers() {
+        let root = workspaceRoot
+        let getDir: @Sendable () -> String = { root.dir }
+
+        bridge.registerRequest("fsReadDir") { data in
+            let params = try JSONDecoder().decode(FsRelPathParams.self, from: data)
+            let dir = getDir()
+            guard let resolvedPath = PathValidator.resolveExistingFsPath(root: dir, relPath: params.relPath) else {
+                throw RPCError.unknownRequest("Path outside workspace root")
+            }
+
+            let fm = FileManager.default
+            guard let contents = try? fm.contentsOfDirectory(atPath: resolvedPath) else {
+                return try JSONEncoder().encode([] as [FsEntry])
+            }
+
+            let visibleEntries = contents.filter { $0 != ".git" }
+            let ignored = GitStatus.filterIgnored(entries: visibleEntries, cwd: resolvedPath)
+
+            let entries: [FsEntry] = visibleEntries.map { name in
+                let fullPath = (resolvedPath as NSString).appendingPathComponent(name)
+                var isDir: ObjCBool = false
+                fm.fileExists(atPath: fullPath, isDirectory: &isDir)
+                return FsEntry(
+                    name: name,
+                    isDirectory: isDir.boolValue,
+                    isIgnored: ignored.contains(name)
+                )
+            }
+
+            return try JSONEncoder().encode(entries)
+        }
+
+        bridge.registerRequest("fsReadFile") { data in
+            let params = try JSONDecoder().decode(FsRelPathParams.self, from: data)
+            let dir = getDir()
+            guard let resolvedPath = PathValidator.resolveExistingFsPath(root: dir, relPath: params.relPath) else {
+                return try JSONEncoder().encode(FileReadResult(content: "", isBinary: false, notFound: true))
+            }
+            let result = readFileContent(absolutePath: resolvedPath)
+            return try JSONEncoder().encode(result)
+        }
+
+        bridge.registerRequest("fsReadFileAbsolute") { data in
+            let params = try JSONDecoder().decode(FsAbsolutePathParams.self, from: data)
+            let result = readFileContent(absolutePath: params.absolutePath)
+            return try JSONEncoder().encode(result)
+        }
+
+        bridge.registerRequest("gitShowFile") { data in
+            let params = try JSONDecoder().decode(FsRelPathParams.self, from: data)
+            let dir = getDir()
+            guard PathValidator.isInsideRoot(root: dir, relPath: params.relPath) else {
+                return try JSONEncoder().encode(FileReadResult(content: "", isBinary: true))
+            }
+
+            guard case .success(let stdout) = runGit(args: ["show", "HEAD:\(params.relPath)"], cwd: dir) else {
+                return try JSONEncoder().encode(FileReadResult(content: "", isBinary: true))
+            }
+
+            // NUL バイトでバイナリ判定
+            if let data = stdout.data(using: .utf8), data.contains(0x00) {
+                return try JSONEncoder().encode(FileReadResult(content: "", isBinary: true))
+            }
+
+            return try JSONEncoder().encode(FileReadResult(content: stdout, isBinary: false))
+        }
+
+        bridge.registerRequest("gitDiffFile") { data in
+            let params = try JSONDecoder().decode(FsRelPathParams.self, from: data)
+            let dir = getDir()
+            guard PathValidator.isInsideRoot(root: dir, relPath: params.relPath) else {
+                return try JSONEncoder().encode("")
+            }
+
+            guard case .success(let stdout) = runGit(args: ["diff", "HEAD", "--", params.relPath], cwd: dir) else {
+                return try JSONEncoder().encode("")
+            }
+            return try JSONEncoder().encode(stdout)
+        }
+
+        bridge.registerRequest("gitShowCommitFile") { data in
+            let params = try JSONDecoder().decode(GitShowCommitFileParams.self, from: data)
+            let dir = getDir()
+            guard PathValidator.isInsideRoot(root: dir, relPath: params.relPath) else {
+                let empty = FileReadResult(content: "", isBinary: false, notFound: true)
+                return try JSONEncoder().encode(["from": empty, "to": empty])
+            }
+
+            let refs = GitDiff.resolveCommitDiffRefs(cwd: dir, hash: params.hash, compareHash: params.compareHash)
+
+            func showAtRef(_ ref: String?) -> FileReadResult {
+                guard let ref else {
+                    return FileReadResult(content: "", isBinary: false, notFound: true)
+                }
+                guard case .success(let stdout) = runGit(args: ["show", "\(ref):\(params.relPath)"], cwd: dir) else {
+                    return FileReadResult(content: "", isBinary: false, notFound: true)
+                }
+                if let data = stdout.data(using: .utf8), data.contains(0x00) {
+                    return FileReadResult(content: "", isBinary: true)
+                }
+                return FileReadResult(content: stdout, isBinary: false)
+            }
+
+            func readWorkingTree() -> FileReadResult {
+                guard let resolved = PathValidator.resolveExistingFsPath(root: dir, relPath: params.relPath) else {
+                    return FileReadResult(content: "", isBinary: false, notFound: true)
+                }
+                return readFileContent(absolutePath: resolved)
+            }
+
+            let from = showAtRef(refs.from)
+            let to = refs.to == nil ? readWorkingTree() : showAtRef(refs.to)
+
+            let result: [String: Any] = [
+                "from": ["content": from.content, "isBinary": from.isBinary, "notFound": from.notFound],
+                "to": ["content": to.content, "isBinary": to.isBinary, "notFound": to.notFound],
+            ]
+            return try JSONSerialization.data(withJSONObject: result)
+        }
+
+        bridge.registerRequest("switchDir") { data in
+            let params = try JSONDecoder().decode(SwitchDirParams.self, from: data)
+            root.value = params.dir
+            let result: [String: String] = [
+                "dir": params.dir,
+                "fileServerBaseUrl": "gozd-file:/",
+            ]
+            return try JSONSerialization.data(withJSONObject: result)
+        }
+    }
+
+    // MARK: - Git RPC ハンドラー（renderer スキーマ準拠: cwd は currentRoot から補完）
 
     private func registerGitHandlers() {
-        bridge.registerRequest("gitStatus") { data in
-            let params = try JSONDecoder().decode(CwdParams.self, from: data)
-            let result = GitStatus.getStatus(cwd: params.cwd)
-            return try JSONEncoder().encode(result)
+        // renderer は params: undefined で呼ぶため、workspaceRoot を使う
+        let root = workspaceRoot
+        let getCwd: @Sendable () -> String = { root.dir }
+
+        // renderer スキーマ: gitStatus の response は Record<string, string>（statuses のみ）
+        bridge.registerRequest("gitStatus") { _ in
+            let result = GitStatus.getStatus(cwd: getCwd())
+            return try JSONEncoder().encode(result.statuses)
         }
 
         bridge.registerRequest("gitLog") { data in
             let params = try JSONDecoder().decode(GitLogParams.self, from: data)
             let (headCommits, defaultBranchCommits, defaultBranch) = GitLog.getLog(
-                cwd: params.cwd,
+                cwd: getCwd(),
                 maxCount: params.maxCount,
                 firstParentOnly: params.firstParentOnly ?? false
             )
@@ -164,21 +326,19 @@ struct ContentView: View {
             return try JSONEncoder().encode(result)
         }
 
-        bridge.registerRequest("gitBranchList") { data in
-            let params = try JSONDecoder().decode(CwdParams.self, from: data)
-            let branches = GitBranch.list(cwd: params.cwd)
+        bridge.registerRequest("gitBranchList") { _ in
+            let branches = GitBranch.list(cwd: getCwd())
             return try JSONEncoder().encode(branches)
         }
 
         bridge.registerRequest("gitBranchDelete") { data in
             let params = try JSONDecoder().decode(GitBranchDeleteParams.self, from: data)
-            try GitBranch.delete(cwd: params.cwd, branch: params.branch)
+            try GitBranch.delete(cwd: getCwd(), branch: params.branch)
             return Data("null".utf8)
         }
 
-        bridge.registerRequest("gitWorktreeList") { data in
-            let params = try JSONDecoder().decode(CwdParams.self, from: data)
-            var entries = GitWorktree.list(cwd: params.cwd)
+        bridge.registerRequest("gitWorktreeList") { _ in
+            var entries = GitWorktree.list(cwd: getCwd())
             GitWorktree.attachGitStatuses(entries: &entries)
             return try JSONEncoder().encode(entries)
         }
@@ -186,7 +346,7 @@ struct ContentView: View {
         bridge.registerRequest("createWorktree") { data in
             let params = try JSONDecoder().decode(CreateWorktreeParams.self, from: data)
             let entry = try GitWorktree.add(
-                cwd: params.cwd,
+                cwd: getCwd(),
                 worktreeDir: params.worktreeDir,
                 branch: params.branch
             )
@@ -195,46 +355,49 @@ struct ContentView: View {
 
         bridge.registerRequest("gitWorktreeRemove") { data in
             let params = try JSONDecoder().decode(GitWorktreeRemoveParams.self, from: data)
-            try GitWorktree.remove(cwd: params.cwd, wtPath: params.path, force: params.force ?? false)
+            try GitWorktree.remove(cwd: getCwd(), wtPath: params.path, force: params.force ?? false)
             return Data("null".utf8)
         }
 
         bridge.registerRequest("gitCommitFiles") { data in
             let params = try JSONDecoder().decode(GitCommitFilesParams.self, from: data)
             let files = GitDiff.getCommitFiles(
-                cwd: params.cwd, hash: params.hash, compareHash: params.compareHash)
+                cwd: getCwd(), hash: params.hash, compareHash: params.compareHash)
             return try JSONEncoder().encode(files)
         }
 
         bridge.registerRequest("gitDiffRefs") { data in
             let params = try JSONDecoder().decode(GitCommitFilesParams.self, from: data)
             let refs = GitDiff.resolveCommitDiffRefs(
-                cwd: params.cwd, hash: params.hash, compareHash: params.compareHash)
+                cwd: getCwd(), hash: params.hash, compareHash: params.compareHash)
             return try JSONEncoder().encode(refs)
         }
 
-        bridge.registerRequest("gitPrList") { data in
-            let params = try JSONDecoder().decode(GhParams.self, from: data)
-            let prs = GitHubCli.getPrList(cwd: params.cwd, env: params.env ?? [:])
+        bridge.registerRequest("gitPrList") { _ in
+            let env = ProcessInfo.processInfo.environment
+            let prs = GitHubCli.getPrList(cwd: getCwd(), env: env)
             return try JSONEncoder().encode(prs)
         }
 
-        bridge.registerRequest("gitIssueList") { data in
-            let params = try JSONDecoder().decode(GhParams.self, from: data)
-            let issues = GitHubCli.getIssueList(cwd: params.cwd, env: params.env ?? [:])
+        bridge.registerRequest("gitIssueList") { _ in
+            let env = ProcessInfo.processInfo.environment
+            let issues = GitHubCli.getIssueList(cwd: getCwd(), env: env)
             return try JSONEncoder().encode(issues)
         }
 
-        bridge.registerRequest("gitViewer") { data in
-            let params = try JSONDecoder().decode(GhParams.self, from: data)
-            let viewer = GitHubCli.getViewer(cwd: params.cwd, env: params.env ?? [:])
+        bridge.registerRequest("gitViewer") { _ in
+            let env = ProcessInfo.processInfo.environment
+            let viewer = GitHubCli.getViewer(cwd: getCwd(), env: env)
             return try JSONEncoder().encode(viewer)
         }
     }
 
-    // MARK: - 永続化 RPC ハンドラー
+    // MARK: - 永続化 RPC ハンドラー（renderer スキーマ準拠: projectDir は currentRoot から補完）
 
     private func registerPersistenceHandlers() {
+        let root2 = workspaceRoot
+        let getProjectDir: @Sendable () -> String = { root2.dir }
+
         bridge.registerRequest("configLoad") { _ in
             let config = ConfigPersistence.load()
             return try JSONEncoder().encode(config)
@@ -246,16 +409,15 @@ struct ContentView: View {
             return Data("null".utf8)
         }
 
-        bridge.registerRequest("taskList") { data in
-            let params = try JSONDecoder().decode(ProjectDirParams.self, from: data)
-            let tasks = TaskPersistence.loadTasks(projectDir: params.projectDir)
+        bridge.registerRequest("taskList") { _ in
+            let tasks = TaskPersistence.loadTasks(projectDir: getProjectDir())
             return try JSONEncoder().encode(tasks)
         }
 
         bridge.registerRequest("taskAdd") { data in
             let params = try JSONDecoder().decode(TaskAddParams.self, from: data)
             let task = try TaskPersistence.addTask(
-                projectDir: params.projectDir,
+                projectDir: getProjectDir(),
                 body: params.body,
                 worktreeDir: params.worktreeDir,
                 prNumber: params.prNumber,
@@ -267,14 +429,61 @@ struct ContentView: View {
         bridge.registerRequest("taskUpdate") { data in
             let params = try JSONDecoder().decode(TaskUpdateParams.self, from: data)
             let task = try TaskPersistence.updateTask(
-                projectDir: params.projectDir, id: params.id, body: params.body)
+                projectDir: getProjectDir(), id: params.id, body: params.body)
             return try JSONEncoder().encode(task)
         }
 
         bridge.registerRequest("taskRemove") { data in
             let params = try JSONDecoder().decode(TaskRemoveParams.self, from: data)
-            TaskPersistence.removeTask(projectDir: params.projectDir, id: params.id)
+            TaskPersistence.removeTask(projectDir: getProjectDir(), id: params.id)
             return Data("null".utf8)
+        }
+    }
+
+    // MARK: - Renderer 連携ハンドラー
+
+    private func registerRendererHandlers(webPage: WebPage, watcher: FileWatcher) {
+        let root = workspaceRoot
+        let channel = self.channel
+
+        // rendererReady: renderer が起動完了した時に gozdOpen を送信
+        bridge.registerMessage("rendererReady") { _ in
+            Task { @MainActor in
+                let dir = root.dir
+                let isGitRepo = GitUtils.isGitRepo(dir: dir)
+                let repoName = (dir as NSString).lastPathComponent
+                let payload = """
+                    {dir: '\(dir.replacingOccurrences(of: "'", with: "\\'"))', \
+                    fileServerBaseUrl: 'gozd-file:/', \
+                    channel: '\(channel)', \
+                    repoName: '\(repoName.replacingOccurrences(of: "'", with: "\\'"))', \
+                    isGitRepo: \(isGitRepo)}
+                    """
+                let js = "window.__gozdReceive?.('gozdOpen', \(payload))"
+                _ = try? await webPage.callJavaScript(js)
+
+                // ファイル監視を開始
+                if root.value != nil {
+                    watcher.startWatching(root: dir, isGitRepo: isGitRepo)
+                }
+            }
+        }
+
+        // openExternal: 外部 URL を開く
+        bridge.registerMessage("openExternal") { data in
+            guard let params = try? JSONDecoder().decode(OpenExternalParams.self, from: data),
+                let url = URL(string: params.url)
+            else { return }
+            Task { @MainActor in
+                NSWorkspace.shared.open(url)
+            }
+        }
+
+        // windowClose: ウィンドウを閉じる
+        bridge.registerMessage("windowClose") { _ in
+            Task { @MainActor in
+                NSApp.keyWindow?.close()
+            }
         }
     }
 
@@ -289,6 +498,32 @@ struct ContentView: View {
             return try JSONSerialization.data(withJSONObject: response)
         }
     }
+}
+
+// MARK: - FS RPC パラメータ型
+
+private struct FsRelPathParams: Decodable {
+    let relPath: String
+}
+
+private struct FsAbsolutePathParams: Decodable {
+    let absolutePath: String
+}
+
+private struct FsEntry: Encodable {
+    let name: String
+    let isDirectory: Bool
+    let isIgnored: Bool
+}
+
+private struct GitShowCommitFileParams: Decodable {
+    let relPath: String
+    let hash: String
+    let compareHash: String?
+}
+
+private struct SwitchDirParams: Decodable {
+    let dir: String
 }
 
 // MARK: - PTY RPC パラメータ型
@@ -314,14 +549,9 @@ private struct PTYKillParams: Decodable {
     let id: Int
 }
 
-// MARK: - Git RPC パラメータ型
-
-private struct CwdParams: Decodable {
-    let cwd: String
-}
+// MARK: - Git RPC パラメータ型（renderer スキーマ準拠: cwd なし）
 
 private struct GitLogParams: Decodable {
-    let cwd: String
     let maxCount: Int?
     let firstParentOnly: Bool?
 }
@@ -333,41 +563,27 @@ private struct GitLogResult: Encodable {
 }
 
 private struct GitBranchDeleteParams: Decodable {
-    let cwd: String
     let branch: String
 }
 
 private struct CreateWorktreeParams: Decodable {
-    let cwd: String
     let worktreeDir: String
     let branch: String
 }
 
 private struct GitWorktreeRemoveParams: Decodable {
-    let cwd: String
     let path: String
     let force: Bool?
 }
 
 private struct GitCommitFilesParams: Decodable {
-    let cwd: String
     let hash: String
     let compareHash: String?
 }
 
-private struct GhParams: Decodable {
-    let cwd: String
-    let env: [String: String]?
-}
-
-// MARK: - 永続化 RPC パラメータ型
-
-private struct ProjectDirParams: Decodable {
-    let projectDir: String
-}
+// MARK: - 永続化 RPC パラメータ型（renderer スキーマ準拠: projectDir なし）
 
 private struct TaskAddParams: Decodable {
-    let projectDir: String
     let body: String
     let worktreeDir: String?
     let prNumber: Int?
@@ -381,8 +597,11 @@ private struct TaskUpdateParams: Decodable {
 }
 
 private struct TaskRemoveParams: Decodable {
-    let projectDir: String
     let id: String
+}
+
+private struct OpenExternalParams: Decodable {
+    let url: String
 }
 
 // MARK: - Shell 環境変数
@@ -421,186 +640,3 @@ private func handleSocketMessage(_ message: GozdMessage) {
     }
 }
 
-// MARK: - Sidebar
-
-struct SidebarView: View {
-    var body: some View {
-        List {
-            Section("Worktrees") {
-                Text("main")
-                Text("feature/swiftui-migration")
-            }
-            Section("Tasks") {
-                Text("Phase 1: PTY")
-            }
-        }
-        .navigationTitle("gozd")
-    }
-}
-
-// MARK: - Test HTML
-
-/// RPC + PTY ブリッジの動作確認用 HTML
-private let bridgeTestHTML = """
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <meta charset="utf-8">
-        <style>
-            body {
-                font-family: -apple-system, system-ui;
-                padding: 24px;
-                margin: 0;
-                background: #1e1e1e;
-                color: #e0e0e0;
-            }
-            h1 { opacity: 0.7; font-size: 18px; }
-            .log {
-                font-family: ui-monospace, monospace;
-                font-size: 13px;
-                padding: 12px;
-                background: rgba(255,255,255,0.05);
-                border-radius: 8px;
-                white-space: pre-wrap;
-                max-height: 60vh;
-                overflow-y: auto;
-            }
-            button {
-                padding: 8px 16px;
-                margin: 4px;
-                border: 1px solid rgba(255,255,255,0.2);
-                border-radius: 6px;
-                background: rgba(255,255,255,0.1);
-                color: #e0e0e0;
-                cursor: pointer;
-            }
-            button:hover { background: rgba(255,255,255,0.2); }
-            .section { margin-top: 16px; }
-            input {
-                padding: 6px 12px;
-                border: 1px solid rgba(255,255,255,0.2);
-                border-radius: 6px;
-                background: rgba(255,255,255,0.05);
-                color: #e0e0e0;
-                font-family: ui-monospace, monospace;
-                font-size: 13px;
-                width: 300px;
-            }
-        </style>
-    </head>
-    <body>
-        <h1>gozd — RPC + PTY Bridge Test</h1>
-
-        <div class="section">
-            <button onclick="testEcho()">Echo</button>
-            <button onclick="testPing()">Ping</button>
-            <button onclick="testPtySpawn()">PTY Spawn</button>
-            <button onclick="testPtyKill()">PTY Kill</button>
-        </div>
-
-        <div class="section">
-            <input id="ptyInput" placeholder="Type command and press Enter"
-                   onkeydown="if(event.key==='Enter') sendPtyInput()" />
-        </div>
-
-        <div id="log" class="log"></div>
-
-        <script>
-            let currentPtyId = null;
-
-            window.__gozdReceive = (type, payload) => {
-                if (type === 'ptyData') {
-                    const text = atob(payload.data);
-                    log(`[pty:${payload.id}] ${text}`);
-                } else if (type === 'ptyExit') {
-                    log(`[pty:${payload.id}] exited with code ${payload.exitCode}`);
-                    currentPtyId = null;
-                } else {
-                    log(`[receive] ${type}: ${JSON.stringify(payload)}`);
-                }
-            };
-
-            async function rpcRequest(name, params = {}) {
-                try {
-                    const res = await fetch(`gozd-rpc://${name}`, {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify(params),
-                    });
-                    log(`[fetch] ${name} status=${res.status} ok=${res.ok}`);
-                    const text = await res.text();
-                    log(`[fetch] ${name} body=${text}`);
-                    return JSON.parse(text);
-                } catch (e) {
-                    log(`[fetch-error] ${name}: ${e.message}`);
-                    return null;
-                }
-            }
-
-            // fire-and-forget メッセージ（レスポンス不要）
-            function rpcMessage(name, params = {}) {
-                fetch(`gozd-rpc://${name}`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(params),
-                });
-            }
-
-            async function testEcho() {
-                log("[send] echo");
-                const result = await rpcRequest("echo", { hello: "world" });
-                log(`[recv] ${JSON.stringify(result)}`);
-            }
-
-            async function testPing() {
-                log("[send] ping");
-                const result = await rpcRequest("ping");
-                log(`[recv] ${JSON.stringify(result)}`);
-            }
-
-            async function testPtySpawn() {
-                if (currentPtyId !== null) {
-                    log("[warn] PTY already running");
-                    return;
-                }
-                log("[send] ptySpawn");
-                const home = "/Users/" + (await rpcRequest("ping")).timestamp ? "miyaoka" : "user";
-                currentPtyId = await rpcRequest("ptySpawn", {
-                    dir: "/tmp",
-                    cols: 80,
-                    rows: 24,
-                });
-                log(`[recv] ptySpawn: id=${currentPtyId}`);
-            }
-
-            function testPtyKill() {
-                if (currentPtyId === null) {
-                    log("[warn] No PTY running");
-                    return;
-                }
-                log(`[send] ptyKill: id=${currentPtyId}`);
-                rpcMessage("ptyKill", { id: currentPtyId });
-            }
-
-            function sendPtyInput() {
-                const input = document.getElementById("ptyInput");
-                if (currentPtyId === null) {
-                    log("[warn] No PTY running");
-                    return;
-                }
-                const text = input.value + "\\n";
-                rpcMessage("ptyWrite", { id: currentPtyId, data: text });
-                input.value = "";
-            }
-
-            function log(msg) {
-                const el = document.getElementById("log");
-                el.textContent += msg + "\\n";
-                el.scrollTop = el.scrollHeight;
-            }
-
-            log("Bridge ready.");
-        </script>
-    </body>
-    </html>
-    """

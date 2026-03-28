@@ -23,6 +23,8 @@ const config: KnipConfig = {
       ],
     },
     "apps/renderer": {
+      // electrobunShim.ts: GOZD_NATIVE 環境変数で Vite alias 経由で使用（静的 import なし）
+      entry: ["src/shared/rpc/electrobunShim.ts!"],
       ignoreDependencies: [
         // @iconify/tailwind4 が動的に require する（packageExtensions で補完済み）
         "@iconify-json/lucide",

@@ -222,7 +222,7 @@ enum PathValidator {
 // MARK: - ファイル読み取りユーティリティ
 
 /// ファイル内容の読み取り結果
-struct FileReadResult {
+struct FileReadResult: Encodable {
     let content: String
     let isBinary: Bool
     var isDirectory: Bool = false
