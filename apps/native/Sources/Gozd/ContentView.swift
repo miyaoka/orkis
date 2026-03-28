@@ -5,6 +5,14 @@ struct ContentView: View {
     @State private var bridge = RPCBridge()
     @State private var page: WebPage?
     @State private var ptyManager: PTYManager?
+    @State private var fileWatcher: FileWatcher?
+    @State private var server: SocketServer?
+
+    /// 現在のワークスペースルート
+    @State private var currentRoot: String?
+
+    /// チャンネル（dev / stable のパス分離用）
+    private let channel = "dev"
 
     var body: some View {
         NavigationSplitView {
@@ -20,10 +28,28 @@ struct ContentView: View {
     }
 
     private func setupApp() {
+        // Claude hooks 設定を生成
+        let settingsPath = claudeSettingsPath(channel: channel)
+        ClaudeHooksGenerator.generate(settingsPath: settingsPath)
+
+        // ソケットサーバーを起動
+        let socketServerPath = socketPath(channel: channel)
+        let socketServer = SocketServer(socketPath: socketServerPath) { message in
+            handleSocketMessage(message)
+        }
+        socketServer.start()
+        server = socketServer
+
         // WebPage をカスタムスキーム付きで作成
-        let schemeHandler = RPCSchemeHandler(bridge: bridge)
+        let rpcSchemeHandler = RPCSchemeHandler(bridge: bridge)
+        let rootRef = _currentRoot
+        let fileSchemeHandler = FileSchemeHandler(rootProvider: {
+            MainActor.assumeIsolated { rootRef.wrappedValue }
+        })
+
         var configuration = WebPage.Configuration()
-        configuration.urlSchemeHandlers[URLScheme("gozd-rpc")!] = schemeHandler
+        configuration.urlSchemeHandlers[URLScheme("gozd-rpc")!] = rpcSchemeHandler
+        configuration.urlSchemeHandlers[URLScheme("gozd-file")!] = fileSchemeHandler
 
         let webPage = WebPage(configuration: configuration)
         page = webPage
@@ -48,18 +74,45 @@ struct ContentView: View {
         ))
         ptyManager = manager
 
+        // FileWatcher を作成（ファイル変更を WebView に通知）
+        let watcher = FileWatcher(callbacks: FileWatcher.Callbacks(
+            onFsChange: { relDir in
+                Task { @MainActor in
+                    let escaped = relDir.replacingOccurrences(of: "'", with: "\\'")
+                    let js = "window.__gozdReceive?.('fsChange', {relDir: '\(escaped)'})"
+                    _ = try? await webPage.callJavaScript(js)
+                }
+            },
+            onGitStatusChange: {
+                Task { @MainActor in
+                    let js = "window.__gozdReceive?.('gitStatusChange', {})"
+                    _ = try? await webPage.callJavaScript(js)
+                }
+            },
+            onBranchChange: {
+                Task { @MainActor in
+                    let js = "window.__gozdReceive?.('branchChange', {})"
+                    _ = try? await webPage.callJavaScript(js)
+                }
+            }
+        ))
+        fileWatcher = watcher
+
         // RPC ハンドラー登録
-        registerPTYHandlers(manager: manager)
+        registerPTYHandlers(manager: manager, socketPath: socketServerPath, settingsPath: settingsPath)
         registerTestHandlers()
 
         // テスト用 HTML をロード
         webPage.load(html: bridgeTestHTML, baseURL: URL(string: "about:blank")!)
     }
 
-    private func registerPTYHandlers(manager: PTYManager) {
+    private func registerPTYHandlers(manager: PTYManager, socketPath: String, settingsPath: String) {
         bridge.registerRequest("ptySpawn") { data in
             let params = try JSONDecoder().decode(PTYSpawnParams.self, from: data)
-            let shellEnv = buildShellEnv()
+            let shellEnv = buildShellEnv(
+                socketPath: socketPath,
+                settingsPath: settingsPath
+            )
             let id = manager.spawn(
                 cwd: params.dir,
                 cols: params.cols,
@@ -124,8 +177,12 @@ private struct PTYKillParams: Decodable {
 // MARK: - Shell 環境変数
 
 /// PTY に注入する環境変数を構築する
-private func buildShellEnv() -> [String: String] {
+///
+/// gozd 固有の環境変数（ソケットパス、Claude hooks 設定パス等）を追加する。
+/// PTY ID は spawn 後に PTYManager が割り当てるため、ここでは静的な ID を仮設定する。
+private func buildShellEnv(socketPath: String, settingsPath: String) -> [String: String] {
     var env = ProcessInfo.processInfo.environment
+    // ターミナル環境変数
     env["TERM"] = "xterm-256color"
     env["COLORTERM"] = "truecolor"
     env["TERM_PROGRAM"] = "gozd"
@@ -133,7 +190,24 @@ private func buildShellEnv() -> [String: String] {
     if env["LANG"] == nil {
         env["LANG"] = "en_US.UTF-8"
     }
+    // gozd 固有の環境変数
+    env["GOZD_SOCKET_PATH"] = socketPath
+    env["GOZD_CLAUDE_SETTINGS_PATH"] = settingsPath
     return env
+}
+
+// MARK: - ソケットメッセージ処理
+
+/// ソケット経由で受信したメッセージを処理する
+private func handleSocketMessage(_ message: GozdMessage) {
+    switch message {
+    case .hook(let hookMessage):
+        print("[gozd] hook: \(hookMessage.event)")
+        // TODO: Phase 3 で ptyId → ウィンドウ特定 → WebView に送信
+    case .open(let openMessage):
+        print("[gozd] open: \(openMessage.targetPath)")
+        // TODO: Phase 3 でウィンドウ管理と連携
+    }
 }
 
 // MARK: - Sidebar
