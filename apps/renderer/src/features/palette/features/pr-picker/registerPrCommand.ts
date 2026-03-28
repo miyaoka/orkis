@@ -52,10 +52,22 @@ export function registerPrCommand(): () => void {
             })();
             return;
           }
-          // 新規 worktree 作成
+          // task を先に作成し、createWorktreeWithTask で worktree 作成 + 紐づけを一括実行
+          // （createWorktree → taskAdd の2ステップだと task なしの中間状態が表示される）
           void (async () => {
+            const taskResult = await tryCatch(
+              request.taskAdd({
+                body: pr.title,
+                prNumber: pr.number,
+              }),
+            );
+            if (!taskResult.ok) {
+              notify.error("Failed to create task", taskResult.error);
+              return;
+            }
             const result = await tryCatch(
-              request.createWorktree({
+              request.createWorktreeWithTask({
+                id: taskResult.value.id,
                 worktreeDir: generateTimestamp(),
                 branch: pr.headRefName,
               }),
@@ -63,17 +75,6 @@ export function registerPrCommand(): () => void {
             if (!result.ok) {
               notify.error("Failed to create worktree", result.error);
               return;
-            }
-            // PR タイトルを task として作成し、worktree に紐づける
-            const taskResult = await tryCatch(
-              request.taskAdd({
-                body: pr.title,
-                worktreeDir: result.value.dir,
-                prNumber: pr.number,
-              }),
-            );
-            if (!taskResult.ok) {
-              notify.error("Failed to create task for worktree", taskResult.error);
             }
             terminalStore.viewMode = "wt";
             worktreeStore.setOpen(result.value.dir, undefined, result.value.fileServerBaseUrl);

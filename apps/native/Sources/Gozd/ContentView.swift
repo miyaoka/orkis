@@ -436,13 +436,23 @@ struct ContentView: View {
             return try JSONEncoder().encode(entries)
         }
 
-        bridge.registerRequest("createWorktree") { data in
+        bridge.registerRequest("createWorktree") { [watcher = self.fileWatcher] data in
             let params = try JSONDecoder().decode(CreateWorktreeParams.self, from: data)
+
+            // worktree 作成中に branchChange が発火するのを防ぐ
+            watcher?.stopWatching()
+
             let entry = try GitWorktree.add(
                 cwd: getProjDir(),
                 worktreeDir: params.worktreeDir,
                 branch: params.branch
             )
+
+            // switchDir 相当: currentDir を更新し FileWatcher を新しい worktree で再開
+            root.switchDir(entry.path)
+            let isGitRepo = GitUtils.isGitRepo(dir: entry.path)
+            watcher?.startWatching(root: entry.path, isGitRepo: isGitRepo)
+
             let response = CreateWorktreeResponse(
                 worktree: entry,
                 dir: entry.path,
@@ -461,6 +471,9 @@ struct ContentView: View {
             let params = try JSONDecoder().decode(CreateWorktreeWithTaskParams.self, from: data)
             let projDir = getProjDir()
 
+            // worktree 作成中に branchChange が発火して task なし中間状態が表示されるのを防ぐ
+            watcher?.stopWatching()
+
             // プロジェクト設定から symlinks を読み込む
             let config = ProjectConfigPersistence.load(projectDir: projDir)
             let entry = try GitWorktree.add(
@@ -478,7 +491,7 @@ struct ContentView: View {
             var worktree = entry
             worktree.task = task
 
-            // switchDir 相当: currentDir を更新し FileWatcher を張り替え
+            // switchDir 相当: currentDir を更新し FileWatcher を新しい worktree で再開
             root.switchDir(entry.path)
             let isGitRepo = GitUtils.isGitRepo(dir: entry.path)
             watcher?.startWatching(root: entry.path, isGitRepo: isGitRepo)
