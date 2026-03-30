@@ -9,6 +9,9 @@ const isNative = !!process.env.GOZD_NATIVE;
 export default defineConfig({
   plugins: [docBlockPlugin(), tailwindcss(), vue()],
   base: "./",
+  define: {
+    __GOZD_NATIVE__: isNative,
+  },
   build: {
     outDir: "dist",
     // material-icon-theme の SVG（1200+個）がインライン化されて JS が肥大化するのを防ぐ

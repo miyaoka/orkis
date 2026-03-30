@@ -14,6 +14,7 @@ const listeners = {
   worktreeChange: [] as Array<() => void>,
   gozdOpen: [] as Array<(payload: Msg["gozdOpen"]) => void>,
   gozdHook: [] as Array<(payload: Msg["gozdHook"]) => void>,
+  nativeSwitchDir: [] as Array<(payload: Msg["nativeSwitchDir"]) => void>,
   notify: [] as Array<(payload: Msg["notify"]) => void>,
 };
 
@@ -45,6 +46,9 @@ const rpc = Electroview.defineRPC<GozdRPC>({
       },
       gozdHook: (payload) => {
         for (const fn of listeners.gozdHook) fn(payload);
+      },
+      nativeSwitchDir: (payload) => {
+        for (const fn of listeners.nativeSwitchDir) fn(payload);
       },
       notify: (payload) => {
         for (const fn of listeners.notify) fn(payload);
@@ -91,6 +95,8 @@ export function useRpc() {
     onWorktreeChange: (fn: () => void) => subscribe("worktreeChange", fn),
     onGozdOpen: (fn: (payload: Msg["gozdOpen"]) => void) => subscribe("gozdOpen", fn),
     onGozdHook: (fn: (payload: Msg["gozdHook"]) => void) => subscribe("gozdHook", fn),
+    onNativeSwitchDir: (fn: (payload: Msg["nativeSwitchDir"]) => void) =>
+      subscribe("nativeSwitchDir", fn),
     onNotify: (fn: (payload: Msg["notify"]) => void) => subscribe("notify", fn),
   };
 }

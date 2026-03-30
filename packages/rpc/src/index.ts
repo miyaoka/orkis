@@ -349,6 +349,8 @@ export type GozdRPC = {
         switchToDir?: string;
       };
       gozdHook: { event: string; payload: Record<string, unknown> };
+      /** native サイドバーからの worktree 切り替え通知 */
+      nativeSwitchDir: { dir: string; fileServerBaseUrl: string };
       /** desktop / cli 側からの通知（エラー・情報） */
       notify: { type: "error" | "info"; source: string; message: string; detail?: string };
     };

@@ -17,7 +17,6 @@
 <script setup lang="ts">
 import { useWindowSize } from "@vueuse/core";
 import { computed, onUnmounted, ref, useTemplateRef, watch, watchEffect } from "vue";
-import { useAppStore } from "../../shared/app";
 import { useCommandRegistry, useContextKeys } from "../../shared/command";
 import { useProjectStore } from "../../shared/project";
 import { useRpc } from "../../shared/rpc";
@@ -40,7 +39,6 @@ import NotificationToast from "./NotificationToast.vue";
 import ResizeHandle from "./ResizeHandle.vue";
 
 const worktreeStore = useWorktreeStore();
-const appStore = useAppStore();
 const projectStore = useProjectStore();
 const contextKeys = useContextKeys();
 const previewPopoverRef = useTemplateRef<HTMLElement>("previewPopover");
@@ -86,10 +84,10 @@ const TERMINAL_MIN_WIDTH = 200;
 const NAVIGATOR_MIN_WIDTH = 180;
 const GIT_GRAPH_MIN_HEIGHT = 40;
 const TERMINAL_MIN_HEIGHT = 150;
-/** hiddenInset タイトルバーの高さ（Electrobun 公式アプリ準拠） */
-const TITLEBAR_HEIGHT = 28;
-/** 信号機ボタン（閉じる・最小化・最大化）用の左マージン */
-const TRAFFIC_LIGHTS_WIDTH = 80;
+
+declare const __GOZD_NATIVE__: boolean;
+/** native モードではサイドバーは SwiftUI 側で表示するため非表示 */
+const showSidebar = computed(() => !__GOZD_NATIVE__ && projectStore.isGitRepo);
 
 const { width: windowWidth, height: windowHeight } = useWindowSize();
 const centerTerminalRef = useTemplateRef<HTMLElement>("centerTerminal");
@@ -105,7 +103,7 @@ const PREVIEW_TOGGLE_WIDTH = 25;
 
 /** Terminal 幅: ウィンドウ幅から Sidebar + H + Navigator + H + 開閉ボタンを引いた残余 */
 const terminalWidth = computed(() => {
-  const sidebarSpace = projectStore.isGitRepo ? sidebarWidth.value + HANDLE_WIDTH : 0;
+  const sidebarSpace = showSidebar.value ? sidebarWidth.value + HANDLE_WIDTH : 0;
   return Math.max(
     TERMINAL_MIN_WIDTH,
     windowWidth.value - sidebarSpace - navigatorWidth.value - HANDLE_WIDTH - PREVIEW_TOGGLE_WIDTH,
@@ -117,7 +115,7 @@ const getTerminalWidth = () => terminalWidth.value;
 
 /** Preview popover に許容される最大幅（Sidebar + H + Terminal 最小幅 + H を残す） */
 const maxPreviewWidth = computed(() => {
-  const sidebarSpace = projectStore.isGitRepo ? sidebarWidth.value + HANDLE_WIDTH : 0;
+  const sidebarSpace = showSidebar.value ? sidebarWidth.value + HANDLE_WIDTH : 0;
   return (
     windowWidth.value -
     sidebarSpace -
@@ -191,8 +189,7 @@ function getCenterTerminalHeight(): number {
 
 // ウィンドウ縦縮小時に gitGraphHeight をクランプ（Terminal が潰れるのを防ぐ）
 watchEffect(() => {
-  const centerHeight = windowHeight.value - TITLEBAR_HEIGHT;
-  const maxGitGraph = centerHeight - TERMINAL_MIN_HEIGHT - HANDLE_WIDTH;
+  const maxGitGraph = windowHeight.value - TERMINAL_MIN_HEIGHT - HANDLE_WIDTH;
   if (gitGraphHeight.value > maxGitGraph) {
     gitGraphHeight.value = Math.max(GIT_GRAPH_MIN_HEIGHT, maxGitGraph);
   }
@@ -200,34 +197,10 @@ watchEffect(() => {
 </script>
 
 <template>
-  <div
-    class="flex h-screen flex-col overflow-hidden bg-zinc-900 text-white"
-    :style="{ '--titlebar-height': `${TITLEBAR_HEIGHT}px` }"
-  >
-    <!-- タイトルバー: hiddenInset で透明化されたネイティブバーの代替 -->
-    <div
-      :class="[
-        'flex shrink-0 items-center select-none',
-        appStore.isDev ? 'bg-indigo-800' : 'bg-zinc-800',
-      ]"
-      :style="{ height: `${TITLEBAR_HEIGHT}px` }"
-    >
-      <!-- 信号機ボタン用の余白 -->
-      <div
-        class="electrobun-webkit-app-region-drag shrink-0"
-        :style="{ width: `${TRAFFIC_LIGHTS_WIDTH}px`, height: '100%' }"
-      />
-      <!-- ドラッグ領域 + タイトル表示 -->
-      <div
-        class="electrobun-webkit-app-region-drag flex min-w-0 flex-1 items-center"
-        style="height: 100%"
-      >
-        <span class="truncate text-sm text-zinc-400">{{ projectStore.repoName ?? "gozd" }}</span>
-      </div>
-    </div>
+  <div class="flex h-screen flex-col overflow-hidden bg-zinc-900 text-white">
     <!-- 横3カラム: Sidebar | Center(Terminal + GitGraph) | Navigator -->
     <div class="flex min-h-0 flex-1 overflow-hidden">
-      <template v-if="projectStore.isGitRepo">
+      <template v-if="showSidebar">
         <div class="shrink-0 overflow-hidden" :style="{ width: `${sidebarWidth}px` }">
           <SidebarPane />
         </div>
@@ -325,14 +298,14 @@ watchEffect(() => {
 }
 
 ._preview-popover {
-  /* アンカーの左端に右端を揃え、タイトルバー直下から下端まで */
+  /* アンカーの左端に右端を揃え、上端から下端まで */
   position-anchor: --preview-anchor;
   inset: unset;
   margin: 0;
-  top: var(--titlebar-height);
+  top: 0;
   bottom: 0;
   right: anchor(left);
-  height: calc(100dvh - var(--titlebar-height));
+  height: 100dvh;
   max-height: none;
 }
 

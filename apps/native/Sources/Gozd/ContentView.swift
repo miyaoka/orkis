@@ -77,22 +77,79 @@ struct ContentView: View {
         self.coordinator = coordinator
     }
 
+    /// サイドバーに表示する worktree 一覧
+    @State private var worktrees: [WorktreeEntry] = []
+    /// サイドバーに表示するブランチ一覧（worktree 化されていないもの）
+    @State private var branches: [String] = []
+    /// 現在アクティブな worktree パス
+    @State private var activeWorktreePath: String = ""
+
     var body: some View {
-        Group {
-            if let page {
-                WebView(page)
-                    .ignoresSafeArea()
-            } else {
-                // page 生成前のプレースホルダ（onAppear / task の確実な発火に必要）
-                Color.clear
+        NavigationSplitView {
+            SidebarView(
+                worktrees: worktrees,
+                branches: branches,
+                activeWorktreePath: activeWorktreePath,
+                onSelectWorktree: handleWorktreeSelect
+            )
+            .navigationTitle((workspaceRoot.projectDir as NSString).lastPathComponent)
+        } detail: {
+            Group {
+                if let page {
+                    WebView(page)
+                } else {
+                    // page 生成前のプレースホルダ（onAppear / task の確実な発火に必要）
+                    Color.clear
+                }
             }
+            .toolbar(removing: .title)
         }
-        .navigationTitle((workspaceRoot.projectDir as NSString).lastPathComponent)
         .task {
             setupApp()
         }
         .onDisappear {
             coordinator.unregisterWindow(id: windowId, projectDir: workspaceRoot.projectDir)
+        }
+    }
+
+    /// サイドバーの worktree/branch データを更新する
+    func refreshSidebarData() {
+        let projDir = workspaceRoot.projectDir
+        var entries = GitWorktree.list(cwd: projDir)
+
+        // Task を紐づけ
+        let tasks = TaskPersistence.loadTasks(projectDir: projDir)
+        for i in entries.indices {
+            entries[i].task = tasks.first { $0.worktreeDir == entries[i].path }
+        }
+
+        worktrees = entries
+        activeWorktreePath = workspaceRoot.currentDir
+
+        // worktree 化されていないブランチを抽出
+        let worktreeBranches = Set(entries.compactMap(\.branch))
+        branches = GitBranch.list(cwd: projDir)
+            .filter { !worktreeBranches.contains($0) }
+            .sorted()
+    }
+
+    /// worktree 選択時のハンドラー
+    private func handleWorktreeSelect(_ entry: WorktreeEntry) {
+        guard entry.path != activeWorktreePath else { return }
+
+        workspaceRoot.switchDir(entry.path)
+        activeWorktreePath = entry.path
+
+        // ファイル監視を新しい worktree に張り替え
+        let isGitRepo = GitUtils.isGitRepo(dir: entry.path)
+        fileWatcher?.startWatching(root: entry.path, isGitRepo: isGitRepo)
+
+        // WebView に worktree 切り替えを通知
+        guard let page else { return }
+        Task { @MainActor in
+            let dir = entry.path.replacingOccurrences(of: "'", with: "\\'")
+            let js = "window.__gozdReceive?.('nativeSwitchDir', {dir: '\(dir)', fileServerBaseUrl: 'gozd-file:/'})"
+            _ = try? await page.callJavaScript(js)
         }
     }
 
@@ -162,10 +219,11 @@ struct ContentView: View {
                     _ = try? await webPage.callJavaScript(js)
                 }
             },
-            onBranchChange: {
+            onBranchChange: { [self] in
                 Task { @MainActor in
                     let js = "window.__gozdReceive?.('branchChange', {})"
                     _ = try? await webPage.callJavaScript(js)
+                    self.refreshSidebarData()
                 }
             }
         ))
@@ -192,6 +250,9 @@ struct ContentView: View {
                 }
             }
         )
+
+        // サイドバーデータの初期ロード
+        refreshSidebarData()
 
         // Vite dev server の URL をロード
         let devServerUrl = URL(string: "http://localhost:5173")!

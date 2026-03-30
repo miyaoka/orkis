@@ -27,7 +27,7 @@ const contextKeys = useContextKeys();
 const notify = useNotificationStore();
 const { setErrorHandler } = useCommandRegistry();
 setErrorHandler(notify.error);
-const { request, send, onGozdOpen, onNotify } = useRpc();
+const { request, send, onGozdOpen, onNativeSwitchDir, onNotify } = useRpc();
 
 const disposeNotify = onNotify(({ type, source, message, detail }) => {
   const notifyFn = type === "error" ? notify.error : notify.info;
@@ -35,8 +35,14 @@ const disposeNotify = onNotify(({ type, source, message, detail }) => {
 });
 
 let cleanup: (() => void) | undefined;
+let cleanupNativeSwitchDir: (() => void) | undefined;
 
 onMounted(() => {
+  // native サイドバーからの worktree 切り替え通知
+  cleanupNativeSwitchDir = onNativeSwitchDir(({ dir, fileServerBaseUrl }) => {
+    worktreeStore.setOpen(dir, undefined, fileServerBaseUrl);
+  });
+
   cleanup = onGozdOpen(
     async ({ dir, selection, fileServerBaseUrl, channel, repoName, isGitRepo, switchToDir }) => {
       if (channel) {
@@ -62,6 +68,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   cleanup?.();
+  cleanupNativeSwitchDir?.();
   disposeNotify();
 });
 </script>
