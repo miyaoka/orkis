@@ -56,7 +56,7 @@ catalogs:
       version: 4.3.6
 
 overrides:
-  tailwind-csstree: 0.2.0
+  tailwind-csstree: 0.3.0
 
 packageExtensionsChecksum: sha256-x9kv9pviUwPC7kBoWrBLoQZztWTVa/tYyuDd2F03Twk=
 
@@ -1664,6 +1664,7 @@ packages:
   basic-ftp@5.2.0:
     resolution: {integrity: sha512-VoMINM2rqJwJgfdHq6RiUudKt2BV+FY5ZFezP/ypmwayk68+NzzAQy4XXLlqsGD4MCzq3DrmNFD/uUmBJuGoXw==}
     engines: {node: '>=10.0.0'}
+    deprecated: Security vulnerability fixed in 5.2.1, please upgrade
 
   birpc@2.9.0:
     resolution: {integrity: sha512-KrayHS5pBi69Xi9JmvoqrIgYGDkD6mcSe/i6YKi3w5kekCLzrX4+nawcXqrj2tIp50Kw/mT/s3p+GVK0A0sKxw==}
@@ -2700,8 +2701,8 @@ packages:
     resolution: {integrity: sha512-Bh7QjT8/SuKUIfObSXNHNSK6WHo6J1tHCqJsuaFDP7gP0fkzSfTxI8y85JrppZ0h8l0maIgc2tfuZQ6/t3GtnQ==}
     engines: {node: ^14.18.0 || >=16.0.0}
 
-  tailwind-csstree@0.2.0:
-    resolution: {integrity: sha512-tE/abGkPAAwd+p8F3VJgYOKFgGOOhsByKr8aDjKahAcESUDROCRe05LFMM7jFAkms+S+f254Wgzjb7SZF9c/Tg==}
+  tailwind-csstree@0.3.0:
+    resolution: {integrity: sha512-FJmLCkH1ZDTEqJRVxMVhdiEbk/W67exqvDYrIQ759jsfv3mp3Gp/rrlgtr7dD5q7BK/t8LfaNqXM+BN6BrTKGA==}
     engines: {node: '>=18.18'}
     peerDependencies:
       '@eslint/css': '>=1.0.0'
@@ -4191,7 +4192,7 @@ snapshots:
       enhanced-resolve: 5.20.1
       jiti: 2.6.1
       synckit: 0.11.12
-      tailwind-csstree: 0.2.0
+      tailwind-csstree: 0.3.0
       tailwindcss: 4.2.2
       tsconfig-paths-webpack-plugin: 4.2.0
       valibot: 1.3.1(typescript@6.0.2)
@@ -5080,9 +5081,7 @@ snapshots:
     dependencies:
       '@pkgr/core': 0.2.9
 
-  tailwind-csstree@0.2.0:
-    dependencies:
-      '@eslint/css-tree': 3.6.9
+  tailwind-csstree@0.3.0: {}
 
   tailwindcss@4.2.2: {}
 
