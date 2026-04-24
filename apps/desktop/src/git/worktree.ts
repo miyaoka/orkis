@@ -5,6 +5,7 @@ import { tryCatch } from "@gozd/shared";
 import type { WorktreeEntry } from "@gozd/rpc";
 import { projectKey } from "../projectKey";
 import { resolveCreatableFsPath, resolveExistingFsPath, resolveGitPath } from "../security";
+import { spawn } from "../spawn";
 import { getGitStatus } from "./status";
 import { assertBranchName } from "./branch";
 
@@ -28,14 +29,14 @@ async function createWorktreeFromRemote({
   branch: string;
   wtPath: string;
 }): Promise<boolean> {
-  const fetchProc = Bun.spawn(["git", "fetch", "origin", branch], {
+  const fetchProc = spawn(["git", "fetch", "origin", branch], {
     cwd,
     stderr: "pipe",
   });
   await fetchProc.exited;
   if (fetchProc.exitCode !== 0) return false;
 
-  const wtProc = Bun.spawn(["git", "worktree", "add", "-b", branch, wtPath, `origin/${branch}`], {
+  const wtProc = spawn(["git", "worktree", "add", "-b", branch, wtPath, `origin/${branch}`], {
     cwd,
     stderr: "pipe",
   });
@@ -73,7 +74,7 @@ export async function addWorktree({
     const ORIGIN_PREFIX = "origin/";
     if (startPoint.startsWith(ORIGIN_PREFIX)) {
       const remoteBranch = startPoint.slice(ORIGIN_PREFIX.length);
-      const fetchProc = Bun.spawn(["git", "fetch", "origin", remoteBranch], {
+      const fetchProc = spawn(["git", "fetch", "origin", remoteBranch], {
         cwd,
         stderr: "pipe",
       });
@@ -85,7 +86,7 @@ export async function addWorktree({
     }
     // ローカルブランチが存在する場合、fast-forward 可能か検証してからリセットする
     const branchExists =
-      (await Bun.spawn(["git", "show-ref", "--verify", "--quiet", `refs/heads/${branch}`], { cwd })
+      (await spawn(["git", "show-ref", "--verify", "--quiet", `refs/heads/${branch}`], { cwd })
         .exited) === 0;
     if (branchExists) {
       // 別 worktree で使用中のブランチは -B でもリセットできない
@@ -96,10 +97,9 @@ export async function addWorktree({
       }
 
       const isAncestor =
-        (await Bun.spawn(
-          ["git", "merge-base", "--is-ancestor", `refs/heads/${branch}`, startPoint],
-          { cwd },
-        ).exited) === 0;
+        (await spawn(["git", "merge-base", "--is-ancestor", `refs/heads/${branch}`, startPoint], {
+          cwd,
+        }).exited) === 0;
       if (!isAncestor) {
         throw new Error(
           `Local branch "${branch}" has diverged from ${startPoint}. Remove the local branch or resolve manually.`,
@@ -108,7 +108,7 @@ export async function addWorktree({
     }
 
     // -B: ブランチが存在しなければ作成、存在すれば startPoint にリセット（fast-forward 検証済み）
-    const wtProc = Bun.spawn(["git", "worktree", "add", "-B", branch, wtPath, startPoint], {
+    const wtProc = spawn(["git", "worktree", "add", "-B", branch, wtPath, startPoint], {
       cwd,
       stderr: "pipe",
     });
@@ -122,7 +122,7 @@ export async function addWorktree({
   } else {
     // まず -b で新規ブランチ作成を試み、既存ブランチなら -b なしでリトライ。
     // タイムスタンプベースの名前では事実上リトライは発生しない
-    const newBranchProc = Bun.spawn(["git", "worktree", "add", "-b", branch, wtPath], {
+    const newBranchProc = spawn(["git", "worktree", "add", "-b", branch, wtPath], {
       cwd,
       stderr: "pipe",
     });
@@ -131,12 +131,12 @@ export async function addWorktree({
     if (newBranchProc.exitCode !== 0) {
       // ブランチが既に存在するかをロケール非依存で判定（stderr のメッセージは LANG で変わるため）
       const branchExists =
-        (await Bun.spawn(["git", "show-ref", "--verify", "--quiet", `refs/heads/${branch}`], {
+        (await spawn(["git", "show-ref", "--verify", "--quiet", `refs/heads/${branch}`], {
           cwd,
         }).exited) === 0;
 
       if (branchExists) {
-        const existingProc = Bun.spawn(["git", "worktree", "add", wtPath, branch], {
+        const existingProc = spawn(["git", "worktree", "add", wtPath, branch], {
           cwd,
           stderr: "pipe",
         });
@@ -174,7 +174,7 @@ export async function removeWorktree(cwd: string, wtPath: string, force?: boolea
   if (force) args.push("--force");
   args.push(wtPath);
 
-  const proc = Bun.spawn(args, { cwd, stderr: "pipe" });
+  const proc = spawn(args, { cwd, stderr: "pipe" });
   await proc.exited;
   if (proc.exitCode !== 0) {
     const stderr = await new Response(proc.stderr).text();
@@ -184,7 +184,7 @@ export async function removeWorktree(cwd: string, wtPath: string, force?: boolea
 
 export async function getWorktreeList(cwd: string): Promise<WorktreeEntry[]> {
   const result = await tryCatch(
-    new Response(Bun.spawn(["git", "worktree", "list", "--porcelain"], { cwd }).stdout).text(),
+    new Response(spawn(["git", "worktree", "list", "--porcelain"], { cwd }).stdout).text(),
   );
   if (!result.ok) return [];
 

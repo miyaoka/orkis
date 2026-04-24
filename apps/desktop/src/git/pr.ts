@@ -1,5 +1,6 @@
 import type { GitPullRequest } from "@gozd/rpc";
 import { tryCatch } from "@gozd/shared";
+import { spawn } from "../spawn";
 
 /**
  * gh api graphql で open な PR 一覧を取得する。
@@ -63,7 +64,7 @@ export async function execGh({
   cwd: string;
 }): Promise<{ ok: true; stdout: string } | { ok: false; stderr: string }> {
   const spawnResult = tryCatch(() =>
-    Bun.spawn(["gh", ...args], { cwd, stdout: "pipe", stderr: "pipe" }),
+    spawn(["gh", ...args], { cwd, stdout: "pipe", stderr: "pipe" }),
   );
   if (!spawnResult.ok) {
     return { ok: false, stderr: String(spawnResult.error) };

@@ -34,6 +34,7 @@ import {
 } from "./security";
 import { generateClaudeSettings } from "./claudeHooks";
 import { getShellEnv } from "./shellEnv";
+import { spawn } from "./spawn";
 import { loadAppState, saveSnapshot, getDefaultFrame } from "./appState";
 import { loadConfig, saveConfig } from "./config";
 import { loadProjectConfig, saveProjectConfig } from "./projectConfig";
@@ -62,7 +63,9 @@ const channel = await Updater.localInfo.channel();
 
 /** git remote origin URL から owner/repo 形式の名前を取得。失敗時はディレクトリ名にフォールバック */
 async function getRepoName(dir: string): Promise<string> {
-  const result = await tryCatch(Promise.resolve(Bun.$`git -C ${dir} remote get-url origin`.text()));
+  const result = await tryCatch(
+    Promise.resolve(Bun.$`git -C ${dir} remote get-url origin`.env(process.env).text()),
+  );
   if (result.ok) {
     const ownerRepo = parseOwnerRepo(result.value.trim());
     if (ownerRepo) return ownerRepo;
@@ -229,7 +232,7 @@ const fileServer = Bun.serve({
     if (source === "git") {
       const insideResult = tryCatch(() => resolveGitPath(dir, relPath));
       if (!insideResult.ok) return new Response("Forbidden", { status: 403 });
-      const proc = Bun.spawn(["git", "show", `HEAD:${relPath}`], { cwd: dir });
+      const proc = spawn(["git", "show", `HEAD:${relPath}`], { cwd: dir });
       const bufResult = await tryCatch(new Response(proc.stdout).arrayBuffer());
       await proc.exited;
       if (!bufResult.ok || proc.exitCode !== 0) {
@@ -354,7 +357,7 @@ const windowWatchGen = new Map<GozdWindow, number>();
 /** linked worktree 対応: `.git` がファイル（gitdir: ...）の場合に実際の git ディレクトリを解決 */
 async function resolveGitDir(root: string): Promise<string> {
   const result = await tryCatch(
-    new Response(Bun.spawn(["git", "rev-parse", "--git-dir"], { cwd: root }).stdout).text(),
+    new Response(spawn(["git", "rev-parse", "--git-dir"], { cwd: root }).stdout).text(),
   );
   if (!result.ok) return path.join(root, ".git");
   const gitDir = result.value.trim();
@@ -398,7 +401,7 @@ function startWatching(win: GozdWindow, root: string, isGitRepo = true) {
     async function resolveRefPath(refName: string): Promise<string | undefined> {
       const result = await tryCatch(
         new Response(
-          Bun.spawn(["git", "rev-parse", "--git-path", refName], { cwd: root }).stdout,
+          spawn(["git", "rev-parse", "--git-path", refName], { cwd: root }).stdout,
         ).text(),
       );
       if (!result.ok) return undefined;
@@ -770,7 +773,7 @@ function createWindowWithRPC(dir: string, options?: CreateWindowOptions): GozdWi
         },
         gitShowFile: async ({ relPath }) => {
           resolveGitPath(currentDir, relPath);
-          const proc = Bun.spawn(["git", "show", `HEAD:${relPath}`], { cwd: currentDir });
+          const proc = spawn(["git", "show", `HEAD:${relPath}`], { cwd: currentDir });
           const result = await tryCatch(new Response(proc.stdout).arrayBuffer());
           await proc.exited;
           if (!result.ok || proc.exitCode !== 0) {
@@ -786,7 +789,7 @@ function createWindowWithRPC(dir: string, options?: CreateWindowOptions): GozdWi
           resolveGitPath(currentDir, relPath);
           const result = await tryCatch(
             new Response(
-              Bun.spawn(["git", "diff", "HEAD", "--", relPath], { cwd: currentDir }).stdout,
+              spawn(["git", "diff", "HEAD", "--", relPath], { cwd: currentDir }).stdout,
             ).text(),
           );
           if (!result.ok) return "";
@@ -803,7 +806,7 @@ function createWindowWithRPC(dir: string, options?: CreateWindowOptions): GozdWi
               // from=null: ルートコミット（親なし）→ ファイルは存在しない
               return { content: "", isBinary: false, notFound: true };
             }
-            const proc = Bun.spawn(["git", "show", `${ref}:${relPath}`], { cwd: currentDir });
+            const proc = spawn(["git", "show", `${ref}:${relPath}`], { cwd: currentDir });
             const result = await tryCatch(new Response(proc.stdout).arrayBuffer());
             await proc.exited;
             if (!result.ok || proc.exitCode !== 0) {
@@ -938,10 +941,10 @@ function createWindowWithRPC(dir: string, options?: CreateWindowOptions): GozdWi
         projectConfigSave: (config) => saveProjectConfig(projectDir, config),
         voicevoxLaunch: async () => {
           // mdfind で VOICEVOX.app を検索（/Applications, ~/Applications, カスタム場所に対応）
-          const mdfind = Bun.spawn(
-            ["mdfind", "kMDItemCFBundleIdentifier == 'jp.hiroshiba.voicevox'"],
-            { stdout: "pipe", stderr: "pipe" },
-          );
+          const mdfind = spawn(["mdfind", "kMDItemCFBundleIdentifier == 'jp.hiroshiba.voicevox'"], {
+            stdout: "pipe",
+            stderr: "pipe",
+          });
           const output = await new Response(mdfind.stdout).text();
           const mdfindStderr = await new Response(mdfind.stderr).text();
           const mdfindExitCode = await mdfind.exited;
@@ -961,7 +964,7 @@ function createWindowWithRPC(dir: string, options?: CreateWindowOptions): GozdWi
           }
           // Engine だけをバックグラウンドで起動（GUI なし）
           // stderr: "inherit" でパイプ詰まりを防ぎ、Electrobun コンソールに出力
-          const engine = Bun.spawn([enginePath], {
+          const engine = spawn([enginePath], {
             stdout: "ignore",
             stderr: "inherit",
           });
@@ -1331,9 +1334,8 @@ if (await isAlreadyRunning()) {
   process.exit(0);
 }
 
-// shellEnv を process.env にマージし、全ての Bun.spawn が正しい PATH・環境で動作するようにする。
-// Launch Services 経由の起動時は PATH が /usr/bin:/bin:/usr/sbin:/sbin のみで、
-// Homebrew の git/gh が解決できず Apple 版 git が使われてしまう問題を防ぐ。
+// shellEnv を process.env にマージする。Bun は env 省略時に起動時のネイティブ環境を継承するため、
+// process.env への変更だけでは子プロセスに反映されない。env: { ...process.env } の明示渡しが必要。
 Object.assign(process.env, await getShellEnv());
 
 // --- アプリメニュー ---
