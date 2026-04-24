@@ -1,11 +1,12 @@
 import { tryCatch } from "@gozd/shared";
 import { UNCOMMITTED_HASH } from "@gozd/rpc";
 import type { GitFileChange } from "@gozd/rpc";
+import { spawn } from "../spawn";
 
 export async function filterIgnored(entries: string[], cwd: string): Promise<Set<string>> {
   if (entries.length === 0) return new Set();
   const result = await tryCatch(
-    new Response(Bun.spawn(["git", "check-ignore", ...entries], { cwd }).stdout).text(),
+    new Response(spawn(["git", "check-ignore", ...entries], { cwd }).stdout).text(),
   );
   if (!result.ok) return new Set();
   const text = result.value;
@@ -28,7 +29,7 @@ interface GitStatusResult {
 export async function getGitStatus(cwd: string): Promise<GitStatusResult> {
   const result = await tryCatch(
     new Response(
-      Bun.spawn(["git", "status", "--porcelain=v2", "--branch", "-z", "--untracked-files=all"], {
+      spawn(["git", "status", "--porcelain=v2", "--branch", "-z", "--untracked-files=all"], {
         cwd,
       }).stdout,
     ).text(),
@@ -149,7 +150,7 @@ export async function getGitCommitFiles(
   compareHash?: string,
 ): Promise<GitFileChange[]> {
   const args = await buildDiffArgs(cwd, hash, compareHash);
-  const result = await tryCatch(new Response(Bun.spawn(args, { cwd }).stdout).text());
+  const result = await tryCatch(new Response(spawn(args, { cwd }).stdout).text());
   if (!result.ok) return [];
   return parseDiffNameStatus(result.value);
 }
@@ -160,7 +161,7 @@ export async function getGitCommitFiles(
  * rev-parse に -- を渡すと rev 解決ではなくリテラル出力になるため使わない。
  */
 async function isRootCommit(cwd: string, hash: string): Promise<boolean> {
-  const proc = Bun.spawn(["git", "rev-parse", `${hash}^`], { cwd, stderr: "ignore" });
+  const proc = spawn(["git", "rev-parse", `${hash}^`], { cwd, stderr: "ignore" });
   const exitCode = await proc.exited;
   return exitCode !== 0;
 }
@@ -185,7 +186,7 @@ export async function resolveCommitDiffRefs(
     const hasUncommitted = hash === UNCOMMITTED_HASH || compareHash === UNCOMMITTED_HASH;
 
     const orderResult = await tryCatch(
-      Bun.spawn(["git", "merge-base", "--is-ancestor", commitA, commitB], { cwd }).exited,
+      spawn(["git", "merge-base", "--is-ancestor", commitA, commitB], { cwd }).exited,
     );
     const aIsOlder = orderResult.ok && orderResult.value === 0;
     const older = aIsOlder ? commitA : commitB;
@@ -217,7 +218,7 @@ async function buildDiffArgs(cwd: string, hash: string, compareHash?: string): P
 
     // 古い方の親を起点にする
     const orderResult = await tryCatch(
-      Bun.spawn(["git", "merge-base", "--is-ancestor", commitA, commitB], { cwd }).exited,
+      spawn(["git", "merge-base", "--is-ancestor", commitA, commitB], { cwd }).exited,
     );
     const aIsOlder = orderResult.ok && orderResult.value === 0;
     const older = aIsOlder ? commitA : commitB;

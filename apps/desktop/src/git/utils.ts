@@ -2,6 +2,7 @@ import { existsSync, statSync } from "node:fs";
 import path from "node:path";
 import { tryCatch } from "@gozd/shared";
 import type { OpenTargetSelection } from "@gozd/rpc";
+import { spawnSync } from "../spawn";
 
 /** remote URL から owner/repo を抽出するパターン（HTTPS / SSH / ssh:// 対応、ローカルパスは除外） */
 const REMOTE_OWNER_REPO_RE =
@@ -21,7 +22,7 @@ export function parseOwnerRepo(url: string): string | undefined {
  */
 function resolveProjectDir(dir: string): string {
   const result = tryCatch(() =>
-    Bun.spawnSync(["git", "rev-parse", "--git-common-dir"], {
+    spawnSync(["git", "rev-parse", "--git-common-dir"], {
       cwd: dir,
       stdout: "pipe",
       stderr: "pipe",
@@ -43,7 +44,7 @@ function resolveProjectDir(dir: string): string {
  */
 function resolveWorktreeRoot(dir: string): string {
   const result = tryCatch(() =>
-    Bun.spawnSync(["git", "rev-parse", "--show-toplevel"], {
+    spawnSync(["git", "rev-parse", "--show-toplevel"], {
       cwd: dir,
       stdout: "pipe",
       stderr: "pipe",
@@ -68,7 +69,7 @@ interface ResolvedOpenTarget {
 /** dir が git リポジトリ内かどうかを同期的に判定する */
 export function checkIsGitRepo(dir: string): boolean {
   const result = tryCatch(() =>
-    Bun.spawnSync(["git", "rev-parse", "--is-inside-work-tree"], {
+    spawnSync(["git", "rev-parse", "--is-inside-work-tree"], {
       cwd: dir,
       stdout: "pipe",
       stderr: "pipe",

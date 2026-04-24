@@ -1,5 +1,6 @@
 import { tryCatch } from "@gozd/shared";
 import type { GitCommit } from "@gozd/rpc";
+import { spawn } from "../spawn";
 
 /**
  * git log のフィールド区切り文字。
@@ -27,9 +28,7 @@ const DEFAULT_MAX_COUNT = 200;
  */
 async function resolveDefaultBranch(cwd: string): Promise<string | undefined> {
   const result = await tryCatch(
-    new Response(
-      Bun.spawn(["git", "symbolic-ref", "refs/remotes/origin/HEAD"], { cwd }).stdout,
-    ).text(),
+    new Response(spawn(["git", "symbolic-ref", "refs/remotes/origin/HEAD"], { cwd }).stdout).text(),
   );
   if (!result.ok) return undefined;
   // "refs/remotes/origin/main" → "main"
@@ -42,7 +41,7 @@ async function resolveDefaultBranch(cwd: string): Promise<string | undefined> {
  */
 async function resolveCurrentBranch(cwd: string): Promise<string | undefined> {
   const result = await tryCatch(
-    new Response(Bun.spawn(["git", "rev-parse", "--abbrev-ref", "HEAD"], { cwd }).stdout).text(),
+    new Response(spawn(["git", "rev-parse", "--abbrev-ref", "HEAD"], { cwd }).stdout).text(),
   );
   if (!result.ok) return undefined;
   const branch = result.value.trim();
@@ -57,7 +56,7 @@ async function resolveCurrentBranch(cwd: string): Promise<string | undefined> {
 async function localRefExists({ cwd, branch }: { cwd: string; branch: string }): Promise<boolean> {
   const result = await tryCatch(
     new Response(
-      Bun.spawn(["git", "rev-parse", "--verify", `refs/heads/${branch}`], { cwd }).stdout,
+      spawn(["git", "rev-parse", "--verify", `refs/heads/${branch}`], { cwd }).stdout,
     ).text(),
   );
   return result.ok && result.value.trim() !== "";
@@ -76,7 +75,7 @@ async function resolveRemoteRef({
   const ref = `origin/${branch}`;
   const result = await tryCatch(
     new Response(
-      Bun.spawn(["git", "rev-parse", "--verify", `refs/remotes/${ref}`], {
+      spawn(["git", "rev-parse", "--verify", `refs/remotes/${ref}`], {
         cwd,
       }).stdout,
     ).text(),
@@ -138,11 +137,9 @@ export async function getGitLog({
 
   // HEAD 系統とデフォルトブランチ系統を並列で取得
   const [headResult, defaultResult] = await Promise.all([
-    tryCatch(new Response(Bun.spawn([...baseArgs, ...headRefs, "--"], { cwd }).stdout).text()),
+    tryCatch(new Response(spawn([...baseArgs, ...headRefs, "--"], { cwd }).stdout).text()),
     defaultRefs.length > 0
-      ? tryCatch(
-          new Response(Bun.spawn([...baseArgs, ...defaultRefs, "--"], { cwd }).stdout).text(),
-        )
+      ? tryCatch(new Response(spawn([...baseArgs, ...defaultRefs, "--"], { cwd }).stdout).text())
       : Promise.resolve(undefined),
   ]);
 

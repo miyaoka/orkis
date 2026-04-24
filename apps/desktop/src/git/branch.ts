@@ -1,4 +1,5 @@
 import { tryCatch } from "@gozd/shared";
+import { spawn } from "../spawn";
 
 /** ブランチ名にシェルメタ文字が含まれていないことを検証する */
 export function assertBranchName(branch: string): void {
@@ -9,7 +10,7 @@ export function assertBranchName(branch: string): void {
 
 export async function getBranchList(cwd: string): Promise<string[]> {
   const result = await tryCatch(
-    new Response(Bun.spawn(["git", "branch", "--format=%(refname:short)"], { cwd }).stdout).text(),
+    new Response(spawn(["git", "branch", "--format=%(refname:short)"], { cwd }).stdout).text(),
   );
   if (!result.ok) return [];
   return result.value.trim().split("\n").filter(Boolean);
@@ -18,7 +19,7 @@ export async function getBranchList(cwd: string): Promise<string[]> {
 export async function deleteBranch(cwd: string, branch: string): Promise<void> {
   assertBranchName(branch);
 
-  const proc = Bun.spawn(["git", "branch", "-D", "--", branch], { cwd, stderr: "pipe" });
+  const proc = spawn(["git", "branch", "-D", "--", branch], { cwd, stderr: "pipe" });
   await proc.exited;
   if (proc.exitCode !== 0) {
     const stderr = await new Response(proc.stderr).text();
