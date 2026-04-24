@@ -89,7 +89,7 @@ export async function addWorktree({
       (await spawn(["git", "show-ref", "--verify", "--quiet", `refs/heads/${branch}`], { cwd })
         .exited) === 0;
     if (branchExists) {
-      // 別 worktree で使用中のブランチは -B でもリセットできない
+      // checkout 済みのブランチは -B でもリセットできない
       const worktrees = await getWorktreeList(cwd);
       const usedBy = worktrees.find((wt) => wt.branch === branch);
       if (usedBy) {
