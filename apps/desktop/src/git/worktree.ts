@@ -52,12 +52,15 @@ export async function addWorktree({
   worktreeDir,
   branch,
   symlinks,
+  startPoint,
 }: {
   cwd: string;
   worktreeDir: string;
   branch: string;
   /** メインリポジトリからシンボリックリンクする対象パス */
   symlinks?: string[];
+  /** ブランチの起点となる commit-ish（例: `origin/feature-x`） */
+  startPoint?: string;
 }): Promise<WorktreeEntry> {
   const worktreeRoot = getWorktreeRoot(cwd);
   await fsp.mkdir(worktreeRoot, { recursive: true });
@@ -65,40 +68,94 @@ export async function addWorktree({
 
   assertBranchName(branch);
 
-  // まず -b で新規ブランチ作成を試み、既存ブランチなら -b なしでリトライ。
-  // タイムスタンプベースの名前では事実上リトライは発生しない
-  const newBranchProc = Bun.spawn(["git", "worktree", "add", "-b", branch, wtPath], {
-    cwd,
-    stderr: "pipe",
-  });
-  await newBranchProc.exited;
-
-  if (newBranchProc.exitCode !== 0) {
-    // ブランチが既に存在するかをロケール非依存で判定（stderr のメッセージは LANG で変わるため）
-    const branchExists =
-      (await Bun.spawn(["git", "show-ref", "--verify", "--quiet", `refs/heads/${branch}`], { cwd })
-        .exited) === 0;
-
-    if (branchExists) {
-      const existingProc = Bun.spawn(["git", "worktree", "add", wtPath, branch], {
+  if (startPoint) {
+    // origin/ プレフィックスの場合はリモートブランチを fetch して最新にする
+    const ORIGIN_PREFIX = "origin/";
+    if (startPoint.startsWith(ORIGIN_PREFIX)) {
+      const remoteBranch = startPoint.slice(ORIGIN_PREFIX.length);
+      const fetchProc = Bun.spawn(["git", "fetch", "origin", remoteBranch], {
         cwd,
         stderr: "pipe",
       });
-      await existingProc.exited;
-      if (existingProc.exitCode !== 0) {
-        const retryStderr = await new Response(existingProc.stderr).text();
+      await fetchProc.exited;
+      if (fetchProc.exitCode !== 0) {
+        const stderr = await new Response(fetchProc.stderr).text();
+        throw new Error(`git fetch failed: ${stderr.trim() || `exit code ${fetchProc.exitCode}`}`);
+      }
+    }
+    // ローカルブランチが存在する場合、fast-forward 可能か検証してからリセットする
+    const branchExists =
+      (await Bun.spawn(["git", "show-ref", "--verify", "--quiet", `refs/heads/${branch}`], { cwd })
+        .exited) === 0;
+    if (branchExists) {
+      // 別 worktree で使用中のブランチは -B でもリセットできない
+      const worktrees = await getWorktreeList(cwd);
+      const usedBy = worktrees.find((wt) => wt.branch === branch);
+      if (usedBy) {
+        throw new Error(`Branch "${branch}" is already checked out in worktree: ${usedBy.path}`);
+      }
+
+      const isAncestor =
+        (await Bun.spawn(
+          ["git", "merge-base", "--is-ancestor", `refs/heads/${branch}`, startPoint],
+          { cwd },
+        ).exited) === 0;
+      if (!isAncestor) {
         throw new Error(
-          `git worktree add failed: ${retryStderr.trim() || `exit code ${existingProc.exitCode}`}`,
+          `Local branch "${branch}" has diverged from ${startPoint}. Remove the local branch or resolve manually.`,
         );
       }
-    } else {
-      // リモートブランチからローカルブランチを作成して worktree 化する
-      const remoteResult = await createWorktreeFromRemote({ cwd, branch, wtPath });
-      if (!remoteResult) {
-        const stderr = await new Response(newBranchProc.stderr).text();
-        throw new Error(
-          `git worktree add failed: ${stderr.trim() || `exit code ${newBranchProc.exitCode}`}`,
-        );
+    }
+
+    // -B: ブランチが存在しなければ作成、存在すれば startPoint にリセット（fast-forward 検証済み）
+    const wtProc = Bun.spawn(["git", "worktree", "add", "-B", branch, wtPath, startPoint], {
+      cwd,
+      stderr: "pipe",
+    });
+    await wtProc.exited;
+    if (wtProc.exitCode !== 0) {
+      const stderr = await new Response(wtProc.stderr).text();
+      throw new Error(
+        `git worktree add failed: ${stderr.trim() || `exit code ${wtProc.exitCode}`}`,
+      );
+    }
+  } else {
+    // まず -b で新規ブランチ作成を試み、既存ブランチなら -b なしでリトライ。
+    // タイムスタンプベースの名前では事実上リトライは発生しない
+    const newBranchProc = Bun.spawn(["git", "worktree", "add", "-b", branch, wtPath], {
+      cwd,
+      stderr: "pipe",
+    });
+    await newBranchProc.exited;
+
+    if (newBranchProc.exitCode !== 0) {
+      // ブランチが既に存在するかをロケール非依存で判定（stderr のメッセージは LANG で変わるため）
+      const branchExists =
+        (await Bun.spawn(["git", "show-ref", "--verify", "--quiet", `refs/heads/${branch}`], {
+          cwd,
+        }).exited) === 0;
+
+      if (branchExists) {
+        const existingProc = Bun.spawn(["git", "worktree", "add", wtPath, branch], {
+          cwd,
+          stderr: "pipe",
+        });
+        await existingProc.exited;
+        if (existingProc.exitCode !== 0) {
+          const retryStderr = await new Response(existingProc.stderr).text();
+          throw new Error(
+            `git worktree add failed: ${retryStderr.trim() || `exit code ${existingProc.exitCode}`}`,
+          );
+        }
+      } else {
+        // リモートブランチからローカルブランチを作成して worktree 化する
+        const remoteResult = await createWorktreeFromRemote({ cwd, branch, wtPath });
+        if (!remoteResult) {
+          const stderr = await new Response(newBranchProc.stderr).text();
+          throw new Error(
+            `git worktree add failed: ${stderr.trim() || `exit code ${newBranchProc.exitCode}`}`,
+          );
+        }
       }
     }
   }
