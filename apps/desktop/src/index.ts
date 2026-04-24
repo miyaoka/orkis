@@ -846,14 +846,14 @@ function createWindowWithRPC(dir: string, options?: CreateWindowOptions): GozdWi
           return entries;
         },
         gitBranchList: () => getBranchList(projectDir),
-        createWorktree: async ({ worktreeDir, branch, fromRemote }) => {
+        createWorktree: async ({ worktreeDir, branch, startPoint }) => {
           const { worktreeSymlinks } = loadProjectConfig(projectDir);
           const entry = await addWorktree({
             cwd: projectDir,
             worktreeDir,
             branch,
             symlinks: worktreeSymlinks,
-            fromRemote,
+            startPoint,
           });
 
           // switchDir 相当: 作成したパスは自明に正当なので検証不要

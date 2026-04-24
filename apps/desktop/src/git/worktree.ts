@@ -16,7 +16,7 @@ function getWorktreeRoot(projectDir: string): string {
 }
 
 /**
- * リモートブランチを fetch し、ローカルブランチを作成（または更新）して worktree 化する。
+ * リモートブランチを fetch し、ローカルブランチを作成して worktree 化する。
  * リモートに存在しない場合は false を返す。
  */
 async function createWorktreeFromRemote({
@@ -35,46 +35,14 @@ async function createWorktreeFromRemote({
   await fetchProc.exited;
   if (fetchProc.exitCode !== 0) return false;
 
-  // ローカルブランチが既に存在する場合はリモートの最新に合わせる
-  const branchExists =
-    (await Bun.spawn(["git", "show-ref", "--verify", "--quiet", `refs/heads/${branch}`], { cwd })
-      .exited) === 0;
-
-  if (branchExists) {
-    const resetProc = Bun.spawn(["git", "branch", "-f", branch, `origin/${branch}`], {
-      cwd,
-      stderr: "pipe",
-    });
-    await resetProc.exited;
-    if (resetProc.exitCode !== 0) {
-      const stderr = await new Response(resetProc.stderr).text();
-      throw new Error(
-        `git branch reset failed: ${stderr.trim() || `exit code ${resetProc.exitCode}`}`,
-      );
-    }
-    const wtProc = Bun.spawn(["git", "worktree", "add", wtPath, branch], {
-      cwd,
-      stderr: "pipe",
-    });
-    await wtProc.exited;
-    if (wtProc.exitCode !== 0) {
-      const stderr = await new Response(wtProc.stderr).text();
-      throw new Error(
-        `git worktree add failed: ${stderr.trim() || `exit code ${wtProc.exitCode}`}`,
-      );
-    }
-  } else {
-    const wtProc = Bun.spawn(["git", "worktree", "add", "-b", branch, wtPath, `origin/${branch}`], {
-      cwd,
-      stderr: "pipe",
-    });
-    await wtProc.exited;
-    if (wtProc.exitCode !== 0) {
-      const stderr = await new Response(wtProc.stderr).text();
-      throw new Error(
-        `git worktree add failed: ${stderr.trim() || `exit code ${wtProc.exitCode}`}`,
-      );
-    }
+  const wtProc = Bun.spawn(["git", "worktree", "add", "-b", branch, wtPath, `origin/${branch}`], {
+    cwd,
+    stderr: "pipe",
+  });
+  await wtProc.exited;
+  if (wtProc.exitCode !== 0) {
+    const stderr = await new Response(wtProc.stderr).text();
+    throw new Error(`git worktree add failed: ${stderr.trim() || `exit code ${wtProc.exitCode}`}`);
   }
   return true;
 }
@@ -84,15 +52,15 @@ export async function addWorktree({
   worktreeDir,
   branch,
   symlinks,
-  fromRemote,
+  startPoint,
 }: {
   cwd: string;
   worktreeDir: string;
   branch: string;
   /** メインリポジトリからシンボリックリンクする対象パス */
   symlinks?: string[];
-  /** リモートブランチから作成する（PR 選択時など） */
-  fromRemote?: boolean;
+  /** ブランチの起点となる commit-ish（例: `origin/feature-x`） */
+  startPoint?: string;
 }): Promise<WorktreeEntry> {
   const worktreeRoot = getWorktreeRoot(cwd);
   await fsp.mkdir(worktreeRoot, { recursive: true });
@@ -100,10 +68,32 @@ export async function addWorktree({
 
   assertBranchName(branch);
 
-  if (fromRemote) {
-    const remoteResult = await createWorktreeFromRemote({ cwd, branch, wtPath });
-    if (!remoteResult) {
-      throw new Error(`Remote branch not found: origin/${branch}`);
+  if (startPoint) {
+    // origin/ プレフィックスの場合はリモートブランチを fetch して最新にする
+    const ORIGIN_PREFIX = "origin/";
+    if (startPoint.startsWith(ORIGIN_PREFIX)) {
+      const remoteBranch = startPoint.slice(ORIGIN_PREFIX.length);
+      const fetchProc = Bun.spawn(["git", "fetch", "origin", remoteBranch], {
+        cwd,
+        stderr: "pipe",
+      });
+      await fetchProc.exited;
+      if (fetchProc.exitCode !== 0) {
+        const stderr = await new Response(fetchProc.stderr).text();
+        throw new Error(`git fetch failed: ${stderr.trim() || `exit code ${fetchProc.exitCode}`}`);
+      }
+    }
+    // -B: ブランチが存在しなければ作成、存在すれば startPoint にリセットして worktree 化
+    const wtProc = Bun.spawn(["git", "worktree", "add", "-B", branch, wtPath, startPoint], {
+      cwd,
+      stderr: "pipe",
+    });
+    await wtProc.exited;
+    if (wtProc.exitCode !== 0) {
+      const stderr = await new Response(wtProc.stderr).text();
+      throw new Error(
+        `git worktree add failed: ${stderr.trim() || `exit code ${wtProc.exitCode}`}`,
+      );
     }
   } else {
     // まず -b で新規ブランチ作成を試み、既存ブランチなら -b なしでリトライ。
