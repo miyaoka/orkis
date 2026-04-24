@@ -95,19 +95,9 @@ export async function addWorktree({
       if (usedBy) {
         throw new Error(`Branch "${branch}" is already checked out in worktree: ${usedBy.path}`);
       }
-
-      const isAncestor =
-        (await spawn(["git", "merge-base", "--is-ancestor", `refs/heads/${branch}`, startPoint], {
-          cwd,
-        }).exited) === 0;
-      if (!isAncestor) {
-        throw new Error(
-          `Local branch "${branch}" has diverged from ${startPoint}. Remove the local branch or resolve manually.`,
-        );
-      }
     }
 
-    // -B: ブランチが存在しなければ作成、存在すれば startPoint にリセット（fast-forward 検証済み）
+    // -B: ブランチが存在しなければ作成、存在すれば startPoint にリセット
     const wtProc = spawn(["git", "worktree", "add", "-B", branch, wtPath, startPoint], {
       cwd,
       stderr: "pipe",
