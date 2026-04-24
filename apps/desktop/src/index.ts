@@ -48,6 +48,9 @@ import {
   cleanupStaleTasks,
 } from "./task";
 
+// gozd のファイル監視が git status を実行する際の index.lock 競合を防止する（ #318 ）
+process.env.GIT_OPTIONAL_LOCKS = "0";
+
 type GozdRPCInstance = ReturnType<typeof BrowserView.defineRPC<GozdRPC>>;
 type GozdWindow = BrowserWindow<GozdRPCInstance>;
 
@@ -136,6 +139,8 @@ function spawnPty(win: GozdWindow, cwd: string, cols: number, rows: number): num
     cwd,
     env: {
       ...shellEnv,
+      // desktop プロセスの GIT_OPTIONAL_LOCKS=0 を PTY に持ち込まない
+      GIT_OPTIONAL_LOCKS: undefined,
       // TERM 系は PTY 側で明示設定する（親の値を持ち込まない）
       TERM: "xterm-256color",
       COLORTERM: "truecolor",
