@@ -91,6 +91,7 @@ const LAUNCH_DIR = path.join(tmpdir(), `gozd-${channel}-launch`);
 const LAUNCH_TTL_MS = 30_000;
 const GIT_STATUS_DEBOUNCE_MS = 300;
 const GIT_WATCH_POLL_MS = 500;
+const PTY_EXIT_TIMEOUT_MS = 5_000;
 
 // --- Claude Code hooks 設定 ---
 
@@ -196,17 +197,49 @@ function spawnPty(win: GozdWindow, cwd: string, cols: number, rows: number): num
           win.webview.rpc?.send.ptyData({ id, data: text });
         }
       },
-      async exit() {
+      exit() {
         // 残りのバッファをフラッシュ
         const remaining = decoder.decode();
         if (remaining) {
           win.webview.rpc?.send.ptyData({ id, data: remaining });
         }
         ptys.delete(id);
-        // exit callback は PTY ストリーム終了時に発火し、プロセス終了より先に来る場合がある。
-        // proc.exited を待って正確な exitCode を取得する。
-        const exitCode = await proc.exited;
-        win.webview.rpc?.send.ptyExit({ id, exitCode });
+
+        let sent = false;
+        let timeoutId: ReturnType<typeof setTimeout> | undefined = setTimeout(() => {
+          timeoutId = undefined;
+          if (proc.exitCode !== null) {
+            notifyExit(proc.exitCode);
+          }
+        }, PTY_EXIT_TIMEOUT_MS);
+
+        const notifyExit = (exitCode: number) => {
+          if (sent) return;
+          sent = true;
+          if (timeoutId !== undefined) {
+            clearTimeout(timeoutId);
+            timeoutId = undefined;
+          }
+          if (!windowIds.has(win)) return;
+          const sendResult = tryCatch(() => win.webview.rpc?.send.ptyExit({ id, exitCode }));
+          if (!sendResult.ok) {
+            console.error(`[pty exit] failed to notify renderer for PTY ${id}:`, sendResult.error);
+          }
+        };
+
+        void proc.exited
+          .then((exitCode) => {
+            notifyExit(exitCode);
+          })
+          .catch((error) => {
+            if (timeoutId !== undefined) {
+              clearTimeout(timeoutId);
+              timeoutId = undefined;
+            }
+            if (windowIds.has(win)) {
+              console.error(`[pty exit] failed to observe process exit for PTY ${id}:`, error);
+            }
+          });
       },
     },
   });
