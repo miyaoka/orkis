@@ -196,14 +196,17 @@ function spawnPty(win: GozdWindow, cwd: string, cols: number, rows: number): num
           win.webview.rpc?.send.ptyData({ id, data: text });
         }
       },
-      exit() {
+      async exit() {
         // 残りのバッファをフラッシュ
         const remaining = decoder.decode();
         if (remaining) {
           win.webview.rpc?.send.ptyData({ id, data: remaining });
         }
         ptys.delete(id);
-        win.webview.rpc?.send.ptyExit({ id, exitCode: proc.exitCode ?? 1 });
+        // exit callback は PTY ストリーム終了時に発火し、プロセス終了より先に来る場合がある。
+        // proc.exited を待って正確な exitCode を取得する。
+        const exitCode = await proc.exited;
+        win.webview.rpc?.send.ptyExit({ id, exitCode });
       },
     },
   });
