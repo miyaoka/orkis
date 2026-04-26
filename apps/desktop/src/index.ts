@@ -136,24 +136,16 @@ let nextPtyId = 0;
 /**
  * PTY とその子プロセス（サーバー等）をプロセスグループごと終了する。
  * Bun.spawn({ terminal }) は forkpty(3) 相当で子プロセスを新セッションリーダーにするため
- * 通常 PID = PGID が成立する。成立しない環境では単体 kill にフォールバックする。
+ * PID = PGID が成立し、負の PID でプロセスグループ全体に SIGTERM が届く。
  */
 function killPtyProcess(entry: PtyEntry) {
   const pid = entry.proc.pid;
-  const groupResult = tryCatch(() => process.kill(-pid, "SIGTERM"));
-  if (!groupResult.ok) {
-    const code = (groupResult.error as NodeJS.ErrnoException).code;
-    if (code === "ESRCH") {
-      // プロセスグループが存在しない: PID != PGID か既に終了済み。単体 kill を試みる
-      const singleResult = tryCatch(() => process.kill(pid, "SIGTERM"));
-      if (!singleResult.ok) {
-        const singleCode = (singleResult.error as NodeJS.ErrnoException).code;
-        if (singleCode !== "ESRCH") {
-          console.error(`[killPtyProcess] failed to kill pid ${pid}:`, singleResult.error);
-        }
-      }
-    } else {
-      console.error(`[killPtyProcess] failed to kill process group ${pid}:`, groupResult.error);
+  const result = tryCatch(() => process.kill(-pid, "SIGTERM"));
+  if (!result.ok) {
+    const code = (result.error as NodeJS.ErrnoException).code;
+    // ESRCH: プロセスグループが既に終了済み
+    if (code !== "ESRCH") {
+      console.error(`[killPtyProcess] failed to kill process group ${pid}:`, result.error);
     }
   }
 }
